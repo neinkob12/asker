@@ -227,22 +227,34 @@ export function rightHandOrderLimit(state: GameState): number {
   return Math.min(rh.settings.orderMaxPrice, RIGHT_HAND_ORDER_LIMIT_BY_RANK[rankForXp(rh.xp) - 1]);
 }
 
+/** Warum die Rechte Hand gerade nicht ausfahren kann: keine in der Stadt, sie fällt aus, sie ist schon unterwegs. */
+export type DriverCause = 'none' | 'out' | 'busy';
+
+/**
+ * Ergebnis von rightHandDriver: die Fahrerin oder der Grund, als Satz für dich (reason) und als Art (cause). Wer
+ * darauf reagiert (z.B. die Aufgabe "Aufträge und Handy"), richtet Warten und eigenen Satz nach cause.
+ */
+export type RightHandDriverResult =
+  | { ok: true; member: StaffMember }
+  | { ok: false; reason: string; cause: DriverCause };
+
 /**
  * Kann die Rechte Hand jetzt eine Lieferung fahren? Nur sie fährt Aufträge aus (Auftrag 28), eine Fahrt zur Zeit.
  * Gibt sonst den Grund zurück (keine Rechte Hand, fällt aus, schon unterwegs).
  */
-export function rightHandDriver(
-  state: GameState,
-  cityId = activeCity(state),
-): { ok: true; member: StaffMember } | { ok: false; reason: string } {
+export function rightHandDriver(state: GameState, cityId = activeCity(state)): RightHandDriverResult {
   // Die Rechte Hand der Stadt, in der geliefert wird (Auftrag 43: die Kölner fuhr sonst Hamburger Aufträge aus).
   const rh = getRightHand(state, cityId);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
   if (!rh || !m || !isEmployed(state, m.id) || (m.cityId ?? 'koeln') !== cityId)
-    return { ok: false, reason: `In ${cityName(cityId)} hast du keine Rechte Hand, die ausfahren könnte.` };
-  if (m.status !== 'active') return { ok: false, reason: `${m.name} fällt gerade aus.` };
+    return {
+      ok: false,
+      reason: `In ${cityName(cityId)} hast du keine Rechte Hand, die ausfahren könnte.`,
+      cause: 'none',
+    };
+  if (m.status !== 'active') return { ok: false, reason: `${m.name} fällt gerade aus.`, cause: 'out' };
   if (m.assignment?.kind === 'delivery')
-    return { ok: false, reason: `${m.name} ist schon mit einer Lieferung unterwegs.` };
+    return { ok: false, reason: `${m.name} ist schon mit einer Lieferung unterwegs.`, cause: 'busy' };
   return { ok: true, member: m };
 }
 

@@ -39,6 +39,7 @@ import {
 } from '../../goods';
 import { getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
 import {
+  choiceOnWay,
   driverWhereabouts,
   getRoute,
   getRoutes,
@@ -125,8 +126,9 @@ function RouteGroup(props: { route: Route; onEdit: () => void }) {
     { label: `${daysText(route.days)} ${clock.formatTime(route.departure)}`, icon: 'clock', color: 'system' },
     { label: loadText(route), icon: 'package', color: 'goods' },
   ];
-  if (route.choice !== 'autobahn')
-    chips.push({ label: ROUTE_CHOICES[route.choice].name, icon: 'moon', color: 'place' });
+  // Zwischen den Städten fährt auch die Landstraße die A1 (choiceOnWay), dann steht nur „über die A1“ da.
+  const choice = choiceOnWay(route.choice, fromCity !== toCity);
+  if (choice !== 'autobahn') chips.push({ label: ROUTE_CHOICES[choice].name, icon: 'moon', color: 'place' });
   if (route.vehicleId !== null)
     chips.push({ label: vehicleName(state, route.vehicleId), icon: 'truck', color: 'goods' });
   if (fromCity !== toCity) chips.push({ label: 'über die A1', icon: 'route', color: 'place' });
@@ -451,7 +453,11 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
 
         <Group title="Weg" icon="moon" color="place" value={ROUTE_CHOICES[draft.choice].name}>
           <div class="logi-route-choice">
-            <ChoiceControl value={draft.choice} onChange={(choice) => set({ choice })} />
+            <ChoiceControl
+              value={draft.choice}
+              interCity={fromCity !== toCity}
+              onChange={(choice) => set({ choice })}
+            />
           </div>
         </Group>
 

@@ -1,5 +1,5 @@
 // Regressionstests zum Bugreview (Paket trade-grow): Deckladung bei Teilkisten, Lkw nur ab Rotterdam, Untergrenze für
-// Gegenangebote.
+// Gegenangebote, Pleite-Regel nach dem Verkauf.
 
 import { describe, expect, it } from 'vitest';
 import type { Simulation } from '../../core';
@@ -139,5 +139,33 @@ describe('Gegenangebot nicht unter ihrem Angebot', () => {
     // Über ihrem Angebot geht es wie bisher (angenommen oder an die Konkurrenz verloren).
     const up = sim.dispatch({ type: 'trade.answer', payload: { orderId: order.id, choice: 'counter', factor: 1.05 } });
     expect(up.ok).toBe(true);
+  });
+});
+
+describe('Pleite-Regel nach dem Verkauf', () => {
+  it('Geld auf dem Konto hält die Hafen-Phase am Leben, ohne Geld, Ware und Fracht ist sie pleite', () => {
+    const sim = soldGame(2);
+    // Nichts mehr da: keine Ware im Hafen und in den alten Lagern, nichts unterwegs, keine alte Lieferung.
+    const trade = sim.state.modules.trade;
+    for (const port of Object.keys(trade.stock)) trade.stock[port] = {};
+    trade.shipments = [];
+    trade.deliveries = [];
+    for (const id of Object.keys(sim.state.modules.goods.stock)) sim.state.modules.goods.stock[id] = [];
+    sim.state.modules.suppliers.shipments = [];
+    sim.state.modules.logistics.cargo = [];
+    sim.state.modules.logistics.trips = [];
+    sim.state.wallet.dirty = 1_000_000;
+    sim.state.wallet.clean = 0;
+    sim.advance(60);
+    expect(sim.state.outcome.gameOver).toBeNull();
+    // Sauberes Geld zählt auch (Fincas, Schiffe, Hallen).
+    sim.state.wallet.dirty = 0;
+    sim.state.wallet.clean = 1_000_000;
+    sim.advance(60);
+    expect(sim.state.outcome.gameOver).toBeNull();
+    // Ohne Geld ist Schluss.
+    sim.state.wallet.clean = 0;
+    sim.advance(5);
+    expect(sim.state.outcome.gameOver?.reason).toBe('bankrupt');
   });
 });

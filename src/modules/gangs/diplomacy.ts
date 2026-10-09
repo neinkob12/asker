@@ -367,7 +367,10 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     });
     return { ok: true };
   }
-  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gangNameIn(gang, 'dative')}`, 'goods.purchase');
+  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gangNameIn(gang, 'dative')}`, {
+    category: 'goods.purchase',
+    cityId: gang.cityId,
+  });
   let rest = offer.amount;
   for (const w of warehouses) {
     const amount = fitsInto(ctx.state, w.id, DEFAULT_PRODUCT, rest);

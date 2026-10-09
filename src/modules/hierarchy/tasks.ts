@@ -62,9 +62,11 @@ import { hireRunnerFor } from './hire';
 import { getLieutenants, isVeedelHidden, lieutenantOfSpot } from './index';
 import { runRestock } from './orders';
 import {
+  type DriverCause,
   getRightHand,
   isTaskActive,
   payrollReserve,
+  type RightHandDriverResult,
   rankForXp,
   rightHandDriver,
   rightHandOrderLimit,
@@ -144,6 +146,39 @@ function pass(ctx: Ctx, rh: RightHandPost, order: Order, reason: string): void {
 }
 
 /**
+ * Was sie ins Protokoll schreibt, wenn eine Anfrage bei dir bleibt, weil sie nicht ausfahren kann: ein eigener Satz je
+ * Grund aus rightHandDriver (sie spricht selbst). Kommt ein Grund dazu, verlangt der Typ hier seinen Satz.
+ */
+const DRIVER_PASS_REASON: Record<DriverCause, string> = {
+  none: 'ich kann hier gerade nicht ausfahren',
+  out: 'ich falle gerade aus',
+  busy: 'ich bin noch unterwegs und die Frist ist zu knapp',
+};
+
+/**
+ * Was aus einer Anfrage wird, wenn rightHandDriver sie nicht fahren lässt. Warten und Satz folgen demselben Ergebnis:
+ * Nur wer unterwegs ist ('busy'), kommt bald zurück; reicht die Frist bis dahin, wartet die Anfrage, und sie nimmt sie
+ * danach. Ein gekippter Deal ('contested') ist auch noch ihre Fahrt, bis die Konfrontation ausgeht. Sonst bleibt die
+ * Anfrage bei dir, mit dem Satz zu genau diesem Grund.
+ */
+export function blockedOrderOutcome(
+  state: GameState,
+  member: StaffMember,
+  order: Order,
+  driver: Extract<RightHandDriverResult, { ok: false }>,
+): { wait: true } | { wait: false; reason: string } {
+  if (driver.cause === 'busy') {
+    const current = getOrders(state).find(
+      (o) => (o.status === 'enRoute' || o.status === 'contested') && o.courierId === member.id,
+    );
+    if (current?.arrivesAt !== null && current?.arrivesAt !== undefined && current.arrivesAt + 15 < order.expiresAt) {
+      return { wait: true };
+    }
+  }
+  return { wait: false, reason: DRIVER_PASS_REASON[driver.cause] };
+}
+
+/**
  * Lieferanfragen (Aufgabe "Aufträge und Handy") und Großhandel (Aufgabe "Großhandel") annehmen und selbst fahren.
  * Regeln: Betrag bis zu ihrer Grenze, auf Wunsch nur in eigenen Revieren, genug Ware. Ist sie unterwegs, wartet
  * sie, wenn die Frist das hergibt; sonst bleibt die Anfrage beim Spieler (Chefsache).
@@ -181,15 +216,9 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
     }
     const driver = rightHandDriver(state, home);
     if (!driver.ok) {
-      // Unterwegs: Reicht die Frist, bis sie zurück ist, nimmt sie die Anfrage danach. Ein gekippter Deal ('contested')
-      // ist auch noch ihre Fahrt, bis die Konfrontation ausgeht.
-      const current = getOrders(state).find(
-        (o) => (o.status === 'enRoute' || o.status === 'contested') && o.courierId === member.id,
-      );
-      if (current?.arrivesAt !== null && current?.arrivesAt !== undefined && current.arrivesAt + 15 < order.expiresAt) {
-        continue;
-      }
-      pass(ctx, rh, order, 'ich bin noch unterwegs und die Frist ist zu knapp');
+      // Warten (nur unterwegs, wenn die Frist reicht) und der Satz im Protokoll kommen aus demselben Ergebnis.
+      const outcome = blockedOrderOutcome(state, member, order, driver);
+      if (!outcome.wait) pass(ctx, rh, order, outcome.reason);
       continue;
     }
     const result = ctx.dispatch(
@@ -364,6 +393,8 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
     cityId: activeCity(state),
     budget: () => restockBudgetLeft(state),
     onPause: (_rule, reason) => {
+      // Mit Vollmacht ruht eine Regel still, auch bei vollem Lager: So entschieden, der Statthalter entscheidet selbst
+      // (siehe den Platz-Check in planOrder, orders.ts).
       if (!rh.fullPower) log(ctx, rh, `Bestellung ruht: ${reason}`);
     },
     onResume: () => {},

@@ -72,6 +72,7 @@ import {
   rightHandMissing,
   rightHandTitle,
 } from '../hierarchy';
+import { launderAtOnce, launderedCost } from '../laundering';
 import { getRoutes, getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
@@ -93,6 +94,7 @@ import {
   OFFER_NEXT_DELAY,
   OFFER_REMINDER_DAYS,
   PLAYER_CITY_SPEED,
+  ROTTERDAM_LAUNDERING_CHANNEL,
   ROTTERDAM_SHARE,
   SALE_AVERAGE_DAYS,
   SALE_CALL_DELAY,
@@ -1245,9 +1247,11 @@ export interface SaleOffer {
   dailyProfit: number;
   /** Was die Statthalter zahlen. */
   price: number;
-  /** Was Jansen für Rotterdam will. */
+  /** Was Jansen für Rotterdam will (sauberes Geld). */
   rotterdamPrice: number;
-  /** Was dir bleibt (Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
+  /** Gebühr der Wäsche, damit Rotterdam sauber bezahlt wird (Schwarzgeld, rotterdamLaunderingFee). */
+  rotterdamFee: number;
+  /** Was dir bleibt (Schwarzgeld, Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
   rest: number;
   /** Ware in den Lagern deiner Städte zum Einkaufspreis: Sie bleibt bei den Statthaltern, die zahlen sie dazu. */
   stockValue: number;
@@ -1255,10 +1259,10 @@ export interface SaleOffer {
   stockAmount: number;
 }
 
-/** Verkaufspreis nach der Formel (rein, für Tests und die Anzeige): auf 1.000 € gerundet. */
 /**
- * Preis aus dem Tagesgewinn: SALE_PROFIT_DAYS Tagesgewinne (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon.
- * Die Ware in den Lagern (stockValue) kommt obendrauf und gehört ganz dir.
+ * Verkaufspreis nach der Formel (rein, für Tests und die Anzeige), auf 1.000 € gerundet: SALE_PROFIT_DAYS Tagesgewinne
+ * (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon. Die Ware in den Lagern (stockValue) kommt obendrauf und
+ * gehört ganz dir. Der Preis ist Schwarzgeld, Rotterdam wird sauber bezahlt: Die Gebühr der Wäsche geht vom Rest ab.
  */
 export function salePriceFor(
   dailyProfit: number,
@@ -1268,7 +1272,24 @@ export function salePriceFor(
   const rotterdamPrice = Math.round((business * ROTTERDAM_SHARE) / 1000) * 1000;
   const stockValue = Math.max(0, Math.round(stock.value / 100) * 100);
   const price = business + stockValue;
-  return { dailyProfit, price, rotterdamPrice, rest: price - rotterdamPrice, stockValue, stockAmount: stock.amount };
+  const rotterdamFee = rotterdamLaunderingFee(rotterdamPrice);
+  return {
+    dailyProfit,
+    price,
+    rotterdamPrice,
+    rotterdamFee,
+    rest: price - rotterdamPrice - rotterdamFee,
+    stockValue,
+    stockAmount: stock.amount,
+  };
+}
+
+/**
+ * Gebühr, damit Rotterdam sauber bezahlt wird: Der Anteil geht beim Verkauf über ROTTERDAM_LAUNDERING_CHANNEL (Jansens
+ * Reederei) durch die Wäsche, zum Gebühr-Satz dieses Wegs. Schwarzgeld, geht von dem ab, was dir bleibt.
+ */
+export function rotterdamLaunderingFee(rotterdamPrice: number): number {
+  return launderedCost(rotterdamPrice, ROTTERDAM_LAUNDERING_CHANNEL).fee;
 }
 
 /** Ware in den Lagern deiner Städte, zum Einkaufspreis (Durchschnitt pro Posten). */
@@ -1388,12 +1409,19 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   const c = ctx.state.modules.city;
   const offer = saleOffer(ctx.state);
   const cities = ownedCities(ctx.state);
+  // Kommt nicht vor (der Preis deckt Rotterdam samt Gebühr), aber dann lieber gar nicht als halb verkaufen.
+  if (wallet.balance(ctx.state, 'dirty') + offer.price < offer.rotterdamPrice + offer.rotterdamFee) {
+    return { ok: false, reason: 'Das Geld reicht nicht für Rotterdam.' };
+  }
   // Gebucht auf Rotterdam, nicht auf die aktive Stadt: Die Kasse der alten Städte bleibt sauber.
   wallet.earn(ctx, offer.price, 'dirty', 'Verkauf des Geschäfts an die Statthalter', {
     category: 'sale.business',
     cityId: HARBOR_CITY,
   });
-  wallet.pay(ctx, offer.rotterdamPrice, 'dirty', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
+  // Rotterdam ist legal (Liegeplatz, Halle) und kostet sauberes Geld: Jansens Reederei wäscht den Anteil sofort, die
+  // Gebühr bucht als Geldwäsche.
+  launderAtOnce(ctx, offer.rotterdamPrice, ROTTERDAM_LAUNDERING_CHANNEL, HARBOR_CITY);
+  wallet.pay(ctx, offer.rotterdamPrice, 'clean', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
     category: 'business.rotterdam',
     cityId: HARBOR_CITY,
   });
@@ -1423,7 +1451,7 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   messages.archive(ctx, 'Frühere Städte');
   journal.add(
     ctx,
-    `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} an Jansen. Dir bleiben ${formatEuro(offer.rest)}.`,
+    `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} sauber an Jansen (Gebühr der Wäsche ${formatEuro(offer.rotterdamFee)}). Dir bleiben ${formatEuro(offer.rest)}.`,
     'good',
   );
   ctx.emit('business.sold', {

@@ -132,6 +132,8 @@ export interface GangIncident {
   trail?: BurglaryTrail;
   /** Laufende Konfrontation zum Vorfall (Täter suchen, Sicherheit am Spot). */
   encounterId?: number;
+  /** Die Stadt des Vorfalls schläft gerade oder hat geschlafen und ist noch nicht wieder aufgewacht (wakeIncident). */
+  resting?: boolean;
 }
 
 /** Gang-Leute an einem deiner Spots. */
@@ -1132,7 +1134,12 @@ export function upkeepIncidents(ctx: Ctx): void {
       continue;
     }
     // Nur die Stadt, die live ist (Auftrag 30): Vorfälle der schlafenden Stadt ruhen bis zum Aufwachen.
-    if (incident.cityId && !isCityLive(ctx.state, incident.cityId)) continue;
+    if (incident.cityId && !isCityLive(ctx.state, incident.cityId)) {
+      incident.resting = true;
+      continue;
+    }
+    // Aufgewacht, aber city.switched noch nicht zugestellt (Wechsel im selben Schritt wie dieser Tick).
+    if (incident.resting && wakeIncident(ctx, incident)) continue;
     if (incident.reported === false) {
       if (incident.plannedAt !== undefined) {
         if (incident.plannedAt <= ctx.now) runBurglary(ctx, incident);
@@ -1149,6 +1156,54 @@ export function upkeepIncidents(ctx: Ctx): void {
     if (incident.expiresAt > ctx.now) continue;
     respond(ctx, incident.id, INCIDENT_CHOICES[incident.kind][0]);
   }
+}
+
+/**
+ * Ereignis city.switched: Die Vorfälle der Stadt, die einschläft, ruhen ab jetzt (auch wenn bis zur Rückkehr kein
+ * Stundentakt kommt); die der Stadt, die aufwacht, werden gleich aufgeweckt.
+ */
+export function onCitySwitched(ctx: Ctx, from: string, to: string): void {
+  for (const incident of [...ctx.state.modules.gangs.incidents]) {
+    if (incident.cityId === from) incident.resting = true;
+    else if (incident.cityId === to) wakeIncident(ctx, incident);
+  }
+}
+
+/**
+ * Die Stadt des Vorfalls ist wieder live. Lief seine Frist in der Ruhe ab, verfällt er ohne Wirkung: keine vorsichtige
+ * Wahl, nur die Fragen der Nachricht verschwinden. Sonst läuft er mit der Frist weiter, die er hat. Ein geplanter
+ * Einbruch, dessen Nacht in die Ruhe fiel, kommt erst in der nächsten Nacht zur selben Stunde, nicht gleich bei deiner
+ * Rückkehr. Gibt zurück, ob der Vorfall weg ist.
+ */
+function wakeIncident(ctx: Ctx, incident: GangIncident): boolean {
+  delete incident.resting;
+  // Mit laufender Konfrontation räumt upkeepIncidents wie gewohnt auf.
+  if (incident.encounterId !== undefined) return false;
+  if (incident.expiresAt <= ctx.now) {
+    // Ein Einbruch, der vor der Ruhe geschah, aber nie gemeldet wurde: Der Verlust gehört wenigstens ins Journal.
+    if (incident.reported === false && incident.plannedAt === undefined) noteMissedBurglary(ctx, incident);
+    retract(ctx, incident);
+    removeIncident(ctx, incident.id);
+    return true;
+  }
+  if (incident.plannedAt !== undefined && incident.plannedAt <= ctx.now) {
+    const days = Math.floor((ctx.now - incident.plannedAt) / MINUTES_PER_DAY) + 1;
+    incident.plannedAt += days * MINUTES_PER_DAY;
+    incident.reportAt = nextReport(incident.plannedAt);
+    incident.expiresAt = incident.reportAt + INCIDENT_EXPIRY;
+  }
+  return false;
+}
+
+/** Einbruch, dessen Meldung und Frist ganz in die Ruhe der Stadt fielen: nur noch ein Eintrag im Journal, ohne Fragen. */
+function noteMissedBurglary(ctx: Ctx, incident: GangIncident): void {
+  if (!incident.amount || !incident.productId) return;
+  const warehouse = getWarehouse(ctx.state, incident.warehouseId ?? '')?.name ?? 'Lager';
+  journal.add(
+    ctx,
+    `Einbruch ${warehousePlace(warehouse, 'in')}, während du weg warst: ${goodsText(incident.productId, incident.amount)} gestohlen.`,
+    'bad',
+  );
 }
 
 /** Kurztext eines Vorfalls für die Gangs-Seite. */

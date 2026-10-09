@@ -504,7 +504,10 @@ export function isPlayerOnTheRoad(state: GameState): boolean {
   );
 }
 
-/** Straßenwahl einer Fahrt für roads (Landstraße meidet die Autobahn). */
+/**
+ * Straßenwahl einer Fahrt für roads (Landstraße meidet die Autobahn). Zwischen zwei Städten nimmt roads immer die
+ * Autobahn (interCityRoute): Weg, Karte und Zeit sind dort für jede Wahl dieselben.
+ */
 export function roadOptions(choice: RouteChoice | undefined): RoadOptions | undefined {
   return choice && ROUTE_CHOICES[choice].avoidMotorway ? { weights: AVOID_MOTORWAY } : undefined;
 }
@@ -521,10 +524,22 @@ export function isNight(time: number): boolean {
   return minute >= NIGHT_START || minute < NIGHT_END;
 }
 
-/** Was eine Wahl bei dieser Abfahrt wirklich bringt: "nachts" fährt am Tag wie die Autobahn. */
-export function effectiveChoice(choice: RouteChoice | undefined, departure: number): RouteChoice {
+/**
+ * Wahl, wie sie auf diesem Weg wirkt: Zwischen zwei Städten gibt es keine Landstraße, jede Fahrt nimmt die Autobahn
+ * (roads.interCityRoute). Die Landstraße fährt dort also wie die Autobahn, auch beim Zoll.
+ */
+export function choiceOnWay(choice: RouteChoice | undefined, interCity: boolean): RouteChoice {
   if (!choice) return 'autobahn';
-  return ROUTE_CHOICES[choice].night && !isNight(departure) ? 'autobahn' : choice;
+  return interCity && ROUTE_CHOICES[choice].avoidMotorway ? 'autobahn' : choice;
+}
+
+/**
+ * Was eine Wahl bei dieser Abfahrt wirklich bringt: "nachts" fährt am Tag wie die Autobahn, die Landstraße zwischen
+ * zwei Städten auch (choiceOnWay).
+ */
+export function effectiveChoice(choice: RouteChoice | undefined, departure: number, interCity = false): RouteChoice {
+  const way = choiceOnWay(choice, interCity);
+  return ROUTE_CHOICES[way].night && !isNight(departure) ? 'autobahn' : way;
 }
 
 /** Container am Kai, die eine geplante Nachtfahrt schon für sich eingeteilt hat. */
@@ -918,7 +933,8 @@ function rollCheck(ctx: Ctx, trip: Trip): void {
   let chance: number;
   // Auftrag 46e: Ein Polizei-Kontakt in der Zielstadt hält den Zoll (Autobahn) bzw. die Streife (Stadt) fern.
   const city = tripCity(ctx.state, trip);
-  if (isInterCityTrip(ctx.state, trip)) {
+  const interCity = isInterCityTrip(ctx.state, trip);
+  if (interCity) {
     const heat = cityHeat(ctx.state, city);
     chance =
       AUTOBAHN_CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution * specialistFactor(ctx.state, 'seizure', city);
@@ -927,7 +943,8 @@ function rollCheck(ctx: Ctx, trip: Trip): void {
     const heat = veedelId ? getHeat(ctx.state, veedelId) : 0;
     chance = CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution * specialistFactor(ctx.state, 'checks', city);
   }
-  chance *= ROUTE_CHOICES[effectiveChoice(trip.choice, trip.startedAt)].checkFactor;
+  // Zwischen den Städten fährt auch die Landstraße über die Autobahn: dort kontrolliert der Zoll wie bei jeder Fahrt.
+  chance *= ROUTE_CHOICES[effectiveChoice(trip.choice, trip.startedAt, interCity)].checkFactor;
   if (!ctx.chance(Math.min(0.9, chance))) return;
   const span = trip.arrivesAt - trip.loadedAt;
   trip.checkAt = trip.loadedAt + Math.max(1, Math.round(span * (0.2 + ctx.random() * 0.6)));

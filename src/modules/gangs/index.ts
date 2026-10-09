@@ -46,7 +46,7 @@ import {
   releaseProtection,
 } from './diplomacy';
 import { forgetFaded } from './memory';
-import { burgleNow, type IncidentKind, respond, runMethod } from './methods';
+import { burgleNow, type IncidentKind, onCitySwitched, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
 import { onSafeFinished } from './safe';
 import { onSearchFinished } from './search';
@@ -257,6 +257,8 @@ export default defineModule({
     'police.tipOff': onTipOff,
     'police.raid': onPoliceRaid,
     'territory.controlChanged': onControlChanged,
+    // Vorfälle ruhen, solange ihre Stadt schläft; was in der Ruhe abläuft, verfällt beim Aufwachen ohne Wirkung.
+    'city.switched': (ctx, { from, to }) => onCitySwitched(ctx, from, to),
     'minigame.finished': (ctx, payload) => {
       onSafeFinished(ctx, payload);
       onSearchFinished(ctx, payload);

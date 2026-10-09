@@ -1,15 +1,24 @@
 // Regressionstests zu Befunden aus dem Bugreview (Paket city): Tagesgewinn für den Verkauf ohne Anheuern, Rotterdam
-// in cityAt, Erinnerung einer Stadt, die nach einer anderen Zusage wartet.
+// in cityAt, Erinnerung einer Stadt, die nach einer anderen Zusage wartet, Rotterdam mit sauberem Geld bezahlt.
 
 import { describe, expect, it } from 'vitest';
 import { MINUTES_PER_DAY, messages, type Simulation, wallet } from '../../core';
-import { createTestGame } from '../../core/testing';
+import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getRightHand, RIGHT_HAND_RANK_XP } from '../hierarchy';
+import { channelFee, getChannel } from '../laundering';
 import { enlist, generateProfile } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { OFFER_CALL_DELAY, OFFER_REMINDER_DAYS } from './config';
-import { acceptedCity, businessDailyProfit, cityAt, cityContact, offerStatus } from './index';
+import { OFFER_CALL_DELAY, OFFER_REMINDER_DAYS, ROTTERDAM_LAUNDERING_CHANNEL } from './config';
+import {
+  acceptedCity,
+  businessDailyProfit,
+  cityAt,
+  cityContact,
+  offerStatus,
+  playableCities,
+  saleOffer,
+} from './index';
 
 const DAY = MINUTES_PER_DAY;
 
@@ -111,5 +120,43 @@ describe('Eine Stadt, die nach einer anderen Zusage wartet, meldet sich wieder',
     sim.advance(OFFER_REMINDER_DAYS * DAY + 5);
     expect(offerStatus(sim.state, 'hamburg')).toBe('later');
     expect(asked()).toHaveLength(1);
+  });
+});
+
+describe('Rotterdam wird mit sauberem Geld bezahlt', () => {
+  it('der Anteil geht beim Verkauf durch die Wäsche der Reederei: sauberes Konto gleich, Gebühr als Geldwäsche', () => {
+    const sim = quietGame(4);
+    for (const city of playableCities()) {
+      if (city.id !== 'koeln') sim.dispatch({ type: 'city.unlock', payload: { cityId: city.id } }, { actor: 'system' });
+      takeCity(sim, city.id);
+    }
+    sim.advance(60);
+    sim.state.modules.city.sale = { status: 'calling', callAt: null, sold: null };
+    const offer = saleOffer(sim.state);
+    const dirty = sim.state.wallet.dirty;
+    const clean = sim.state.wallet.clean;
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'city.sell', payload: {} }).ok).toBe(true);
+
+    // Gebühr zum Satz der Reederei: so viel Schwarzgeld, dass genau der Preis von Rotterdam sauber herauskommt.
+    const rate = channelFee(sim.state, ROTTERDAM_LAUNDERING_CHANNEL);
+    const fee = Math.round(offer.rotterdamPrice / (1 - rate)) - offer.rotterdamPrice;
+    expect(fee).toBeGreaterThan(0);
+    expect(sim.state.wallet.clean).toBeCloseTo(clean, 0);
+    expect(sim.state.wallet.dirty).toBeCloseTo(dirty + offer.price - offer.rotterdamPrice - fee, 0);
+    expect(offer.rest).toBe(offer.price - offer.rotterdamPrice - fee);
+
+    const changes = eventsOfType(events, 'wallet.changed').map((e) => e.payload);
+    const rotterdam = changes.filter((c) => c.category === 'business.rotterdam');
+    expect(rotterdam).toHaveLength(1);
+    expect(rotterdam[0]).toMatchObject({ kind: 'clean', amount: -offer.rotterdamPrice, cityId: 'rotterdam' });
+    const fees = changes.filter((c) => c.category === 'laundering');
+    expect(fees).toHaveLength(1);
+    expect(fees[0]).toMatchObject({
+      kind: 'dirty',
+      amount: -fee,
+      cityId: 'rotterdam',
+      reason: `Gebühr ${getChannel(ROTTERDAM_LAUNDERING_CHANNEL).name}`,
+    });
   });
 });

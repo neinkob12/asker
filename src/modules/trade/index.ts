@@ -2210,11 +2210,36 @@ export default defineModule({
     // Auftrag 44, Teil 7: Container gepackt, der Score gilt für alle Container der Bestellung.
     'minigame.finished': (ctx, payload) => onPackingFinished(ctx, payload),
   },
-  // Pleite-Regel: Ware in einem Hafen, ein Container unterwegs oder eine Lieferung auf der Straße.
+  // Pleite-Regel: Ware in einem Hafen, ein Container unterwegs, eine Lieferung auf der Straße oder Geld für den nächsten
+  // Container. Nach dem Verkauf liefert kein alter Lieferant mehr (suppliers zählt das Geld dann nicht), also zählt es hier.
   solvency: (state) =>
     isBusinessSold(state) &&
-    (totalStock(state) > 0 || getShipments(state).length > 0 || getDeliveries(state).length > 0),
+    (totalStock(state) > 0 ||
+      getShipments(state).length > 0 ||
+      getDeliveries(state).length > 0 ||
+      wallet.balance(state) >= cheapestContainer()),
 });
+
+let cheapest: number | null = null;
+
+/**
+ * Was der billigste Container kostet (Ware und Fracht auf der Linie, ohne Deckladung), aus den Daten. Wer so viel Geld
+ * hat (schwarz oder sauber: mit sauberem Geld kaufst du Fincas, Schiffe und Hallen), ist nicht pleite.
+ */
+function cheapestContainer(): number {
+  if (cheapest !== null) return cheapest;
+  let min = Number.POSITIVE_INFINITY;
+  for (const producer of PRODUCERS) {
+    for (const productId of Object.keys(producer.products)) {
+      for (const size of CONTAINER_SIZES) {
+        const cost = containerCost(producer.id, productId, size.id);
+        min = Math.min(min, cost.goods + cost.freight + cost.cover);
+      }
+    }
+  }
+  cheapest = Number.isFinite(min) ? min : 0;
+  return cheapest;
+}
 
 /** Nach einer erfolgreichen Bestellung des Spielers selbst: Container packen (Minispiel, Auftrag 44, Teil 7). */
 function packAfter(

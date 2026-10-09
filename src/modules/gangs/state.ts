@@ -342,8 +342,10 @@ export function tributeAmount(state: GameState, id: string): number {
   const s = getGangStatus(state, id);
   if (!s) return 0;
   if (s.quote && s.quote.until > state.time) return s.quote.tribute;
-  // Wer mehr Revier hat, kann mehr zahlen: pro eigenem Veedel wird es teurer.
-  const turf = controlledBy(state, PLAYER_FACTION).length;
+  // Wer mehr Revier hat, kann mehr zahlen: pro eigenem Veedel wird es teurer. Es zählen nur deine Veedel in der Stadt
+  // der Gang, so wie ihre Macht auch nur dort reicht (playerPower).
+  const city = gangCity(state, id);
+  const turf = controlledBy(state, PLAYER_FACTION).filter((v) => veedelCity(v) === city).length;
   return roundTo(TRIBUTE_BASE + s.hostility * TRIBUTE_PER_HOSTILITY + turf * TRIBUTE_PER_PLAYER_VEEDEL, 50);
 }
 

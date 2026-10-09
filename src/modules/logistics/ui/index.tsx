@@ -45,6 +45,7 @@ import {
   berthCost,
   cargoRisk,
   cargoRiskFrom,
+  choiceOnWay,
   defaultPickupWarehouse,
   freeDrivers,
   getCargo,
@@ -101,6 +102,9 @@ function TripRow(props: { trip: Trip }) {
   const from = placeOf(state, trip.fromId)?.name ?? 'Hafen';
   const to = placeOf(state, trip.toId)?.name ?? 'Lager';
   const stopped = trip.status === 'stopped';
+  const interCity = isInterCityTrip(state, trip);
+  // Zwischen den Städten fährt auch die Landstraße die A1: kein Chip „Landstraße“.
+  const choice = choiceOnWay(trip.choice, interCity);
   // Am vollen Lager: Umleiten ins nächste Lager der Stadt mit Platz (Auftrag 33).
   const here = getWarehouse(state, trip.toId);
   const elsewhere =
@@ -139,7 +143,7 @@ function TripRow(props: { trip: Trip }) {
         icon={stopped ? 'siren' : trip.driverId ? 'truck' : 'car'}
         color={stopped ? 'danger' : 'goods'}
         title={trip.kind === 'pickup' ? `Hafen → ${to}` : `${from} → ${to}`}
-        meta={legText(trip, progress.leg, isInterCityTrip(state, trip))}
+        meta={legText(trip, progress.leg, interCity)}
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
           // Je Ware mit ihrer Einheit (Gramm und Stück nie zu einer Zahl addiert).
@@ -149,8 +153,7 @@ function TripRow(props: { trip: Trip }) {
             color: 'goods' as const,
           })),
           trip.vehicleId !== undefined && { label: vehicleName(state, trip.vehicleId), icon: 'truck', color: 'goods' },
-          trip.choice &&
-            trip.choice !== 'autobahn' && { label: ROUTE_CHOICES[trip.choice].name, icon: 'route', color: 'place' },
+          choice !== 'autobahn' && { label: ROUTE_CHOICES[choice].name, icon: 'route', color: 'place' },
         ]}
       >
         <ProgressBar value={progress.total} tone={stopped ? 'bad' : 'accent'} label="Fahrt" />

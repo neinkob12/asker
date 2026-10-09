@@ -241,6 +241,9 @@ export function planOrder(
   }
   // Der Kurier lädt im Ziel-Lager ab, suppliers.order nimmt nur, was dort Platz hat (Schiffsware kommt an den Kai). Pakete,
   // die nicht passen, fallen weg; passt keins, ruht die Regel mit Grund (sonst scheiterte die Bestellung still).
+  // Mit Vollmacht ruht die Regel dabei still, ohne Eintrag im Protokoll der Rechten Hand (restock in tasks.ts meldet
+  // Pausen nur ohne Vollmacht). Das ist so entschieden und bleibt: Der Statthalter entscheidet selbst, ob er umlagert
+  // oder ein Lager dazukauft (Ausbau in fullpower.ts), und schreibt dir dazu kein Protokoll.
   const room = courierRoom(state, warehouseId);
   const fits = offers.filter(
     (o) => supplierIn(o.supplier, city).kind === 'port' || o.pkg.amount * unitWeight(o.pkg.productId) <= room,

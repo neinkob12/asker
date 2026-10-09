@@ -1,5 +1,6 @@
 // Regressionstests zum Bugreview (Paket Logistik): feste Routen-Fahrer, Kontrollen mit verletztem Fahrer, weggefallene
-// Fahrzeuge, Teillieferungen am vollen Lager, Nachkauf, schlafender Kai, Nachtfahrten, Kran, Schiffe.
+// Fahrzeuge, Teillieferungen am vollen Lager, Nachkauf, schlafender Kai, Nachtfahrten, Kran, Schiffe, Landstraße
+// zwischen zwei Städten.
 
 import { describe, expect, it } from 'vitest';
 import { clock, MINUTES_PER_DAY, type Simulation } from '../../core';
@@ -17,6 +18,7 @@ import {
   warehousePlace,
 } from '../goods';
 import { getStaffMember, setStatus } from '../staff';
+import { allVeedel } from '../veedel';
 import { LOAD_MINUTES } from './config';
 import {
   freeDrivers,
@@ -25,6 +27,7 @@ import {
   getTrips,
   itemsText,
   nextDeparture,
+  type RouteChoice,
   type RouteInput,
   receiveCargo,
   type Trip,
@@ -460,5 +463,56 @@ describe('Seeschiffe fahren nicht auf der Straße', () => {
       }),
     ).toEqual({ ok: false, reason: 'Schiffe fahren nicht auf der Straße.' });
     expect(sim.state.modules.fleet.vehicles.find((v) => v.id === shipId)?.tripId).toBeNull();
+  });
+});
+
+describe('Route zwischen zwei Städten mit Landstraße', () => {
+  /** Route von Köln nach Hamburg mit dieser Wahl bis zur Abfahrt; Hamburg mit hoher Heat, der Zoll kontrolliert oft. */
+  function departed(seed: number, choice: RouteChoice): { sim: Simulation; trip: Trip } {
+    const sim = quietGame(seed);
+    expect(sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' }).ok).toBe(true);
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'werkstatt-ottensen' } }).ok).toBe(true);
+    for (const v of allVeedel('hamburg')) sim.state.modules.police.heat[v.id] = 100;
+    const driverId = hireDriver(sim);
+    store(sim.ctx('test'), { productId: 'weed', amount: 2000, warehouseId: 'ehrenfeld', quality: 0.8 });
+    const routeId = addRoute(sim, {
+      driverId,
+      fromId: 'ehrenfeld',
+      toId: 'werkstatt-ottensen',
+      items: [{ productId: 'weed', amount: 1000 }],
+      departure: departureIn(sim, 10),
+      choice,
+    });
+    const route = getRoute(sim.state, routeId);
+    const at = route ? nextDeparture(sim.state, route) : null;
+    if (at === null) throw new Error('keine Abfahrt');
+    sim.advance(at - sim.state.time);
+    const trip = getTrips(sim.state).find((t) => t.routeId === routeId);
+    if (!trip) throw new Error('keine Fahrt');
+    return { sim, trip };
+  }
+
+  /** Bis zur Kontrolle fahren: der Text im Journal ("Zollkontrolle auf der A1 bei …"). */
+  function customsText(sim: Simulation, trip: Trip): string | undefined {
+    sim.advance((trip.checkAt ?? sim.state.time) - sim.state.time);
+    return sim.state.journal.find((e) => e.text.startsWith('Zollkontrolle'))?.text;
+  }
+
+  it('fährt die A1 wie mit Autobahn: gleiche Fahrzeit, der Zoll kontrolliert genauso und am selben Ort', () => {
+    let checks = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const fast = departed(seed, 'autobahn');
+      const slow = departed(seed, 'country');
+      expect(slow.trip.choice).toBe('country');
+      expect(slow.trip.arrivesAt - slow.trip.loadedAt).toBe(fast.trip.arrivesAt - fast.trip.loadedAt);
+      // Gleicher Seed und gleiche Chance: Die Kontrolle fällt auf dieselbe Minute (oder bleibt bei beiden aus).
+      expect(slow.trip.checkAt).toBe(fast.trip.checkAt);
+      if (fast.trip.checkAt === null) continue;
+      checks++;
+      const text = customsText(fast.sim, fast.trip);
+      expect(text).toMatch(/^Zollkontrolle auf der A1 bei /);
+      expect(customsText(slow.sim, slow.trip)).toBe(text);
+    }
+    expect(checks).toBeGreaterThan(0);
   });
 });

@@ -130,9 +130,11 @@ Geldwäsche bucht den gewaschenen Betrag als Umbuchung (`transfer`, kein Gewinn 
 getrennt (`laundering`).
 
 **Pleite-Regel:** Module können `solvency(state)` angeben ("kann der Spieler dank mir weitermachen?").
-Melden alle `false`, löst der Kern `game.over` mit `bankrupt` aus. Stand jetzt: `goods` (Ware im Lager) und
-`suppliers` (Lieferung unterwegs, genug Schwarzgeld oder Kredit für ein Paket; bei einem gesperrten Lieferanten
-zählt, ob das Geld für Schulden plus Paket reicht).
+Melden alle `false`, löst der Kern `game.over` mit `bankrupt` aus. Stand jetzt: `goods` (Ware im Lager; nach dem
+Verkauf des Geschäfts nur Lager, die nicht an die Statthalter gingen), `suppliers` (Lieferung unterwegs, genug
+Schwarzgeld oder Kredit für ein Paket; bei einem gesperrten Lieferanten zählt, ob das Geld für Schulden plus Paket
+reicht), `logistics` (Ware am Kai, Fahrt unterwegs) und nach dem Verkauf `trade` (Ware in einem Hafen, Container oder
+Lieferung unterwegs, Geld auf dem Konto, schwarz oder sauber, für den billigsten Container).
 
 ### Spielstände (`persistence.ts`, `saves.ts`, `session.ts`)
 
@@ -437,7 +439,9 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   eines Fahrzeugs begrenzt nur, wenn man es wählt. Auf Routen fasst das Privatauto 5 kg (`INTERCITY_CAPACITY`, wie
   bisher). Fliegt eine Ladung auf, ist das Fahrzeug zur Hälfte beschlagnahmt. Jede Fahrt
   mit Ware wählt die Strecke (`ROUTE_CHOICES`): Autobahn wie bisher, Landstraße (`roads` mit `AVOID_MOTORWAY`, mindestens
-  ein Fünftel länger, Kontrollen halb so oft) oder nachts (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen, nur bei Abfahrt in der Nacht; bis dahin ist die
+  ein Fünftel länger, Kontrollen halb so oft; nur in der Stadt: Zwischen zwei Städten gibt es keine Landstraßen-Daten,
+  jede Fahrt nimmt die Autobahn (`interCityRoute`) mit derselben Zeit und demselben Zoll, `choiceOnWay`) oder nachts
+  (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen, nur bei Abfahrt in der Nacht; bis dahin ist die
   Fahrt `planned`, Container bleiben am Kai und können dort noch vom Zoll gefunden werden). Der Liegeplatz hat Stufen
   (`BERTH_LEVELS`: Halle am Kai, Kran): Ware länger sicher, weniger Zoll, Laden schneller. Jansen und Daan bieten Container
   (`container: 'full'`, 5 bzw. 6 kg, billig pro Gramm) und halbe Container (`'shared'`, noch billiger, mit 12 % fliegt die
@@ -1064,7 +1068,10 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Verkaufsformel** (`city/config.ts`): Preis = `SALE_PROFIT_DAYS` (90) Tagesgewinne aller Städte; Tagesgewinn =
   Schnitt der letzten `SALE_AVERAGE_DAYS` (7) abgeschlossenen Tage aus der Kasse, je Stadt das Ergebnis vor dem Anteil
   der Statthalter und ohne Ausbau (`businessDailyProfit`), mindestens `SALE_PRICE_MIN`. Rotterdam kostet
-  `ROTTERDAM_SHARE` (0,65) davon, der Rest ist das Startkapital (`salePriceFor`, `saleOffer`). Begründung: 90 Tage sind
+  `ROTTERDAM_SHARE` (0,65) davon, der Rest ist das Startkapital (`salePriceFor`, `saleOffer`). Rotterdam ist legal und
+  wird sauber bezahlt: Der Anteil geht beim Verkauf über Jansens Reederei durch die Wäsche
+  (`ROTTERDAM_LAUNDERING_CHANNEL`, Gebühr aus `laundering/config.ts`, `launderAtOnce`), die Gebühr (`rotterdamFee`,
+  Kategorie `laundering`) geht vom Startkapital ab. Begründung: 90 Tage sind
   ein Quartal Statthalter-Ergebnis, ein runder, großer Betrag (beim Bot 1,5 bis 2,2 Mio. €); zwei Drittel davon für
   Rotterdam lassen etwa 30 Tagesgewinne als Startkapital (0,5 bis 0,8 Mio. €): genug für die Container der ersten zwei
   Wochen, nicht für alle Kunden auf einmal. Mit drei Vierteln platzten beim Bot in der ersten Woche Bestellungen (Geld
@@ -1072,7 +1079,8 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Nach dem Verkauf** (`business.sold`, `isBusinessSold`, `saleRecord`): Rotterdam ist ein Ort im Ausland
   (`ABROAD_CITIES`, `CityDef.abroad`, keine Veedel), du fährst hin, die Stadt wird aktiv. Die deutschen Städte schlafen
   nicht mehr für dich (`closeSleepers` und `closeLiveDay` ruhen, keine Kasse pro Stadt), Fahrten und Wechsel dorthin gehen
-  nicht mehr, Rang Importeur. Module räumen per Ereignis auf: `logistics` (Routen, Nachkauf), `laundering` (Jansens
+  nicht mehr, Rang Importeur. Module räumen per Ereignis auf: `goods` (die Ware in den Lagern der verkauften Städte
+  geht an die Statthalter, sie war im Preis; Eintrag im Journal), `logistics` (Routen, Nachkauf), `laundering` (Jansens
   Reederei als vierter Weg, `harborOnly`), `trade` (Kunden, Abnahmevertrag, Jansens Halle mit `START_STOCK`). `quests`
   bietet keine Wochenverträge mehr an (`contractsOpen`). Code, der die Veedel der aktiven Stadt nimmt, muss mit einer leeren Liste leben
   (z.B. `police.hottestVeedel`, `territory.checkMilestones`).

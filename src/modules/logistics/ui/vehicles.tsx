@@ -5,7 +5,7 @@
 import { formatAmount, type GameState } from '../../../core';
 import { Hint, SegmentedControl, Select } from '../../../ui';
 import { freeVehicles, getVehicles, isShip, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
-import { ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
+import { choiceOnWay, ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
 
 export const AUTO = '';
 
@@ -53,8 +53,16 @@ export function VehicleSelect(props: {
   return <Select label={props.label ?? 'Fahrzeug'} wide value={value} options={options} onChange={props.onChange} />;
 }
 
-/** Autobahn, Landstraße oder nachts, mit dem Satz zur gewählten Strecke. */
-export function ChoiceControl(props: { value: RouteChoice; onChange: (value: RouteChoice) => void }) {
+/**
+ * Autobahn, Landstraße oder nachts, mit dem Satz zur gewählten Strecke. Zwischen zwei Städten (interCity) gibt es keine
+ * Landstraße: Der Satz sagt dann, dass die Fahrt die A1 nimmt (choiceOnWay).
+ */
+export function ChoiceControl(props: {
+  value: RouteChoice;
+  onChange: (value: RouteChoice) => void;
+  interCity?: boolean;
+}) {
+  const onAutobahn = choiceOnWay(props.value, props.interCity ?? false) !== props.value;
   return (
     <div class="logi-choice">
       <SegmentedControl
@@ -64,7 +72,11 @@ export function ChoiceControl(props: { value: RouteChoice; onChange: (value: Rou
         options={ROUTE_CHOICE_ORDER.map((id) => ({ value: id, label: ROUTE_CHOICES[id].name }))}
         onChange={props.onChange}
       />
-      <Hint>{ROUTE_CHOICES[props.value].hint}</Hint>
+      <Hint>
+        {onAutobahn
+          ? 'Zwischen den Städten gibt es nur die A1: gleiche Zeit und gleicher Zoll wie mit Autobahn.'
+          : ROUTE_CHOICES[props.value].hint}
+      </Hint>
     </div>
   );
 }

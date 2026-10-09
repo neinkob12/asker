@@ -22,8 +22,17 @@ import { getSuppliers } from '../suppliers';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { RIGHT_HAND_RANK_XP } from './config';
-import { appointWage, canBeLieutenant, getPost, getRightHand, lieutenantDemand, taskIdleReason } from './index';
+import {
+  appointWage,
+  canBeLieutenant,
+  getPost,
+  getRightHand,
+  lieutenantDemand,
+  rightHandDriver,
+  taskIdleReason,
+} from './index';
 import { planOrder, runRestock } from './orders';
+import { blockedOrderOutcome } from './tasks';
 import type { OrderRule } from './types';
 
 const DAY = 24 * 60;
@@ -378,6 +387,66 @@ describe('Steckt die Rechte Hand in einem gekippten Deal, wartet die nächste An
     sim.advance(5);
     expect(rh(sim).passed).not.toContain(second.id);
     expect(getOrders(sim.state, { status: 'offered' }).map((o) => o.id)).toContain(second.id);
+  });
+});
+
+describe('Bleibt eine Anfrage beim Spieler, nennt die Rechte Hand ihren wirklichen Grund', () => {
+  function ordersGame() {
+    const sim = quietGame();
+    const boss = withRightHand(sim);
+    changeReputation(sim.ctx('test'), 40);
+    sim.dispatch({
+      type: 'hierarchy.configureRightHand',
+      payload: { settings: { orders: true, orderMaxPrice: 3000 } },
+    });
+    return { sim, boss };
+  }
+
+  it('ist sie mit einer Lieferung unterwegs und reicht die Frist nicht, sagt sie, dass sie noch unterwegs ist', () => {
+    const { sim, boss } = ordersGame();
+    const first = offerDelivery(sim.ctx('customers'), true);
+    if (!first) throw new Error('keine Bestellung');
+    sim.advance(5);
+    const running = getOrders(sim.state).find((o) => o.id === first.id);
+    expect(running?.courierId).toBe(boss.id);
+    expect(rightHandDriver(sim.state)).toMatchObject({ ok: false, cause: 'busy' });
+    const arrives = running?.arrivesAt ?? sim.state.time;
+    expect(arrives).toBeGreaterThan(sim.state.time + 10);
+    const second = offerDelivery(sim.ctx('customers'), true);
+    if (!second) throw new Error('keine zweite Bestellung');
+    second.price = 50;
+    // Die Frist endet kurz nach ihrer Rückkehr: zu knapp, um zu warten.
+    second.expiresAt = arrives + 10;
+    store(sim.ctx('goods'), { productId: second.productId, amount: second.amount + 100 });
+    sim.advance(5);
+    expect(rh(sim).passed).toContain(second.id);
+    const entry = rh(sim).log.find((e) => e.text.startsWith(`Anfrage von ${second.contactName}`));
+    expect(entry?.text).toMatch(/ich bin noch unterwegs und die Frist ist zu knapp/);
+  });
+
+  it('fällt sie aus, sagt sie das, statt zu behaupten, sie sei unterwegs', () => {
+    const { sim, boss } = ordersGame();
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    setStatus(sim.ctx('staff'), boss.id, 'jailed');
+    const driver = rightHandDriver(sim.state);
+    if (driver.ok) throw new Error('sie dürfte nicht fahren');
+    expect(driver.cause).toBe('out');
+    const outcome = blockedOrderOutcome(sim.state, boss, order, driver);
+    expect(outcome).toEqual({ wait: false, reason: expect.stringMatching(/falle gerade aus/) });
+    expect(outcome.wait ? '' : outcome.reason).not.toMatch(/unterwegs/);
+  });
+
+  it('hat die Stadt keine Rechte Hand, die fahren könnte, ist auch das ein eigener Satz', () => {
+    const { sim, boss } = ordersGame();
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    const driver = rightHandDriver(sim.state, 'hamburg');
+    if (driver.ok) throw new Error('in Hamburg gibt es keine Rechte Hand');
+    expect(driver.cause).toBe('none');
+    const outcome = blockedOrderOutcome(sim.state, boss, order, driver);
+    expect(outcome).toEqual({ wait: false, reason: expect.stringMatching(/nicht ausfahren/) });
+    expect(outcome.wait ? '' : outcome.reason).not.toMatch(/unterwegs|falle/);
   });
 });
 

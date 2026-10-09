@@ -1,16 +1,17 @@
 // Regressionstests aus dem Bugreview (Gangs): je Fehler ein Block, benannt nach dem Verhalten, das er absichert.
 
 import { describe, expect, it } from 'vitest';
-import { fillText, type GameEvents, type Simulation, wallet } from '../../core';
+import { clock, fillText, type GameEvents, MINUTES_PER_DAY, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { activeCity, unlockCity } from '../city';
 import { activeEncounters } from '../encounters';
-import { fitsInto, formatProductAmount, getStock, productName, store, warehouseSites } from '../goods';
+import { fitsInto, formatProductAmount, getStock, getWarehouses, productName, store, warehouseSites } from '../goods';
 import { getStaffMember, invalidateStaffIndex, isEmployed } from '../staff';
 import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { gangsTick, pickRaidTarget, pickTarget } from './ai';
 import { statusOf } from './common';
+import { TRIBUTE_PER_PLAYER_VEEDEL } from './config';
 import { GANGS, type Gang, gangNameIn, rivalryKey } from './data';
 import {
   type GangStatus,
@@ -20,6 +21,7 @@ import {
   intimidationFactor,
   raidTargets,
   scriptedRaid,
+  tributeAmount,
 } from './index';
 import { type GangIncident, runMethod } from './methods';
 import { onEncounterResolved } from './reactions';
@@ -51,7 +53,7 @@ function hire(sim: Simulation, spotId: string, loyalty = 30): string {
   return id;
 }
 
-function run(sim: Simulation, gangId: string, method: 'poach' | 'intimidate'): boolean {
+function run(sim: Simulation, gangId: string, method: 'poach' | 'intimidate' | 'burglary'): boolean {
   const ctx = sim.ctx('gangs');
   const s = statusOf(ctx, gangId);
   if (!s) throw new Error(gangId);
@@ -72,6 +74,26 @@ function switchToHamburg(sim: Simulation): void {
   const result = sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
   if (!result.ok) throw new Error(result.reason);
   expect(activeCity(sim.state)).toBe('hamburg');
+}
+
+/** Bis zur nächsten vollen Stunde h vorspulen. */
+function advanceToHour(sim: Simulation, h: number): void {
+  while (clock.hour(sim.state.time) !== h || sim.state.time % 60 !== 0) sim.advance(60 - (sim.state.time % 60) || 60);
+}
+
+/** Zurück nach Köln schalten (Hamburg schläft danach). */
+function switchToKoeln(sim: Simulation): void {
+  expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } }).ok).toBe(true);
+}
+
+/** Ware ins erste Kölner Lager legen und einen Einbruch der Gang einplanen (in der nächsten Nacht). */
+function planBurglary(sim: Simulation, gangId: string): GangIncident {
+  const w = getWarehouses(sim.state, 'koeln')[0];
+  store(sim.ctx('test'), { productId: 'weed', amount: 300, warehouseId: w.id, quality: 0.6, unitCost: 3 });
+  expect(run(sim, gangId, 'burglary')).toBe(true);
+  const incident = incidents(sim).find((i) => i.kind === 'burglary' && i.byGangId === gangId);
+  if (incident?.plannedAt === undefined) throw new Error('kein geplanter Einbruch');
+  return incident;
 }
 
 function raidResolved(outcome: 'success' | 'failure'): GameEvents['encounter.resolved'] {
@@ -101,7 +123,7 @@ describe('Gedächtnis „Überfall abgewehrt“ nur, wenn du gewinnst', () => {
 });
 
 describe('Vorfälle der schlafenden Stadt ruhen', () => {
-  it('ein Kölner Abwerbe-Vorfall läuft nicht ab, solange Hamburg live ist, und erst nach der Rückkehr', () => {
+  it('ein Kölner Abwerbe-Vorfall läuft nicht ab, solange Hamburg live ist, und verfällt nach der Rückkehr ohne Wirkung', () => {
     const sim = createTestGame({ seed: 3 });
     const member = hire(sim, 'ebertplatz');
     expect(run(sim, 'ost', 'poach')).toBe(true);
@@ -111,11 +133,112 @@ describe('Vorfälle der schlafenden Stadt ruhen', () => {
     sim.advance(incident.expiresAt - sim.state.time + 3 * 60);
     expect(incidents(sim).some((i) => i.id === incident.id)).toBe(true);
     expect(isEmployed(sim.state, member)).toBe(true);
-    // Zurück in Köln: Die Frist ist um, jetzt gilt die vorsichtige Wahl (gehen lassen).
-    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } }).ok).toBe(true);
+    // Zurück in Köln: Die Frist lief in der Ruhe ab, der Vorfall verfällt ohne die vorsichtige Wahl (gehen lassen).
+    switchToKoeln(sim);
     sim.advance(2 * 60);
     expect(incidents(sim).some((i) => i.id === incident.id)).toBe(false);
-    expect(isEmployed(sim.state, member)).toBe(false);
+    expect(isEmployed(sim.state, member)).toBe(true);
+  });
+
+  it('kurzer Wechsel ohne Stundentakt dazwischen: abgelaufene Frist verfällt ohne Wirkung, offene läuft bis zur Frist weiter', () => {
+    const sim = createTestGame({ seed: 3 });
+    const lapsed = hire(sim, 'ebertplatz');
+    const open = hire(sim, 'neumarkt');
+    expect(run(sim, 'ost', 'poach')).toBe(true);
+    expect(run(sim, 'ost', 'poach')).toBe(true);
+    const first = incidents(sim).find((i) => i.staffId === lapsed);
+    const second = incidents(sim).find((i) => i.staffId === open);
+    if (!first || !second) throw new Error('nicht beide abgeworben');
+    // Die Gangs ticken um x:19: kurz danach weg, vor dem nächsten Takt zurück, eine Frist endet dazwischen.
+    while (sim.state.time % 60 !== 20) sim.advance(1);
+    first.expiresAt = sim.state.time + 10;
+    switchToHamburg(sim);
+    sim.advance(20);
+    switchToKoeln(sim);
+    sim.advance(60);
+    expect(incidents(sim).some((i) => i.id === first.id)).toBe(false);
+    expect(isEmployed(sim.state, lapsed)).toBe(true);
+    // Die andere Frist läuft noch: kein sofortiges Gehenlassen, erst an ihrer Frist gilt die vorsichtige Wahl.
+    expect(incidents(sim).some((i) => i.id === second.id)).toBe(true);
+    expect(isEmployed(sim.state, open)).toBe(true);
+    sim.advance(second.expiresAt - sim.state.time + 60);
+    expect(incidents(sim).some((i) => i.id === second.id)).toBe(false);
+    expect(isEmployed(sim.state, open)).toBe(false);
+  });
+
+  it('ein Einbruch, dessen Nacht in die Ruhe fiel, kommt nicht gleich bei der Rückkehr, sondern in der nächsten Nacht', () => {
+    const sim = createTestGame({ seed: 4 });
+    advanceToHour(sim, 12);
+    const incident = planBurglary(sim, 'west');
+    const plannedAt = incident.plannedAt ?? 0;
+    switchToHamburg(sim);
+    // Die Nacht vergeht in der Ruhe; zurück am Morgen danach, die Frist (Meldung um 7 plus acht Stunden) läuft noch.
+    sim.advance(plannedAt - sim.state.time + 4 * 60);
+    expect(incident.expiresAt).toBeGreaterThan(sim.state.time + 2 * 60);
+    const before = getStock(sim.state, { cityId: 'koeln' });
+    switchToKoeln(sim);
+    sim.advance(2 * 60);
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(before);
+    expect(incident.plannedAt).toBe(plannedAt + MINUTES_PER_DAY);
+    // In der nächsten Nacht zur selben Stunde bricht die Gang ein.
+    sim.advance(plannedAt + MINUTES_PER_DAY - sim.state.time + 60);
+    expect(incident.plannedAt).toBeUndefined();
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBeLessThan(before);
+  });
+
+  it('ein Einbruch vor der Ruhe, dessen Meldung und Frist in die Ruhe fielen, steht danach nur im Journal', () => {
+    const sim = createTestGame({ seed: 4 });
+    advanceToHour(sim, 12);
+    const incident = planBurglary(sim, 'west');
+    sim.advance((incident.plannedAt ?? 0) - sim.state.time + 30);
+    expect(incident.plannedAt).toBeUndefined();
+    expect(incident.reported).toBe(false);
+    expect(incident.amount).toBeGreaterThan(0);
+    switchToHamburg(sim);
+    sim.advance(incident.expiresAt - sim.state.time + 60);
+    switchToKoeln(sim);
+    sim.advance(60);
+    expect(incidents(sim).some((i) => i.id === incident.id)).toBe(false);
+    expect(messages.thread(sim.state, 'other:neighbor')).toHaveLength(0);
+    expect(sim.state.journal.some((j) => j.text.includes('während du weg warst'))).toBe(true);
+  });
+});
+
+describe('Schutzgeld zählt nur deine Veedel in der Stadt der Gang', () => {
+  it('ein Hamburger Veedel macht das Kölner Schutzgeld nicht teurer, ein Kölner schon (und umgekehrt)', () => {
+    const sim = createTestGame();
+    const controller = sim.state.modules.territory.controller;
+    const hh = gang('hh-hafen');
+    const koeln = tributeAmount(sim.state, 'ost');
+    const hamburg = tributeAmount(sim.state, hh.id);
+    const free = (cityId: string) => {
+      const v = allVeedel(cityId).find((x) => controller[x.id] !== PLAYER_FACTION);
+      if (!v) throw new Error(`kein freies Veedel in ${cityId}`);
+      return v.id;
+    };
+    controller[free('hamburg')] = PLAYER_FACTION;
+    expect(tributeAmount(sim.state, 'ost')).toBe(koeln);
+    expect(tributeAmount(sim.state, hh.id)).toBe(hamburg + TRIBUTE_PER_PLAYER_VEEDEL);
+    controller[free('koeln')] = PLAYER_FACTION;
+    expect(tributeAmount(sim.state, 'ost')).toBe(koeln + TRIBUTE_PER_PLAYER_VEEDEL);
+    expect(tributeAmount(sim.state, hh.id)).toBe(hamburg + TRIBUTE_PER_PLAYER_VEEDEL);
+  });
+});
+
+describe('Gekaufte Gang-Ware wird in der Stadt der Gang gebucht', () => {
+  it('Ware einer Kölner Gang zählt in der Kasse zu Köln, auch wenn Hamburg live ist', () => {
+    const sim = createTestGame();
+    switchToHamburg(sim);
+    const s = status(sim, 'ost');
+    s.relation = 100;
+    s.hostility = 0;
+    wallet.earn(sim.ctx('test'), 5000, 'dirty', 'Test');
+    const events = recordEvents(sim);
+    s.offer = { id: 11, amount: 50, price: 200, expiresAt: sim.state.time + 60 };
+    expect(sim.dispatch({ type: 'gangs.acceptOffer', payload: { gangId: 'ost', offerId: 11 } }).ok).toBe(true);
+    const paid = eventsOfType(events, 'wallet.changed').find((e) => e.payload.category === 'goods.purchase');
+    expect(paid?.payload.amount).toBe(-200);
+    expect(paid?.payload.cityId).toBe('koeln');
   });
 });
 
