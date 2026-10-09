@@ -330,18 +330,22 @@ ui.tour.skip();                    // beendet die laufende Tour
 - **Schritte** (`TourStep`): `anchor` aus `TOUR_ANCHORS` (ohne Anker steht die Box mittig), `anchorKey` (trägt
   derselbe Anker an mehreren Elementen, z.B. die Kundenanzeige an jedem Spot, wählt der Schlüssel `data-tour-key`),
   `text` (ein, zwei Sätze), `title`, `speaker` (Kontakt mit `look` und `voice`, sonst eine neutrale Box), `before`
-  (läuft vor dem Schritt, darf ein Promise sein), `waitFor` (`'next'` Standard: Weiter-Knopf; `{ event }` oder
-  `{ state }`: kein Knopf, Hinweis „Mach das jetzt“, nur der Anker ist bedienbar, weiter beim Ereignis bzw. sobald die
-  Bedingung gilt, die wird sofort und nach jeder Änderung geprüft), `placement` (`auto`, `top`, `bottom`, `left`,
-  `right`), `tint` (Bedeutungsfarbe, Standard `brand`).
+  (läuft vor dem Schritt, darf ein Promise sein), `waitFor` (`'next'` Standard: Weiter-Knopf; `{ event }`,
+  `{ state }` oder `{ ui }`: kein Knopf, Hinweis „Mach das jetzt“, nur der Anker ist bedienbar, weiter beim Ereignis
+  bzw. sobald die Bedingung am Spielzustand oder an der Oberfläche gilt (`ui: (ui: UiState) => boolean`, z.B. „im
+  Handy ist ein Lieferant offen“); Bedingungen werden sofort und nach jeder Änderung geprüft), `placement` (`auto`,
+  `top`, `bottom`, `left`, `right`), `tint` (Bedeutungsfarbe, Standard `brand`). **Sagt der Text „Tipp auf …“, braucht
+  der Schritt ein `waitFor`**: Bei `'next'` liegen die Blocker auch über dem Anker, ein Tipp dort geht ins Leere.
 - **Ablauf** (`tour/controller.ts`, `TourRunner`, getestet): Läuft schon eine Tour, wird die neue eingereiht. `pause`
   hält die Uhr an; ein Tempo-Wunsch währenddessen (Regler als Anker, Dialog) gilt nach der Tour. Ein neues oder
   geladenes Spiel beendet alle Touren als `'reset'` (nicht `'skipped'`) und gibt das Tempo von vor der Tour zurück.
 - **Oberfläche** (`tour/TourHost.tsx`, in `shell/App.tsx` über Handy, HUD und Suche, unter den Dialogen des Kerns,
   `--z-tour`): Der Anker wird Bild für Bild verfolgt (Handy federt, Karte fliegt, Fenster ändert sich), der Ausschnitt
   wandert in 250 ms (bei „Bewegung reduzieren“ sofort). Fehlt der Anker, wartet der Schritt bis zu zwei Sekunden und
-  zeigt die Box dann mittig ohne Umrandung, nie ein Fehler. Vier unsichtbare Blocker fangen Klicks neben dem Anker ab
-  (bei `'next'` auch auf dem Anker). Tastatur: Enter oder Leertaste = Weiter, Esc tut nichts, andere Kürzel sind
+  zeigt die Box dann mittig ohne Umrandung, nie ein Fehler; liegt er in einer scrollbaren Seite (das Angebot unten in
+  der Lieferanten-App), rollt er beim Finden ins Bild (`scrollIntoView`). Vier unsichtbare Blocker fangen Klicks neben
+  dem Anker ab (bei `'next'` auch auf dem Anker). Am Handy-Bildschirm wandert das Blatt nach oben (`data-side="top"`),
+  wenn es unten den Anker zudecken würde und oben Platz ist. Tastatur: Enter oder Leertaste = Weiter, Esc tut nichts, andere Kürzel sind
   gesperrt (`shell/keys.ts`); der Fokus bleibt in der Box (`role="dialog"`, Text `aria-live="polite"`). Der
   Tempo-Regler zeigt „Pause“ und ist gesperrt, außer er ist selbst der Anker (dann merkt ein Tipp das Tempo für nach
   der Tour, `is-queued`). Ton: ein kurzer Klick je Schritt; hat der Sprecher eine `voice` und ist die Sprachausgabe an,

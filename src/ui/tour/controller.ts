@@ -1,8 +1,10 @@
 // Ablauf einer Tour (Auftrag 46a), ohne DOM und getestet: Warteschlange der Touren, aktueller Schritt, `before`,
-// Warten auf Weiter, ein Ereignis oder eine Bedingung am Zustand, Uhr anhalten und das Tempo am Ende zurückgeben.
+// Warten auf Weiter, ein Ereignis oder eine Bedingung am Spielzustand bzw. an der Oberfläche, Uhr anhalten und das
+// Tempo am Ende zurückgeben.
 // Was zu sehen ist (Overlay, Box), zeichnet TourHost.tsx aus `current()`.
 
 import type { GameState } from '../../core';
+import type { UiState } from '../runtime';
 import type { TourApi, TourDef, TourOutcome, TourStep } from './types';
 
 /** Was die Ablaufsteuerung von der Oberfläche braucht (UiRuntime stellt es, Tests eine Attrappe). */
@@ -11,9 +13,11 @@ export interface TourHost {
   speed(): number;
   setSpeed(speed: number): void;
   state(): GameState | null;
+  /** Zustand der Oberfläche (Handy, Seiten, Dialoge) für Bedingungen mit `waitFor { ui }`. */
+  ui(): UiState;
   /** Ruft fn bei jedem Ereignis dieser Art, gibt die Abmeldung zurück. */
   onEvent(type: string, fn: () => void): () => void;
-  /** Ruft fn nach jeder Änderung (Spielschritt, Befehl), gibt die Abmeldung zurück. */
+  /** Ruft fn nach jeder Änderung (Spielschritt, Befehl, Oberfläche), gibt die Abmeldung zurück. */
   onChange(fn: () => void): () => void;
   /** Neuzeichnen anstoßen. */
   render(): void;
@@ -170,14 +174,18 @@ export class TourRunner implements TourApi {
     const wait = step.waitFor ?? 'next';
     if (typeof wait === 'object' && 'event' in wait) {
       run.cleanup.push(this.host.onEvent(wait.event, () => this.advance()));
-    } else if (typeof wait === 'object' && 'state' in wait) {
+    } else if (typeof wait === 'object') {
       const check = () => {
-        const state = this.host.state();
         let ok = false;
         try {
-          ok = !!state && wait.state(state);
+          if ('state' in wait) {
+            const state = this.host.state();
+            ok = !!state && wait.state(state);
+          } else {
+            ok = wait.ui(this.host.ui());
+          }
         } catch (error) {
-          console.error(`Tour ${run.def.id}, Schritt ${step.id}: waitFor.state`, error);
+          console.error(`Tour ${run.def.id}, Schritt ${step.id}: waitFor`, error);
         }
         if (ok) this.advance();
         return ok;

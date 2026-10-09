@@ -246,7 +246,9 @@ als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro
 `TourStarter` im HUD startet sie, sobald der Zustand eine Stufe ohne gesehene Tour zeigt (`toursSeen`, Befehl
 `tutorial.tourSeen`, Migration 2), also beim Erreichen und nach dem Laden. Erklär-Stufen (0, 3, 4, 10) enden mit
 `tutorial.advance` aus der Tour, nach Stufe 0 steht das Tempo auf 1. Touren, in denen der Spieler selbst etwas tun muss,
-laufen mit laufender Uhr (`pause: false`) und sind überspringbar. Die geskripteten Momente prüft `tutorial/scripted.ts`
+laufen mit laufender Uhr (`pause: false`) und sind überspringbar; **sagt ein Schritt „Tipp auf …“, braucht er ein
+`waitFor`** (`{ event }`, `{ state }` oder `{ ui }` für die Oberfläche, etwa „ein Lieferant ist offen“), sonst sperren
+die Blocker auch den Anker (Stufe 5: Lieferant antippen, einmal bestellen; Feedback 08.10.2026). Die geskripteten Momente prüft `tutorial/scripted.ts`
 jede Spielminute (Ereignis `tutorial.scriptedMoment`): Handy-Bestellung bei 3.000 € (`customers.scriptedOrder`),
 Pop-up „Lager fast leer“ (Dialog `tutorial.lowStock`, bis zu dreimal, eins pro Tag, `LOW_STOCK_POPUP`), erster
 Gang-Angriff bei 6.000 € (`gangs.scriptedRaid`, Kategorie `loss.gang`, Ereignis `gang.raided`; bis dahin kein
@@ -269,6 +271,10 @@ Fakten aus dem Seed, genau eine passende Antwort, zwei Treffer = Aussteigen, Nac
 mittlerem Misstrauen, Gas = Jagd; `traffic/scene.ts`: Ego-Blick aus dem Fenster, Gesicht des Beamten aus dem Look-System als
 HTML über dem projizierten Kopf, Stimme über `audio.speak`). Tresor leichter (`PROXIMITY_RANGE`, `crossedTarget`). Noch offen
 (Auftrag 48): Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck, Licht und Material der 2D-Spiele.
+Feedback vom 08.10.2026: Ein Klick auf einen Spot mit wartenden Kunden verkauft direkt an den dringendsten, den die
+Ware bedienen kann (`clickSaleCustomer` in `spots/ui/map.ts`, fehlt die Ware, meldet `customers.serve` das); ohne
+Kunden öffnet er das Spot-Fenster. Zivis kommen nicht mehr von selbst (`UNDERCOVER_SHIFTS` in `police/config.ts`),
+das Minispiel bleibt über Vorschau und Test-Spielstand spielbar.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

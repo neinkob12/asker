@@ -314,7 +314,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   `window.koeln = { session, runtime }` zum Ausprobieren und für Playwright.
 - **Tour** (`tour/`, Auftrag 46a): Spotlight-Erklärungen über dem Spiel. Elemente tragen `data-tour="<id>"`
   (`TOUR_ANCHORS`), eine Tour ist eine Liste von Schritten (`TourDef`, `TourStep`: Anker, ein, zwei Sätze, Sprecher
-  mit Porträt, `before`, `waitFor` als Weiter, Ereignis oder Bedingung am Zustand), das Overlay graut alles aus und
+  mit Porträt, `before`, `waitFor` als Weiter, Ereignis oder Bedingung am Spielzustand bzw. an der Oberfläche), das Overlay graut alles aus und
   schneidet den Anker frei, die Box hat „Weiter“; die Uhr steht. `ui.tour.start(def)` reiht ein, `active()`, `skip()`.
   Reine Oberfläche ohne Zustand im Spielstand; die Inhalte je Stufe kommen mit dem Modul `tutorial` (46b, 46c).
   Details, Anker-Liste und Vorschau (`?tour=demo`, `npm run screenshot -- --scenes=tour`):
@@ -1559,11 +1559,7 @@ selbst im `before` (am Handy-Bildschirm legt `onMap` das Handy für Karte und HU
 `toursSeen` steht; das deckt das Erreichen der Stufe (`tutorial.stageReached`) und das Laden eines Spielstands ab. Am
 Ende schickt die Oberfläche `tutorial.tourSeen { stage }`, bei Erklär-Stufen (`EXPLAIN_STAGES` 0, 3, 4, 10) dazu
 `tutorial.advance`, nach Stufe 0 `ui.setSpeed(1)`. Der „Weiter“-Knopf der Stufen-Karte erscheint nur noch, wenn die
-Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 7 ein Leutnant, 10
-ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist
-überspringbar, falls die Voraussetzung fehlt; Überspringen zählt als gesehen, ein neues oder geladenes Spiel beendet
-die Tour mit `'reset'` und vermerkt nichts. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
-(`MOMENT_STAGES`); geht das Tutorial ohne sie weiter, kommt sie mit Stufe 10 (ohne den Satz zum Zoll). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
+Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 5 einen Lieferanten antippen (`waitFor { ui }`) und die erste Bestellung (`shipment.ordered`), 7 ein Leutnant, 10 ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist überspringbar, falls die Voraussetzung fehlt; Überspringen zählt als gesehen, ein neues oder geladenes Spiel beendet die Tour mit `'reset'` und vermerkt nichts. Die Tour der Stufe 9 startet erst mit der Beschlagnahme (`MOMENT_STAGES`); geht das Tutorial ohne sie weiter, kommt sie mit Stufe 10 (ohne den Satz zum Zoll). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
 Lieferung in Köln (`shipment.arrived`, Lager im HUD) und nach dem ersten Fahrer (`staff.hired`, Abholen am Kai und
 Routen; Routen gibt es nur zwischen zwei Lagern, der Kai ist keins). „Tutorial beenden“ beendet auch die Tour und
 markiert alle als gesehen; die Migration 2 markiert in laufenden Ständen alle Touren bis zur Stufe als gesehen.

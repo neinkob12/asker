@@ -21,6 +21,8 @@ const HOLE_PADDING = 6;
 const FALLBACK_RADIUS = 12;
 /** Ein Element, das verschwunden ist, wird höchstens so oft pro Sekunde neu gesucht. */
 const REQUERY_MS = 120;
+/** Abstand des Blatts am Handy-Bildschirm zum Rand (wie .tour--mobile .tour-box in tour.css). */
+const MOBILE_SHEET_GAP = 8;
 
 /** Sichtbar heißt: im Dokument, mit Fläche, nicht versteckt. */
 function isVisible(el: Element): boolean {
@@ -34,6 +36,34 @@ function findAnchor(anchor: string, key?: string): HTMLElement | null {
   const all = document.querySelectorAll<HTMLElement>(tourSelector(anchor, key));
   for (const el of all) if (isVisible(el)) return el;
   return null;
+}
+
+/** Nächster Vorfahr, der scrollt (overflow auto oder scroll mit Überlauf), sonst null. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
+/**
+ * Liegt der Anker in einer scrollbaren Seite (das Angebot unten in der Lieferanten-App), kommt er ins Bild: Außerhalb
+ * des Ausschnitts fangen die Blocker jede Berührung ab, der Spieler könnte sonst nicht hinscrollen. Bewegt nur diese
+ * eine Seite (kein scrollIntoView: das verschöbe auch Container mit overflow hidden wie die Karte) und so wenig wie
+ * nötig; ein Anker, der höher ist als die Seite, steht danach mit seinem Anfang oben.
+ */
+function scrollAnchorIntoView(el: HTMLElement): void {
+  const parent = scrollParent(el);
+  if (!parent) return;
+  const a = el.getBoundingClientRect();
+  const c = parent.getBoundingClientRect();
+  const pad = HOLE_PADDING + 8;
+  let delta = 0;
+  if (a.top < c.top + pad) delta = a.top - c.top - pad;
+  else if (a.bottom > c.bottom - pad) delta = Math.min(a.bottom - c.bottom + pad, a.top - c.top - pad);
+  if (Math.abs(delta) < 1) return;
+  parent.scrollBy({ top: delta, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
 }
 
 function readRect(el: Element): Rect {
@@ -77,6 +107,7 @@ function useAnchor(anchor: string | undefined, key: string | undefined, tick: nu
         if (now - lastQuery >= REQUERY_MS) {
           lastQuery = now;
           element = findAnchor(anchor, key);
+          if (element) scrollAnchorIntoView(element);
         }
       }
       let next: Tracked;
@@ -141,7 +172,13 @@ function TourStepView(props: { view: TourView; runner: TourRunner; mobile: boole
     if (mobile) {
       el.style.left = '';
       el.style.top = '';
-      el.removeAttribute('data-side');
+      // Das Blatt liegt unten. Deckt es den Anker zu (das Angebot unten in der Lieferanten-App) und ist oben Platz,
+      // wandert es nach oben; sonst könnte der Spieler dort nichts antippen.
+      const height = el.offsetHeight;
+      const sheetTop = window.innerHeight - MOBILE_SHEET_GAP - height;
+      const covers = !!hole && hole.top + hole.height > sheetTop && hole.top > height + 2 * MOBILE_SHEET_GAP;
+      if (covers) el.setAttribute('data-side', 'top');
+      else el.removeAttribute('data-side');
       return;
     }
     const size = { width: el.offsetWidth, height: el.offsetHeight };

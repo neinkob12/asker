@@ -246,6 +246,11 @@ function stage4(ctx: TourContext): TourStep[] {
   ];
 }
 
+/**
+ * Stufe 5 zum Mitmachen (Feedback 08.10.2026: In der Erklärung ließ sich kein Lieferant antippen und „Tipp auf Kaufen“
+ * ging ins Leere, weil Weiter-Schritte alles sperren): Der Spieler tippt selbst einen Lieferanten an und bestellt
+ * einmal; die Uhr läuft, überspringen geht.
+ */
 function stage5(ctx: TourContext): TourStep[] {
   const { ui } = ctx;
   return [
@@ -260,19 +265,23 @@ function stage5(ctx: TourContext): TourStep[] {
       id: 'list',
       anchor: 'phone.screen',
       before: () => ui.openPhone('suppliers.app'),
-      text: 'Hier stehen alle, die an dich liefern. Mit mehr Umsatz melden sich weitere.',
+      waitFor: {
+        ui: (state) => state.phone.open && state.phone.app === 'suppliers.app' && !!state.phone.params?.supplierId,
+      },
+      text: 'Hier stehen alle, die an dich liefern. Tipp einen an, dann siehst du sein Angebot. Mit mehr Umsatz kommen weitere.',
     }),
     step({
       id: 'offer',
       anchor: 'suppliers.offer',
       tint: 'goods',
-      before: () => ui.openPhone('suppliers.app', { supplierId: 'koeln' }),
-      text: 'Dat Angebot nach Warenart. Einzeln bestellen: Tipp auf Kaufen, die Ware fährt zu deinem Lager.',
+      // Kein before: Der Lieferant, den der Spieler eben angetippt hat, bleibt offen.
+      waitFor: { event: 'shipment.ordered' },
+      text: 'Dat Angebot nach Warenart. Bestell jetzt einmal selbst: Tipp bei einem Paket auf Kaufen, die Ware fährt zu deinem Lager.',
     }),
     step({
       id: 'tip',
       anchor: 'phone.screen',
-      text: 'Merk dir: Mehr Produkte bringen mehr Kunden. Und Ware auf Lager lohnt sich immer.',
+      text: 'Läuft. Merk dir: Mehr Produkte bringen mehr Kunden. Und Ware auf Lager lohnt sich immer.',
     }),
   ];
 }
