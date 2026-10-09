@@ -48,11 +48,11 @@ describe('roads: Gewicht pro Straßenart (Auftrag 33)', () => {
     );
   });
 
-  it('zwischen den Städten dauert die Landstraße länger', () => {
+  it('zwischen den Städten gibt es keine Landstraße: Die Fahrt nimmt die Autobahn und dauert so lange wie dort', () => {
     const koeln = { lng: 6.95, lat: 50.94 };
     const hamburg = { lng: 9.99, lat: 53.55 };
-    expect(interCityMinutes(koeln, hamburg, 400, { weights: AVOID_MOTORWAY })).toBeGreaterThan(
-      interCityMinutes(koeln, hamburg, 400) * 1.3,
+    expect(travelMinutes(koeln, hamburg, 400, 0, { weights: AVOID_MOTORWAY })).toBe(
+      interCityMinutes(koeln, hamburg, 400),
     );
   });
 });

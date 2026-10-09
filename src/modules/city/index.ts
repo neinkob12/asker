@@ -72,6 +72,7 @@ import {
   rightHandMissing,
   rightHandTitle,
 } from '../hierarchy';
+import { launderAtOnce, launderedCost } from '../laundering';
 import { getRoutes, getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
@@ -93,6 +94,7 @@ import {
   OFFER_NEXT_DELAY,
   OFFER_REMINDER_DAYS,
   PLAYER_CITY_SPEED,
+  ROTTERDAM_LAUNDERING_CHANNEL,
   ROTTERDAM_SHARE,
   SALE_AVERAGE_DAYS,
   SALE_CALL_DELAY,
@@ -395,6 +397,11 @@ export function cityOfSpot(state: GameState, spotId: string): string {
 export function cityAt(lng: number, lat: number): string {
   const veedel = veedelAt(lng, lat);
   if (veedel) return veedel.cityId;
+  // Orte im Ausland (Rotterdam) haben keine Veedel, aber einen Rahmen: Ein Punkt dort gehört nicht zu Köln.
+  for (const c of ABROAD_CITIES) {
+    const [w, s, e, n] = c.bounds;
+    if (lng >= w && lng <= e && lat >= s && lat <= n) return c.id;
+  }
   let best = FIRST_CITY;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const c of CITIES) {
@@ -657,6 +664,12 @@ function cityCalling(state: GameState): boolean {
   return (state.messages.calls?.retries ?? []).some((r) => ids.has(r.call.contact.id));
 }
 
+/** Eine Stadt wartet (später): Sie meldet sich nach OFFER_REMINDER_DAYS Spieltagen wieder per Chat. */
+function letWait(ctx: Ctx, offer: OfferState): void {
+  offer.status = 'later';
+  offer.remindAt = ctx.now + OFFER_REMINDER_DAYS * MINUTES_PER_DAY;
+}
+
 export function answerOffer(ctx: Ctx, choice: OfferChoice, cityId: string): CommandResult {
   const offer = ctx.state.modules.city.offers[cityId];
   if (!offer || offer.status === 'none' || offer.status === 'scheduled' || offer.status === 'queued') {
@@ -670,9 +683,10 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice, cityId: string): Comm
   ctx.emit('city.offerAnswered', { choice, ready, cityId });
   if (choice === 'come') {
     if (ready) {
-      // Nur eine Zusage gilt: Wer vorher einer anderen Stadt zugesagt hat, lässt die jetzt warten.
+      // Nur eine Zusage gilt: Wer vorher einer anderen Stadt zugesagt hat, lässt die jetzt warten (sie meldet sich wie
+      // nach „Ich brauch noch Zeit“ alle OFFER_REMINDER_DAYS Tage wieder).
       for (const [id, other] of Object.entries(ctx.state.modules.city.offers)) {
-        if (id !== cityId && other.status === 'accepted' && !isCityUnlocked(ctx.state, id)) other.status = 'later';
+        if (id !== cityId && other.status === 'accepted' && !isCityUnlocked(ctx.state, id)) letWait(ctx, other);
       }
       offer.status = 'accepted';
       offer.remindAt = null;
@@ -696,8 +710,7 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice, cityId: string): Comm
       });
     }
   } else if (choice === 'later') {
-    offer.status = 'later';
-    offer.remindAt = ctx.now + OFFER_REMINDER_DAYS * MINUTES_PER_DAY;
+    letWait(ctx, offer);
     tell(ctx, cityId, offerText(ctx.state, cityId, 'later'));
   } else {
     offer.status = 'declined';
@@ -804,7 +817,7 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
     const offer = offerOf(ctx, next);
     if (offer.status !== 'accepted') {
       for (const [id, other] of Object.entries(ctx.state.modules.city.offers)) {
-        if (other.status === 'accepted' && !isCityUnlocked(ctx.state, id)) other.status = 'later';
+        if (other.status === 'accepted' && !isCityUnlocked(ctx.state, id)) letWait(ctx, other);
       }
       offer.status = 'accepted';
     }
@@ -1202,19 +1215,31 @@ export function jansenContact(state: GameState): Contact {
 }
 
 /**
- * Tagesgewinn des ganzen Geschäfts: Schnitt der letzten SALE_AVERAGE_DAYS abgeschlossenen Tage aus der Kasse, je Stadt
- * das Ergebnis vor dem Anteil der Statthalter und ohne Ausbau (einmalige Ausgaben), summiert über deine Städte.
+ * Was der Verkauf nicht als Kosten zählt: den Anteil der Statthalter und, wie im Schlaf, die einmaligen Ausgaben für
+ * Wachstum (Ausbau, Anheuern).
+ */
+const SALE_EXCLUDED_CATEGORIES: readonly string[] = ['share.righthand', ...SLEEP_EXCLUDED_CATEGORIES];
+
+/**
+ * Tagesgewinn einer Stadt für den Verkauf: Schnitt der letzten SALE_AVERAGE_DAYS abgeschlossenen Tage aus der Kasse,
+ * das Ergebnis vor dem Anteil der Statthalter und ohne einmalige Ausgaben (Ausbau, Anheuern), ungerundet.
+ */
+export function saleCityDailyProfit(state: GameState, cityId: string): number {
+  const r = cityReport(state, cityId, SALE_AVERAGE_DAYS, 1);
+  const back = r.rows
+    .filter((row) => SALE_EXCLUDED_CATEGORIES.includes(row.category))
+    .reduce((sum, row) => sum + row.amount, 0);
+  return (r.profit - back) / SALE_AVERAGE_DAYS;
+}
+
+/**
+ * Tagesgewinn des ganzen Geschäfts: saleCityDailyProfit summiert über deine Städte (vor dem Anteil der Statthalter,
+ * ohne einmalige Ausgaben).
  */
 export function businessDailyProfit(state: GameState): number {
   let total = 0;
-  for (const cityId of ownedCities(state)) {
-    const r = cityReport(state, cityId, SALE_AVERAGE_DAYS, 1);
-    const back = r.rows
-      .filter((row) => row.category === 'share.righthand' || row.category === 'expansion')
-      .reduce((sum, row) => sum + row.amount, 0);
-    total += r.profit - back;
-  }
-  return Math.round(total / SALE_AVERAGE_DAYS);
+  for (const cityId of ownedCities(state)) total += saleCityDailyProfit(state, cityId);
+  return Math.round(total);
 }
 
 export interface SaleOffer {
@@ -1222,9 +1247,11 @@ export interface SaleOffer {
   dailyProfit: number;
   /** Was die Statthalter zahlen. */
   price: number;
-  /** Was Jansen für Rotterdam will. */
+  /** Was Jansen für Rotterdam will (sauberes Geld). */
   rotterdamPrice: number;
-  /** Was dir bleibt (Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
+  /** Gebühr der Wäsche, damit Rotterdam sauber bezahlt wird (Schwarzgeld, rotterdamLaunderingFee). */
+  rotterdamFee: number;
+  /** Was dir bleibt (Schwarzgeld, Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
   rest: number;
   /** Ware in den Lagern deiner Städte zum Einkaufspreis: Sie bleibt bei den Statthaltern, die zahlen sie dazu. */
   stockValue: number;
@@ -1232,10 +1259,10 @@ export interface SaleOffer {
   stockAmount: number;
 }
 
-/** Verkaufspreis nach der Formel (rein, für Tests und die Anzeige): auf 1.000 € gerundet. */
 /**
- * Preis aus dem Tagesgewinn: SALE_PROFIT_DAYS Tagesgewinne (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon.
- * Die Ware in den Lagern (stockValue) kommt obendrauf und gehört ganz dir.
+ * Verkaufspreis nach der Formel (rein, für Tests und die Anzeige), auf 1.000 € gerundet: SALE_PROFIT_DAYS Tagesgewinne
+ * (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon. Die Ware in den Lagern (stockValue) kommt obendrauf und
+ * gehört ganz dir. Der Preis ist Schwarzgeld, Rotterdam wird sauber bezahlt: Die Gebühr der Wäsche geht vom Rest ab.
  */
 export function salePriceFor(
   dailyProfit: number,
@@ -1245,7 +1272,24 @@ export function salePriceFor(
   const rotterdamPrice = Math.round((business * ROTTERDAM_SHARE) / 1000) * 1000;
   const stockValue = Math.max(0, Math.round(stock.value / 100) * 100);
   const price = business + stockValue;
-  return { dailyProfit, price, rotterdamPrice, rest: price - rotterdamPrice, stockValue, stockAmount: stock.amount };
+  const rotterdamFee = rotterdamLaunderingFee(rotterdamPrice);
+  return {
+    dailyProfit,
+    price,
+    rotterdamPrice,
+    rotterdamFee,
+    rest: price - rotterdamPrice - rotterdamFee,
+    stockValue,
+    stockAmount: stock.amount,
+  };
+}
+
+/**
+ * Gebühr, damit Rotterdam sauber bezahlt wird: Der Anteil geht beim Verkauf über ROTTERDAM_LAUNDERING_CHANNEL (Jansens
+ * Reederei) durch die Wäsche, zum Gebühr-Satz dieses Wegs. Schwarzgeld, geht von dem ab, was dir bleibt.
+ */
+export function rotterdamLaunderingFee(rotterdamPrice: number): number {
+  return launderedCost(rotterdamPrice, ROTTERDAM_LAUNDERING_CHANNEL).fee;
 }
 
 /** Ware in den Lagern deiner Städte, zum Einkaufspreis (Durchschnitt pro Posten). */
@@ -1365,12 +1409,19 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   const c = ctx.state.modules.city;
   const offer = saleOffer(ctx.state);
   const cities = ownedCities(ctx.state);
+  // Kommt nicht vor (der Preis deckt Rotterdam samt Gebühr), aber dann lieber gar nicht als halb verkaufen.
+  if (wallet.balance(ctx.state, 'dirty') + offer.price < offer.rotterdamPrice + offer.rotterdamFee) {
+    return { ok: false, reason: 'Das Geld reicht nicht für Rotterdam.' };
+  }
   // Gebucht auf Rotterdam, nicht auf die aktive Stadt: Die Kasse der alten Städte bleibt sauber.
   wallet.earn(ctx, offer.price, 'dirty', 'Verkauf des Geschäfts an die Statthalter', {
     category: 'sale.business',
     cityId: HARBOR_CITY,
   });
-  wallet.pay(ctx, offer.rotterdamPrice, 'dirty', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
+  // Rotterdam ist legal (Liegeplatz, Halle) und kostet sauberes Geld: Jansens Reederei wäscht den Anteil sofort, die
+  // Gebühr bucht als Geldwäsche.
+  launderAtOnce(ctx, offer.rotterdamPrice, ROTTERDAM_LAUNDERING_CHANNEL, HARBOR_CITY);
+  wallet.pay(ctx, offer.rotterdamPrice, 'clean', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
     category: 'business.rotterdam',
     cityId: HARBOR_CITY,
   });
@@ -1400,7 +1451,7 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   messages.archive(ctx, 'Frühere Städte');
   journal.add(
     ctx,
-    `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} an Jansen. Dir bleiben ${formatEuro(offer.rest)}.`,
+    `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} sauber an Jansen (Gebühr der Wäsche ${formatEuro(offer.rotterdamFee)}). Dir bleiben ${formatEuro(offer.rest)}.`,
     'good',
   );
   ctx.emit('business.sold', {

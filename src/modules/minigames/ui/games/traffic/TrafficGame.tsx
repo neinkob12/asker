@@ -32,7 +32,7 @@ import {
   trafficScore,
 } from './model';
 import { Officer, officerLook } from './Officer';
-import { OFFICER_LINES, QUESTIONS, VEHICLE_NAMES, VISIBLE_NAMES } from './questions';
+import { OFFICER_LINES, plateAdjective, QUESTIONS, VEHICLE_NAMES, VISIBLE_NAMES } from './questions';
 import { createTrafficScene, type TrafficScene } from './scene';
 import { TRAFFIC_SOUNDS } from './sounds';
 
@@ -363,7 +363,7 @@ export function TrafficGame(props: MinigameViewProps) {
         </span>
         <span class={`traffic__fact${ev.plateHome ? '' : ' is-warn'}`}>
           <Icon name="idCard" />
-          {`${ev.plateCity}er Kennzeichen`}
+          {`${plateAdjective(ev.plateCity)} Kennzeichen`}
         </span>
         <span class="traffic__fact">
           <Icon name="package" />

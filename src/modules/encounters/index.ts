@@ -17,12 +17,13 @@
 //
 // Öffentliche API:
 //   startEncounter(ctx, request), getEncounter(state, id), activeEncounters(state), autoResolveEncounter(ctx, id),
+//   addResultLosses(ctx, id, losses) (Folgen, die der Auslöser selbst bucht, auf der Ergebnis-Karte nachtragen),
 //   ENCOUNTER_KINDS, ROLE_NAMES, PLAYER_STATS, TIPOFF_HEAT, minigameParams, apply* (Folgen der Minispiele)
 // Befehle: 'encounters.auto'
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
 
 import { type Ctx, defineModule, type GameState } from '../../core';
-import { autoResolve, expireDecisions, getKind, stakesFor, start } from './engine';
+import { addResultLosses as addLosses, autoResolve, expireDecisions, getKind, stakesFor, start } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
 import { onMinigameFinished } from './minigames';
 import { buildFoes, firstIntent } from './tactics';
@@ -121,6 +122,18 @@ declare module '../../core' {
 /** Konfrontation starten. Das Ergebnis kommt als 'encounter.resolved', meist noch im selben Aufruf. Wirft bei unbekanntem Anlass. */
 export function startEncounter(ctx: Ctx, request: EncounterRequest): { encounterId: number } {
   return { encounterId: start(ctx, request).id };
+}
+
+/**
+ * Folgen, die der Auslöser nach 'encounter.resolved' selbst gebucht hat (z.B. Beschlagnahme und Festnahme nach einer
+ * Polizeiflucht), ins Ergebnis nachtragen, damit die Ergebnis-Karte sie zeigt. Bucht selbst nichts.
+ */
+export function addResultLosses(
+  ctx: Ctx,
+  encounterId: number,
+  losses: { goods?: number; money?: number; staffArrested?: readonly string[] },
+): void {
+  addLosses(ctx, encounterId, losses);
 }
 
 /** Eine wartende Konfrontation sofort auswürfeln, ohne auf den Spieler zu warten (z.B. für Tests anderer Module). */

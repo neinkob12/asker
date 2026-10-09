@@ -3,7 +3,7 @@
 // erreichbar, sondern in zwei Tipps, mit Hinweis, ob die Person reden könnte.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro, formatPercent } from '../../../core';
+import { clock, formatEuro, formatPercent, type GameState } from '../../../core';
 import {
   ActionSheet,
   Button,
@@ -17,12 +17,12 @@ import {
   useUi,
 } from '../../../ui';
 import { atSpotStart, getSpot } from '../../spots';
-import { bailCost, effectiveWage, isAbsent, type StaffMember, talkChance } from '../index';
+import { bailCost, isAbsent, type StaffMember, talkChance, wageDue } from '../index';
 
-/** Kurztext zum Ausfall: bis wann, was es pro Tag kostet. */
-export function absenceText(m: StaffMember): string {
+/** Kurztext zum Ausfall: bis wann, was es pro Tag kostet (so, wie um Mitternacht gebucht wird, mit Buchhalter). */
+export function absenceText(state: GameState, m: StaffMember): string {
   const until = m.statusUntil !== null ? `bis Tag ${clock.day(m.statusUntil)}, ${clock.formatTime(m.statusUntil)}` : '';
-  const cost = effectiveWage(m);
+  const cost = wageDue(state, m);
   const costText =
     m.status === 'jailed'
       ? m.jailSupport
@@ -85,7 +85,7 @@ export function AbsenceSheet(props: { member: StaffMember; open: boolean; onClos
     <ActionSheet
       open={props.open}
       onClose={props.onClose}
-      title={isAbsent(m) ? `${m.name}: ${absenceText(m)}` : `${m.name} entlassen?`}
+      title={isAbsent(m) ? `${m.name}: ${absenceText(state, m)}` : `${m.name} entlassen?`}
       message={talkHint(m)}
       actions={actions}
     />
@@ -93,6 +93,7 @@ export function AbsenceSheet(props: { member: StaffMember; open: boolean; onClos
 }
 
 function AbsentRow(props: { member: StaffMember }) {
+  const { state } = useGame();
   const ui = useUi();
   const [open, setOpen] = useState(false);
   const m = props.member;
@@ -110,7 +111,7 @@ function AbsentRow(props: { member: StaffMember }) {
           icon={m.status === 'jailed' ? 'jail' : 'bandage'}
           color={m.status === 'jailed' ? 'warn' : 'danger'}
           title={m.name}
-          meta={absenceText(m)}
+          meta={absenceText(state, m)}
         >
           {m.status === 'jailed' && !m.jailSupport && (
             <Tag category="danger" icon="alert">
@@ -128,7 +129,7 @@ function AbsentRow(props: { member: StaffMember }) {
 export function AbsentGroup(props: { members: StaffMember[] }) {
   const { state } = useGame();
   if (props.members.length === 0) return null;
-  const total = props.members.reduce((sum, m) => sum + effectiveWage(m), 0);
+  const total = props.members.reduce((sum, m) => sum + wageDue(state, m), 0);
   const jailed = props.members.filter((m) => m.status === 'jailed');
   const bail = jailed.reduce((sum, m) => sum + bailCost(state, m.id), 0);
   return (

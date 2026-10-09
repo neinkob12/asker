@@ -17,16 +17,17 @@ function storage(): Storage | null {
   }
 }
 
-/** Name ohne Steuerzeichen und doppelte Leerzeichen, gekürzt. */
+/** Name ohne Steuerzeichen und doppelte Leerzeichen, gekürzt (wie der Server, api/leaderboard.ts). */
 export function cleanPlayerName(raw: string): string {
-  return (
-    raw
-      // Steuerzeichen und unsichtbare Formatzeichen (Zero-Width, Rechts-nach-links): sonst steht eine leere Zeile da.
-      .replace(/[\p{Cc}\p{Cf}]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, PLAYER_NAME_MAX)
-  );
+  const name = raw
+    // Steuerzeichen (Zeilenumbruch, Tab) werden ein Leerzeichen, sonst klebt „Jakob\tMüller“ zusammen.
+    .replace(/\p{Cc}/gu, ' ')
+    // Unsichtbare Formatzeichen (Zero-Width, Rechts-nach-links) fliegen raus: sonst steht eine leere Zeile da.
+    .replace(/\p{Cf}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Nach Codepunkten kürzen: Ein Emoji an der Grenze bleibt ganz oder fällt weg, statt halb (Ersatzzeichen).
+  return Array.from(name).slice(0, PLAYER_NAME_MAX).join('');
 }
 
 export function getPlayerName(): string {

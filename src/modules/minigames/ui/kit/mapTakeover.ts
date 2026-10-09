@@ -6,8 +6,18 @@ import { useEffect, useState } from 'preact/hooks';
 import { takeOverMap } from '../../../../map';
 import { prefersReducedMotion } from '../../../../ui';
 
-/** Kulisse, die während eines Minispiels auf der Karte aus ist (Verkehr, Leute an Spots). */
-export const MAP_DECOR_LAYERS = ['roads.traffic', 'spots.people'] as const;
+/**
+ * Kulisse, die während eines Minispiels auf der Karte aus ist (Verkehr, Leute an Spots). Es zählen die IDs der
+ * MapLibre-Ebenen, nicht die der Layer-Registry: Die Leute an Spots liegen in drei Gruppen und der Streife
+ * (spots/ui/people.ts, groupLayer und PATROL_SOURCE).
+ */
+export const MAP_DECOR_LAYERS = [
+  'roads.traffic',
+  'spots.people.0',
+  'spots.people.1',
+  'spots.people.2',
+  'spots.people.patrol',
+] as const;
 
 /** Übernimmt die Karte, solange `active` gilt; true, sobald sie dem Minispiel gehört (sofort bei !active). */
 export function useMapTakeover(active: boolean): boolean {

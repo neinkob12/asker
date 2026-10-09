@@ -196,6 +196,13 @@
   cursor: not-allowed;
   filter: none;
 }
+/* Warum „Selbst abholen“ nicht geht, sichtbar unter dem Knopf (ein Tooltip erscheint auf Touch-Geräten nicht) */
+.logi-track__note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--hud-ink-2);
+}
 @media (prefers-reduced-motion: reduce) {
   .logi-track {
     animation: none;

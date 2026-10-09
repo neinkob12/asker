@@ -149,8 +149,10 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   );
   const n = Math.min(count ?? (origin ? max : 1), max);
   const load = [{ productId, size, cover, count: n }];
+  // Aus dem Ausfuhrlager zählt jeder Container mit dem, was er trägt (der letzte ist oft nicht voll).
+  const amounts = origin ? Object.fromEntries(Object.entries(stock).map(([id, lot]) => [id, lot.amount])) : undefined;
   const plan = vesselId === null ? null : voyagePlan(state, vesselId, producer.id, target);
-  const total = loadCost(producer.id, load, vesselId !== null) + (plan?.cost ?? 0);
+  const total = loadCost(producer.id, load, vesselId !== null, amounts) + (plan?.cost ?? 0);
   const risk = containerRisk(state, producer.id, size, target, cover, vesselId, stock[productId]?.pack ?? 1);
   // Auftrag 44, Teil 7: Du packst selbst (Minispiel). Gut gepackt bzw. schlecht gepackt, ohne Packen gilt risk.
   const packed = (score: number) =>
@@ -349,7 +351,7 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
           )}
           {/* Eigenes Schiff gegen Linie (Auftrag 43, I11): Preis, Zeit und Zoll nebeneinander. */}
           {plan && (
-            <ListItem value={formatEuro(loadCost(producer.id, load, false))}>
+            <ListItem value={formatEuro(loadCost(producer.id, load, false, amounts))}>
               <ItemContent
                 icon="ship"
                 color="system"

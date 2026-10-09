@@ -42,11 +42,12 @@ import {
 import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { atSpot, getSpot } from '../../spots';
-import { getStaffMember, isGoodSpecialist, specialistEffect, specialistProvider } from '../../staff';
+import { getStaffMember, isGoodSpecialist } from '../../staff';
 import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   ALL_FILTER,
+  accountantGains,
   balance,
   balanceHistory,
   type CategoryRow,
@@ -118,6 +119,10 @@ function encodeFilter(f: FinanceFilter): string {
 // pro Neuzeichnen (die Kasse zeichnet bis zu zehnmal pro Sekunde, in der Pause und zwischen Schritten ohne Änderung).
 const reportOf = memoStateKeyed(
   (state: GameState, period: Period, filter: FinanceFilter) => balance(state, period, filter),
+  (period, filter) => `${period}|${encodeFilter(filter)}`,
+);
+const accountantsOf = memoStateKeyed(
+  (state: GameState, period: Period, filter: FinanceFilter) => accountantGains(state, period, filter),
   (period, filter) => `${period}|${encodeFilter(filter)}`,
 );
 const historyOf = memoStateKeyed(
@@ -436,44 +441,49 @@ function PerLieutenant(props: { period: Period; filter: FinanceFilter; onPick: (
 /**
  * Zeile „Buchhalter“ (Auftrag 46e): Was er im Zeitraum pro Tag mehr an Erlös gebracht und an Löhnen gespart hat, aus
  * der Bilanz zurückgerechnet (Erlös × Anteil / (1 + Anteil), Löhne × Anteil / (1 − Anteil)). Ohne Buchhalter nichts.
+ * Er wirkt nur in seiner Stadt: Je Stadt der Bilanz zählt ihr Buchhalter (bei „Alle Städte“ je Stadt eine Zeile).
  */
-function Accountant(props: { report: Report; period: Period }) {
+function Accountant(props: { period: Period; filter: FinanceFilter }) {
   const { state } = useGame();
   const ui = useUi();
-  const city = activeCity(state);
-  const accountant = specialistProvider(state, 'revenue', city);
-  if (!accountant) return null;
-  const revenueShare = specialistEffect(state, 'revenue', city);
-  const wageShare = specialistEffect(state, 'wages', city);
-  const { days } = periodSpan(props.period);
-  const sales = props.report.rows.filter((r) => r.category.startsWith('sales.')).reduce((sum, r) => sum + r.amount, 0);
-  const extra = Math.round((sales * revenueShare) / (1 + revenueShare) / days);
-  const saved = Math.round((props.report.wages * wageShare) / (1 - wageShare) / days);
+  const gains = accountantsOf(state, props.period, props.filter);
+  if (gains.length === 0) return null;
+  const several = gains.length > 1;
+  const names = gains.map((g) => {
+    const member = getStaffMember(state, g.staffId);
+    return member ? `${member.name}${isGoodSpecialist(member) ? ' (gut)' : ''}` : 'Buchhalter';
+  });
   return (
     <Group
       title="Buchhalter"
       icon="scale"
       color="law"
-      value={formatEuro(extra + saved)}
-      note={`${accountant.name}${isGoodSpecialist(accountant) ? ' (gut)' : ''}: pro Tag im Zeitraum.`}
+      value={formatEuro(gains.reduce((sum, g) => sum + g.extra + g.saved, 0))}
+      note={`${names.join(', ')}: pro Tag im Zeitraum.`}
     >
       <List>
-        <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: accountant.id })} value={formatEuro(extra)}>
-          <ItemContent
-            icon="cash"
-            color="money"
-            title="Mehrerlös"
-            meta={`+${Math.round(revenueShare * 100)} % auf jeden Verkauf`}
-          />
-        </ListItem>
-        <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: accountant.id })} value={formatEuro(saved)}>
-          <ItemContent
-            icon="users"
-            color="people"
-            title="Gesparte Löhne"
-            meta={`−${Math.round(wageShare * 100)} % auf alle Löhne`}
-          />
-        </ListItem>
+        {gains.flatMap((g) => {
+          const where = several ? ` in ${cityName(g.cityId)}` : '';
+          const open = () => ui.openPanel('staff.profile', { staffId: g.staffId });
+          return [
+            <ListItem key={`${g.cityId}:extra`} onClick={open} value={formatEuro(g.extra)}>
+              <ItemContent
+                icon="cash"
+                color="money"
+                title="Mehrerlös"
+                meta={`+${Math.round(g.revenueShare * 100)} % auf jeden Verkauf${where}`}
+              />
+            </ListItem>,
+            <ListItem key={`${g.cityId}:saved`} onClick={open} value={formatEuro(g.saved)}>
+              <ItemContent
+                icon="users"
+                color="people"
+                title="Gesparte Löhne"
+                meta={`−${Math.round(g.wageShare * 100)} % auf alle Löhne${where}`}
+              />
+            </ListItem>,
+          ];
+        })}
       </List>
     </Group>
   );
@@ -552,7 +562,7 @@ function FinanceApp() {
         </Disclosure>
       )}
       <ProfitAndLoss report={report} period={period} filter={current} />
-      {!sold && <Accountant report={report} period={period} />}
+      {!sold && <Accountant period={period} filter={current} />}
       <History period={period} filter={current} />
       {/* Nach dem Verkauf (Auftrag 43, H8) gehören Spots, Leutnants und Löhne den Statthaltern. */}
       {!sold && (

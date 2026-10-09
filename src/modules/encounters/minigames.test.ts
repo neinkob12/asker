@@ -428,9 +428,9 @@ describe('applyBrawl', () => {
     get(sim, e.id).resolve = 90;
     finish(sim, challengeOf(get(sim, e.id)), 0.4, ['down:1', `hurt:${staffId}`]);
     const after = get(sim, e.id);
-    // Entschieden, oder die Leute schlagen wieder zu (ein neuer Straßenkampf wartet auf dich).
-    if (after.minigame) expect(after.minigame).toMatchObject({ kind: 'brawl' });
-    else expect(after.phase).toBe('done');
+    // Entschieden: Die Leute spielen den Rest ohne weiteres Minispiel aus.
+    expect(after.minigame ?? null).toBeNull();
+    expect(after.phase).toBe('done');
     expect(after.log[0]).toMatchObject({ round: 1, actionId: 'minigame:brawl' });
     expect(after.round).toBeGreaterThanOrEqual(1);
     expect(after.participants.find((p) => p.id === staffId)?.condition).not.toBe('ok');

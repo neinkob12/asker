@@ -144,8 +144,12 @@ export function removeRestock(ctx: Ctx, ruleId: number): CommandResult {
   return s.restock.length < before ? { ok: true } : { ok: false, reason: 'Diese Regel gibt es nicht.' };
 }
 
-/** Der passende freie Lkw für eine Lieferung (der kleinste, in den sie passt), sonst null. */
+/**
+ * Der passende freie Lkw für eine Lieferung (der kleinste, in den sie passt), sonst null. Lkw stehen in Rotterdam und
+ * fahren nur von dort; ab einem anderen Hafen fährt die Spedition.
+ */
 function truckFor(state: GameState, portId: string, order: TradeOrder): number | null {
+  if (portId !== HARBOR_CITY) return null;
   const grams = shippableItems(state, portId, order).reduce((sum, i) => sum + i.amount, 0);
   const fits = freeVehicles(state, HARBOR_CITY).filter((v) => vehicleSpec(state, v.id).capacity >= grams);
   return fits.at(-1)?.id ?? null;

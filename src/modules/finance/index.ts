@@ -12,6 +12,7 @@
 //   Bilanz (Auftrag 27): PERIODS, periodSpan(period), balance(state, period, filter), balanceHistory(state, period,
 //   filter), explainReport(report), FinanceFilter, filterTargets(state)
 //   Städte (Auftrag 30): cityReport(state, cityId, days, offset?), cityDayProfit(state, cityId, day), bookingCity(state, …)
+//   Buchhalter (Auftrag 46e): accountantGains(state, period, filter) je Stadt der Bilanz
 // Keine Befehle, keine eigenen Ereignisse.
 
 import {
@@ -26,10 +27,11 @@ import {
   type MoneyGroup,
   type MoneyKind,
 } from '../../core';
-import { activeCity, cityOfSpot } from '../city';
+import { activeCity, citiesUnlocked, cityOfSpot } from '../city';
 import { getLieutenantIds, lieutenantOfSpot, teamLeadOf } from '../hierarchy';
 import { getAllSpots, getSpots, type Spot } from '../spots';
-import { getStaffMember, payrollDue } from '../staff';
+import { getStaffMember, payrollDue, specialistEffect, specialistProvider } from '../staff';
+import { veedelCity } from '../veedel';
 import { DAYS_KEPT, OTHER_REASON, REASON_DAYS_KEPT, REASON_LIMIT, RUNWAY_WARN_DAYS } from './config';
 
 export { DAYS_KEPT, REASON_DAYS_KEPT, RUNWAY_WARN_DAYS } from './config';
@@ -415,6 +417,60 @@ export function balanceHistory(
   return result;
 }
 
+// --- Buchhalter (Auftrag 46e) ---
+
+export interface AccountantGain {
+  staffId: string;
+  cityId: string;
+  /** Anteil mehr auf jeden Verkauf bzw. weniger auf die Löhne dieser Stadt. */
+  revenueShare: number;
+  wageShare: number;
+  /** Mehrerlös und gesparte Löhne pro Tag im Zeitraum. */
+  extra: number;
+  saved: number;
+}
+
+/** Städte, die eine Bilanz umfasst: alle freien, eine Stadt oder die des Veedels, Spots bzw. Leutnants. */
+function filterCities(state: GameState, filter: FinanceFilter): readonly string[] {
+  if (filter.kind === 'all') return citiesUnlocked(state);
+  if (filter.kind === 'city') return [filter.cityId];
+  if (filter.kind === 'veedel') return [veedelCity(filter.veedelId)];
+  if (filter.kind === 'spot') return [cityOfSpot(state, filter.spotId)];
+  return [getStaffMember(state, filter.staffId)?.cityId ?? 'koeln'];
+}
+
+/**
+ * Was die Buchhalter im Zeitraum pro Tag mehr an Erlös gebracht und an Löhnen gespart haben, aus der Bilanz
+ * zurückgerechnet (Erlös × Anteil / (1 + Anteil), Löhne × Anteil / (1 − Anteil)). Der Buchhalter wirkt nur in seiner
+ * Stadt: Je Stadt der Bilanz zählen ihr Buchhalter und ihr Teil der Bilanz. Leer ohne Buchhalter.
+ */
+export function accountantGains(
+  state: GameState,
+  period: Period,
+  filter: FinanceFilter = ALL_FILTER,
+): AccountantGain[] {
+  const { days } = periodSpan(period);
+  const result: AccountantGain[] = [];
+  for (const cityId of filterCities(state, filter)) {
+    const accountant = specialistProvider(state, 'revenue', cityId);
+    if (!accountant) continue;
+    const revenueShare = specialistEffect(state, 'revenue', cityId);
+    const wageShare = specialistEffect(state, 'wages', cityId);
+    // Bei „Alle Städte“ nur der Teil dieser Stadt, sonst umfasst die Bilanz ohnehin nur sie.
+    const r = balance(state, period, filter.kind === 'all' ? { kind: 'city', cityId } : filter);
+    const sales = r.rows.filter((row) => row.category.startsWith('sales.')).reduce((sum, row) => sum + row.amount, 0);
+    result.push({
+      staffId: accountant.id,
+      cityId,
+      revenueShare,
+      wageShare,
+      extra: Math.round((sales * revenueShare) / (1 + revenueShare) / days),
+      saved: Math.round((r.wages * wageShare) / (1 - wageShare) / days),
+    });
+  }
+  return result;
+}
+
 // --- Städte (Auftrag 30) ---
 
 /** Gewinn- und Verlustrechnung einer Stadt über die letzten days Tage (mit offset: ab so vielen Tagen zurück). */
@@ -470,9 +526,15 @@ export function explainReport(r: Report): string {
   return 'Ausgeglichen.';
 }
 
-/** "Löhne Läufer sind" vs. "Einkauf Ware ist". */
+/**
+ * "Löhne Läufer sind" vs. "Einkauf Ware ist": Mehrzahl, wenn die Bezeichnung mit einem Wort in der Mehrzahl beginnt
+ * oder mehrere Posten aufzählt („Schutzgeld und Tribut“, „Fracht, Schiffe und Lkw“). Was in Klammern steht, zählt
+ * nicht („Zoll (Autobahn und Kai)“ ist).
+ */
 function plural(label: string): 'sind' | 'ist' {
-  return /^(Löhne|Konfrontationen|Überfälle|Lieferaufträge|Sonstige)/.test(label) ? 'sind' : 'ist';
+  const head = label.split('(')[0];
+  const pluralWord = /^(Löhne|Konfrontationen|Überfälle|Lieferaufträge|Lieferungen|Sonstige|Gang-Angriffe|Zuwendungen)/;
+  return pluralWord.test(label) || / und |, /.test(head) ? 'sind' : 'ist';
 }
 
 function bestPhrase(best: CategoryRow): string {

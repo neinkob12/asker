@@ -7,7 +7,7 @@
 import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } from '../../core';
 import { activeCity } from '../city';
 import { getSalesStats } from '../customers';
-import { getProduct, getStock, getWarehouse, productName, warehouseCity } from '../goods';
+import { getProduct, getStock, getWarehouse, productName, unitWeight, warehouseCity, warehouseFree } from '../goods';
 import { getCargo, getTrips } from '../logistics';
 import { priceIndex } from '../market';
 import { getStaff } from '../staff';
@@ -23,6 +23,7 @@ import {
   type SupplierPackage,
   shipmentItems,
   shipmentsInTransit,
+  supplierIn,
 } from '../suppliers';
 import { isTaskActive } from './righthand';
 import type { OrderRule } from './types';
@@ -149,6 +150,16 @@ export function ruleStock(state: GameState, warehouseId: string, productId: stri
   return stock + shipped + atSea + onQuay + moving;
 }
 
+/** Platz im Lager in Gramm abzüglich der Kurier-Lieferungen dorthin, wie suppliers.order ihn vor dem Bestellen prüft. */
+function courierRoom(state: GameState, warehouseId: string): number {
+  let inbound = 0;
+  for (const s of shipmentsInTransit(state)) {
+    if (s.toPort || s.warehouseId !== warehouseId) continue;
+    for (const item of shipmentItems(s)) inbound += item.amount * unitWeight(item.productId);
+  }
+  return warehouseFree(state, warehouseId) - inbound;
+}
+
 /** Kurztext einer Regel, z.B. "Gras bei Frankfurt, passend, ab 50". */
 export function orderRuleLabel(state: GameState, rule: OrderRule): string {
   const what = rule.productId ? productName(rule.productId) : 'Alles nach Nachfrage';
@@ -228,9 +239,22 @@ export function planOrder(
     if (rule.supplierId) return { kind: 'pause', reason: 'Der Lieferant hat die Ware gerade nicht.' };
     return { kind: 'pause', reason: 'Kein Lieferant hat die Ware.' };
   }
-  const affordable = offers.filter((o) => o.price <= budget);
+  // Der Kurier lädt im Ziel-Lager ab, suppliers.order nimmt nur, was dort Platz hat (Schiffsware kommt an den Kai). Pakete,
+  // die nicht passen, fallen weg; passt keins, ruht die Regel mit Grund (sonst scheiterte die Bestellung still).
+  // Mit Vollmacht ruht die Regel dabei still, ohne Eintrag im Protokoll der Rechten Hand (restock in tasks.ts meldet
+  // Pausen nur ohne Vollmacht). Das ist so entschieden und bleibt: Der Statthalter entscheidet selbst, ob er umlagert
+  // oder ein Lager dazukauft (Ausbau in fullpower.ts), und schreibt dir dazu kein Protokoll.
+  const room = courierRoom(state, warehouseId);
+  const fits = offers.filter(
+    (o) => supplierIn(o.supplier, city).kind === 'port' || o.pkg.amount * unitWeight(o.pkg.productId) <= room,
+  );
+  if (fits.length === 0) {
+    const name = getWarehouse(state, warehouseId)?.name ?? 'Lager';
+    return { kind: 'pause', reason: `Im ${name} ist kein Platz mehr. Bau Regale ein oder lager um.` };
+  }
+  const affordable = fits.filter((o) => o.price <= budget);
   if (affordable.length === 0) {
-    return { kind: 'noMoney', needed: Math.min(...offers.map((o) => o.price)) };
+    return { kind: 'noMoney', needed: Math.min(...fits.map((o) => o.price)) };
   }
   // Ohne feste Ware: erst eine Ware wählen (was die Kunden vermissen, sonst die mit dem kleinsten Bestand), damit die
   // Pakete vergleichbar sind (Gramm und Stück lassen sich nicht mischen).
@@ -304,6 +328,26 @@ export function runRestock(
         }
         break;
       }
+      // Lehnt suppliers.order ab, ruht die Regel mit dem Grund (sonst scheiterte sie still bei jedem Durchgang).
+      // Wieder in Gang ist sie erst danach, damit ein bleibender Grund nicht jedes Mal neu gemeldet wird.
+      const result =
+        plan.kind === 'order'
+          ? ctx.dispatch(
+              {
+                type: 'suppliers.order',
+                payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
+              },
+              { actor },
+            )
+          : null;
+      if (result && !result.ok) {
+        const reason = result.reason ?? 'Die Bestellung ging nicht durch.';
+        if (rule.paused !== reason) {
+          rule.paused = reason;
+          hooks.onPause(rule, reason);
+        }
+        break;
+      }
       if (rule.paused) {
         rule.paused = null;
         hooks.onResume(rule);
@@ -313,14 +357,6 @@ export function runRestock(
         break;
       }
       if (plan.kind !== 'order') break;
-      const result = ctx.dispatch(
-        {
-          type: 'suppliers.order',
-          payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
-        },
-        { actor },
-      );
-      if (!result.ok) break;
       hooks.onOrdered(plan);
     }
   }

@@ -72,7 +72,7 @@ export const GANG_VOICES_MUENCHEN: Readonly<Record<string, GangVoice>> = {
     ],
     offer: [
       'Aus dem Schließfach: {amount} für {price}. Abholen in {veedel}.',
-      'Dragan. {amount}, {price}, {veedel}. Abfahrt in einer Stunde.',
+      'Dragan. {amount}, {price}, {veedel}. Der Zug wartet nicht ewig.',
       'Übrig vom Wochenende: {amount}. {price}, Treffpunkt {veedel}.',
       'Sonderangebot am Bahnsteig: {amount} für {price}. Nur heute, {veedel}.',
       'Ein Koffer zu viel: {amount}. {price}. Frag in {veedel} nach dem Schaffner.',

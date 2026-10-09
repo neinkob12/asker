@@ -363,6 +363,12 @@ export const SALE_PRICE_MIN = 1_000_000;
  * 0,65 bleibt etwa ein Monat Tagesgewinn als Startkapital, genug für die ersten Container, nicht für alle Kunden.
  */
 export const ROTTERDAM_SHARE = 0.65;
+/**
+ * Rotterdam (Liegeplatz, Halle) ist legal und wird mit sauberem Geld bezahlt. Der Verkaufspreis ist Schwarzgeld: Der
+ * Anteil für Jansen geht beim Verkauf über diesen Weg der Geldwäsche (Gebühr aus laundering/config.ts), die Gebühr geht
+ * von dem ab, was dir bleibt.
+ */
+export const ROTTERDAM_LAUNDERING_CHANNEL = 'shipping' as const;
 /** So viele Spielminuten nach „Boss von Deutschland“ ruft Jansen an. */
 export const SALE_CALL_DELAY = 6 * 60;
 /** „Noch nicht“: So viele Spieltage später meldet er sich wieder. */
@@ -376,7 +382,8 @@ export const SALE_CALL_LINES: readonly string[] = [
   'Ganz Deutschland, hab ich gehört. Respekt. Das hat vor dir keiner geschafft.',
   'Ich hör auf. Vierzig Jahre Hafen reichen. Mein Liegeplatz, meine Halle, meine Leute, meine Kunden: alles zu haben.',
   'Deine Statthalter wollen dich auszahlen. {price} für alles, was du in Deutschland hast. Sie laufen sowieso allein.',
-  'Ich will {rotterdam}. Dann bleiben dir {rest}, und du bist Lieferant für alle. Auch für deine alten Leute.',
+  'Ich will {rotterdam}, sauber. Meine Reederei wäscht dir das, gegen die übliche Gebühr.',
+  'Dann bleiben dir {rest}, und du bist Lieferant für alle. Auch für deine alten Leute.',
   'Kein Spot mehr, keine Läufer. Container, Zoll, Kunden. Großes Geschäft.',
   'Also. Kommst du nach Rotterdam?',
 ];

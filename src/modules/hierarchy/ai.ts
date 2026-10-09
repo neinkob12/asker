@@ -299,8 +299,12 @@ function handleAbsences(turn: Turn): void {
     if (!absence.replaced && atMySpot) {
       const spotId = m.returnTo?.targetId ?? '';
       const free = freeStaff(ctx.state, m.role === 'security' ? 'security' : 'runner')[0];
-      const cost = free || m.role !== 'runner' ? 0 : runnerHireCost(ctx.state, spotId);
-      const canHire = free || (post.settings.mayHire && cost <= budget(turn, true));
+      // Steht dort schon jemand (z.B. von "Koordinieren" hingestellt), übernimmt der, und staff.replace heuert niemanden
+      // an: Dann kostet es nichts (sonst ging der Preis eines Läufers vom Tagesbudget ab).
+      const occupied = m.role === 'runner' ? activeRunnerAt(ctx.state, spotId) : securityAt(ctx.state, { spotId })[0];
+      const cost = free || occupied || m.role !== 'runner' ? 0 : runnerHireCost(ctx.state, spotId);
+      // Steht dort schon jemand, wird niemand angeheuert: Das geht auch, wenn er nicht anheuern darf.
+      const canHire = free || occupied || (post.settings.mayHire && cost <= budget(turn, true));
       if (canHire && run({ type: 'staff.replace', payload: { staffId: m.id, fire: fireNow } })) {
         absence.replaced = true;
         if (cost > 0) spend(turn, cost, true);

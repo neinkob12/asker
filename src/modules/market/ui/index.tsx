@@ -7,6 +7,7 @@ import {
   Button,
   Chips,
   Disclosure,
+  Empty,
   Group,
   ItemContent,
   List,
@@ -170,6 +171,9 @@ function MarketOverview(props: { productId?: string }) {
     .map((v) => ({ veedel: v, price: referencePrice(state, productId, v.id) }))
     .sort((a, b) => b.price - a.price);
   const prices = rows.map((r) => r.price);
+  // Ein Ort ohne Veedel (Rotterdam nach dem Verkauf) hat keine Richtpreise: kein Höchster und Tiefster (sonst ±∞).
+  const priceText = (pick: (...values: number[]) => number) =>
+    prices.length > 0 ? `${formatNumber(pick(...prices), 2)} €` : '–';
   return (
     <div class="mkt-overview">
       <IndexGroup />
@@ -185,13 +189,8 @@ function MarketOverview(props: { productId?: string }) {
       <SummaryTiles
         items={[
           { icon: 'tag', color: 'system', value: formatEuro(product?.basePrice ?? 0), label: 'Basis' },
-          { icon: 'trendUp', color: 'money', value: `${formatNumber(Math.max(...prices), 2)} €`, label: 'Höchster' },
-          {
-            icon: 'trendDown',
-            color: 'danger',
-            value: `${formatNumber(Math.min(...prices), 2)} €`,
-            label: 'Tiefster',
-          },
+          { icon: 'trendUp', color: 'money', value: priceText(Math.max), label: 'Höchster' },
+          { icon: 'trendDown', color: 'danger', value: priceText(Math.min), label: 'Tiefster' },
         ]}
       />
       <Group
@@ -200,29 +199,33 @@ function MarketOverview(props: { productId?: string }) {
         color="money"
         more="Gefragt heißt: mehr Nachfrage als Ware, der Preis steigt. Gesättigt: zu viel Ware im Veedel, der Preis fällt. Konkurrenz durch Gangs drückt den Preis zusätzlich."
       >
-        <List>
-          {rows.map(({ veedel, price }) => {
-            const t = trend(state, productId, veedel.id);
-            const competition = getCompetitionFactor(state, veedel.id);
-            return (
-              <ListItem key={veedel.id} value={`${formatNumber(price, 2)} €`}>
-                <ItemContent
-                  icon={TREND_ICON[t]}
-                  color={TREND_COLOR[t]}
-                  title={veedel.name}
-                  tags={[
-                    t !== 'flat' && { label: TREND_TEXT[t], icon: TREND_ICON[t], color: TREND_COLOR[t] },
-                    competition !== 1 && {
-                      label: `Konkurrenz ${deviation(competition)}`,
-                      icon: 'skull',
-                      color: 'danger',
-                    },
-                  ]}
-                />
-              </ListItem>
-            );
-          })}
-        </List>
+        {rows.length === 0 ? (
+          <Empty>Hier gibt es keine Veedel.</Empty>
+        ) : (
+          <List>
+            {rows.map(({ veedel, price }) => {
+              const t = trend(state, productId, veedel.id);
+              const competition = getCompetitionFactor(state, veedel.id);
+              return (
+                <ListItem key={veedel.id} value={`${formatNumber(price, 2)} €`}>
+                  <ItemContent
+                    icon={TREND_ICON[t]}
+                    color={TREND_COLOR[t]}
+                    title={veedel.name}
+                    tags={[
+                      t !== 'flat' && { label: TREND_TEXT[t], icon: TREND_ICON[t], color: TREND_COLOR[t] },
+                      competition !== 1 && {
+                        label: `Konkurrenz ${deviation(competition)}`,
+                        icon: 'skull',
+                        color: 'danger',
+                      },
+                    ]}
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        )}
       </Group>
     </div>
   );

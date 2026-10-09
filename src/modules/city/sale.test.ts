@@ -4,9 +4,17 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
+import { launderedCost } from '../laundering';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { ROTTERDAM_SHARE, SALE_CALL_DELAY, SALE_PRICE_MIN, SALE_PROFIT_DAYS, SALE_REMINDER_DAYS } from './config';
+import {
+  ROTTERDAM_LAUNDERING_CHANNEL,
+  ROTTERDAM_SHARE,
+  SALE_CALL_DELAY,
+  SALE_PRICE_MIN,
+  SALE_PROFIT_DAYS,
+  SALE_REMINDER_DAYS,
+} from './config';
 import {
   activeCity,
   isBossOfGermany,
@@ -16,6 +24,7 @@ import {
   playableCities,
   playerRank,
   presentCity,
+  rotterdamLaunderingFee,
   saleBlocker,
   salePriceFor,
   saleRecord,
@@ -51,7 +60,10 @@ describe('Verkaufspreis (Auftrag 40)', () => {
     const offer = salePriceFor(40_000);
     expect(offer.price).toBe(40_000 * SALE_PROFIT_DAYS);
     expect(offer.rotterdamPrice).toBe(Math.round((offer.price * ROTTERDAM_SHARE) / 1000) * 1000);
-    expect(offer.rest).toBe(offer.price - offer.rotterdamPrice);
+    // Rotterdam wird sauber bezahlt: Die Gebühr der Wäsche über Jansens Reederei geht vom Rest ab.
+    expect(offer.rotterdamFee).toBe(launderedCost(offer.rotterdamPrice, ROTTERDAM_LAUNDERING_CHANNEL).fee);
+    expect(offer.rotterdamFee).toBeGreaterThan(0);
+    expect(offer.rest).toBe(offer.price - offer.rotterdamPrice - offer.rotterdamFee);
     expect(salePriceFor(-5_000).price).toBe(SALE_PRICE_MIN);
   });
 
@@ -81,12 +93,19 @@ describe('Boss von Deutschland und Verkauf (Auftrag 40)', () => {
     // Verkaufen nur der Spieler.
     expect(sim.dispatch({ type: 'city.sell', payload: {} }, { actor: 'system' }).ok).toBe(false);
     const before = sim.state.wallet.dirty;
+    const cleanBefore = sim.state.wallet.clean;
     const result = sim.dispatch({ type: 'city.sell', payload: {} });
     expect(result.ok).toBe(true);
     const record = saleRecord(sim.state);
     expect(record).not.toBeNull();
     expect(record?.cities).toEqual(playableCities().map((c) => c.id));
-    expect(sim.state.wallet.dirty).toBeCloseTo(before + (record?.price ?? 0) - (record?.rotterdamPrice ?? 0), 0);
+    // Schwarzgeld: Preis minus Rotterdam samt Gebühr der Wäsche; Rotterdam selbst geht über sauberes Geld.
+    const rotterdam = record?.rotterdamPrice ?? 0;
+    expect(sim.state.wallet.dirty).toBeCloseTo(
+      before + (record?.price ?? 0) - rotterdam - rotterdamLaunderingFee(rotterdam),
+      0,
+    );
+    expect(sim.state.wallet.clean).toBeCloseTo(cleanBefore, 0);
     expect(isBusinessSold(sim.state)).toBe(true);
     expect(ownedCities(sim.state)).toEqual([]);
     expect(eventsOfType(events, 'business.sold')).toHaveLength(1);

@@ -174,14 +174,35 @@ export class Simulation {
         core.emit('clock.dayStarted', { day: clock.day(state.time), weekday: clock.weekday(state.time) });
       }
       this.tickers ??= this.modules.filter((m) => m.tick).map((module) => ({ module, ctx: this.ctx(module.id) }));
+      // Wirft ein Modul, ticken die übrigen trotzdem, und Fristen, Anrufe und die Pleite-Regel laufen in dieser Minute;
+      // erst danach kommt der erste Fehler beim Aufrufer an. Sonst stünden bei einem dauerhaften Fehler alle späteren
+      // Module still, und ein einmaliger Fehler um Mitternacht nähme ihnen den Tagestick.
+      let failed = false;
+      let tickError: unknown;
       for (const { module, ctx } of this.tickers) {
-        // module.tick erst hier lesen (Messungen umhüllen es nachträglich, siehe perf.bench.test.ts).
-        if ((state.time - (module.tickOffset ?? 0)) % (module.tickEvery ?? 1) === 0) module.tick?.(ctx);
+        if ((state.time - (module.tickOffset ?? 0)) % (module.tickEvery ?? 1) !== 0) continue;
+        try {
+          // module.tick erst hier lesen (Messungen umhüllen es nachträglich, siehe perf.bench.test.ts).
+          module.tick?.(ctx);
+        } catch (error) {
+          if (failed) console.error(`Fehler im Tick von ${module.id}`, error);
+          else {
+            failed = true;
+            tickError = error;
+          }
+        }
       }
-      expireMessages(core);
-      processCalls(core);
-      this.flush();
-      this.checkSolvency();
+      try {
+        expireMessages(core);
+        processCalls(core);
+        this.flush();
+        this.checkSolvency();
+      } catch (error) {
+        if (!failed) throw error;
+        // Der ursprüngliche Fehler aus dem Tick soll ankommen, nicht ein Folgefehler.
+        console.error('Fehler nach einem Fehler im Tick', error);
+      }
+      if (failed) throw tickError;
     });
   }
 

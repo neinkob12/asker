@@ -39,10 +39,12 @@ import {
   PRODUCT_CATEGORIES,
   productName,
   qualityTier,
+  unitWeight,
   warehousePlace,
 } from '../../goods';
-import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
+import { cargoAmount, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
+import { specialistFactor } from '../../staff';
 import { tutorialAllows } from '../../tutorial';
 import {
   activeDeal,
@@ -64,6 +66,7 @@ import {
   isUnlocked,
   type OrderLine,
   type OrderMode,
+  orderDestination,
   orderQuote,
   type ProblemChoice,
   packagePrice,
@@ -182,14 +185,22 @@ function PackageChips(props: {
   productId: string;
   /** Container-Paket (Auftrag 33). */
   container?: 'full' | 'shared';
+  /** Lager, in das das Paket einzeln geht, wenn es nicht das unter „Liefern an“ ist (dort kein Platz mehr). */
+  to?: string;
 }) {
   const { state } = useGame();
   const trend = indexTrend(state, props.productId);
   const deal = activeDeal(state, props.supplierId, props.packageId);
-  if (!trend && !deal && !props.container) return null;
+  if (!trend && !deal && !props.container && !props.to) return null;
   return (
     <Chips
       items={[
+        !!props.to && {
+          label: `an ${props.to}`,
+          icon: 'warehouse',
+          color: 'place',
+          title: 'Passt nicht mehr ins gezeigte Lager, geht an eins mit Platz.',
+        },
         props.container === 'full' && { label: 'ganzer Container', icon: 'package', color: 'goods' },
         props.container === 'shared' && { label: 'geteilt: fremde Ware drin', icon: 'alert', color: 'warn' },
         deal && {
@@ -403,16 +414,31 @@ function emptyDraft(supplierId: string): OrderDraft {
 }
 
 /** Wohin geliefert wird und ob überhaupt bestellt werden kann (Lager, Liegeplatz, Schulden). */
-function orderTarget(state: GameState, supplier: Supplier, target: string) {
-  const warehouses = getWarehouses(state, activeCity(state));
+function orderTarget(state: GameState, supplier: Supplier, draft: OrderDraft) {
+  const cityId = activeCity(state);
+  const warehouses = getWarehouses(state, cityId);
   const toPort = supplier.kind === 'port';
   // Ohne Lager in der Stadt geht keine Lieferung (Auftrag 43, M8: sonst erst ein Banner nach dem Tippen).
   const noWarehouse = warehouses.length === 0;
-  const picked = warehouses.some((w) => w.id === target) ? target : undefined;
-  // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
-  const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
+  // Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, das der Befehl nehmen würde: Schiffsware das, in das die
+  // Abholung ohnehin fährt, Kurierware eins mit Platz für die Sammelbestellung bzw. (Einzeln) das leichteste Paket.
+  const warehouseId = orderDestination(state, supplier.id, shownLines(state, supplier, draft), draft.target);
   const canOrder = !isBlocked(state, supplier.id) && !noWarehouse && !(toPort && !hasBerth(state));
   return { warehouses, toPort, noWarehouse, warehouseId, canOrder };
+}
+
+/**
+ * Pakete, für die „Liefern an“ das Lager zeigt: die Sammelbestellung, im Modus Einzeln das leichteste angebotene Paket.
+ * Geht ein schwereres Paket woandershin, weil es dort nicht mehr passt, nennt seine Zeile das Lager (Chip).
+ */
+function shownLines(state: GameState, supplier: Supplier, draft: OrderDraft): OrderLine[] {
+  if (draft.mode === 'group') return draftLines(state, supplier, draft);
+  const weight = (p: SupplierPackage) => p.amount * unitWeight(p.productId);
+  const lightest = availablePackages(state, supplier.id).reduce<SupplierPackage | undefined>(
+    (best, p) => (!best || weight(p) < weight(best) ? p : best),
+    undefined,
+  );
+  return lightest ? [{ packageId: lightest.id, count: 1 }] : [];
 }
 
 /** Die gewählten Pakete der Sammelbestellung (nur, was der Lieferant dir gerade anbietet). */
@@ -428,7 +454,7 @@ function useGroupOrder(supplier: Supplier, draft: OrderDraft, update: UpdateDraf
   const { state, dispatch } = useGame();
   const ui = useUi();
   return (onCredit: boolean) => {
-    const { warehouseId } = orderTarget(state, supplier, draft.target);
+    const { warehouseId } = orderTarget(state, supplier, draft);
     const r = dispatch({
       type: 'suppliers.orderBatch',
       payload: {
@@ -450,7 +476,7 @@ function GroupOrderBar(props: { supplier: Supplier; draft: OrderDraft; update: U
   const { supplier, draft } = props;
   const quote = orderQuote(state, supplier.id, draftLines(state, supplier, draft), 'group');
   const send = useGroupOrder(supplier, draft, props.update);
-  const { canOrder } = orderTarget(state, supplier, draft.target);
+  const { canOrder } = orderTarget(state, supplier, draft);
   return (
     <div class="sup-bar">
       <span class="sup-bar__sum">
@@ -477,7 +503,7 @@ function GroupOrderBar(props: { supplier: Supplier; draft: OrderDraft; update: U
 function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDraft }) {
   const { state, dispatch } = useGame();
   const { supplier, draft, update } = props;
-  const { warehouseId, canOrder } = orderTarget(state, supplier, draft.target);
+  const { warehouses, warehouseId, toPort, canOrder } = orderTarget(state, supplier, draft);
   const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
@@ -491,19 +517,34 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
     packages: supplier.packages.filter((p) => getProduct(p.productId)?.category === c.id),
   })).filter((c) => c.packages.length > 0);
 
-  const buy = (packageId: string, onCredit: boolean) =>
-    dispatch({
+  // Einzeln: Jedes Paket geht in das Lager, das für sein eigenes Gewicht Platz hat (wie der Befehl ohne Angabe).
+  const destination = (packageId: string) =>
+    orderDestination(state, supplier.id, [{ packageId, count: 1 }], draft.target);
+  const buy = (packageId: string, onCredit: boolean) => {
+    const target = destination(packageId);
+    return dispatch({
       type: 'suppliers.order',
       payload: {
         supplierId: supplier.id,
         packageId,
         ...(onCredit ? { onCredit: true } : {}),
-        ...(warehouseId ? { warehouseId } : {}),
+        ...(target ? { warehouseId: target } : {}),
       },
     });
+  };
+  /** Lager eines Pakets, wenn es im Modus Einzeln woandershin geht als „Liefern an“ zeigt. */
+  const elsewhere = (p: SupplierPackage) => {
+    if (draft.mode !== 'single' || toPort || !warehouseId || !offered.has(p.id)) return undefined;
+    const target = destination(p.id);
+    return target && target !== warehouseId ? warehouses.find((w) => w.id === target)?.name : undefined;
+  };
 
   const aside = (p: SupplierPackage) => {
-    if (!offered.has(p.id)) return <span class="ui-hint">ab Vertrauen {p.minTrust}</span>;
+    // Nicht angeboten: zu wenig Vertrauen oder (Hafen) noch kein eigener Liegeplatz, den der Hinweis darüber nennt.
+    if (!offered.has(p.id)) {
+      const why = toPort && !hasBerth(state) ? 'nur mit Liegeplatz' : `ab Vertrauen ${p.minTrust ?? 0}`;
+      return <span class="ui-hint">{why}</span>;
+    }
     const price = packagePrice(state, supplier.id, p.id);
     if (draft.mode === 'group') {
       if (p.container) return <span class="ui-hint">nur einzeln</span>;
@@ -557,6 +598,7 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
             <List>
               {c.packages.map((p) => {
                 const price = packagePrice(state, supplier.id, p.id);
+                const to = elsewhere(p);
                 return (
                   <ListItem key={p.id} aside={aside(p)}>
                     <div class={offered.has(p.id) ? 'sup-pkg' : 'sup-pkg is-locked'}>
@@ -569,6 +611,7 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
                         packageId={p.id}
                         productId={p.productId}
                         {...(p.container ? { container: p.container } : {})}
+                        {...(to ? { to } : {})}
                       />
                     </div>
                   </ListItem>
@@ -664,13 +707,15 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
       </div>
     );
   }
-  const { warehouses, toPort, noWarehouse, warehouseId } = orderTarget(state, supplier, props.draft.target);
+  const { warehouses, toPort, noWarehouse, warehouseId } = orderTarget(state, supplier, props.draft);
   const rel = getRelation(state, supplier.id);
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
   const blocked = isBlocked(state, supplier.id);
   const discount = supplierDiscount(state, supplier.id);
   const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => s.supplierId === supplier.id);
+  // Auftrag 46e: Ein Polizei-Kontakt in der Stadt mindert die Beschlagnahme samt Zoll, wie beim Wurf der Bestellung.
+  const seizeFactor = specialistFactor(state, 'seizure', cityId);
   return (
     <div class="sup-app">
       <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
@@ -681,7 +726,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
       {/* Risiko pro Lieferung mit dem Vertrauen von jetzt, Zoll an der Grenze extra genannt (Auftrag 43, L6). */}
       <KeyValue
         label="Beschlagnahme"
-        value={`${formatPercent(seizeChance(supplier, rel.trust))} je Lieferung${supplier.customs ? `, davon Zoll ${formatPercent(supplier.customs)}` : ''}`}
+        value={`${formatPercent(Math.min(1, seizeChance(supplier, rel.trust) * seizeFactor))} je Lieferung${supplier.customs ? `, davon Zoll ${formatPercent(supplier.customs * seizeFactor)}` : ''}`}
       />
       <KeyValue label="Lieferzeit" value={clock.formatDuration(supplier.deliveryTime)} />
       <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />

@@ -22,13 +22,13 @@ import {
   correctCount,
   createInterview,
   currentRound,
-  discovered,
   type InterviewState,
   initInterview,
   interviewPicks,
   interviewScore,
   isDone,
   mark,
+  newlyDiscovered,
   type Phase,
   type Signal,
   typedChars,
@@ -280,7 +280,9 @@ export function InterviewGame(props: MinigameViewProps) {
   const s = game.current;
   const round = currentRound(setup, s);
   const last = hud.phase === 'verdict' || hud.phase === 'end' ? hud.results[hud.results.length - 1] : undefined;
-  const found = discovered(s);
+  // Nur Neues kommt in die Akte; was die Antwort an Bekanntem verrät, steht dort schon.
+  const found = newlyDiscovered(s, person.known);
+  const lastKnown = !!last && last.reveals !== 'none' && person.known.includes(last.reveals);
   const mouth: MouthStyle =
     cue?.kind === 'grin'
       ? 'grin'
@@ -458,7 +460,7 @@ export function InterviewGame(props: MinigameViewProps) {
             <p class="iv-prompt">
               {last.correct
                 ? last.exposed
-                  ? `Erkannt: ${traitName(last.exposed, person.name)}.`
+                  ? `${lastKnown ? 'Bestätigt' : 'Erkannt'}: ${traitName(last.exposed, person.name)}.`
                   : 'Richtig: nichts Auffälliges.'
                 : last.falseAlarms > 1
                   ? 'Zu oft daneben getippt: Du hast nur Gesten gesehen.'
@@ -468,10 +470,12 @@ export function InterviewGame(props: MinigameViewProps) {
             </p>
             <p class="iv-verdict__detail">
               {last.reveals !== 'none' && !last.correct
-                ? `Die Antwort verriet: ${traitName(last.reveals, person.name)}. Nicht in der Akte.`
+                ? `Die Antwort verriet: ${traitName(last.reveals, person.name)}. ${lastKnown ? 'Steht schon in der Akte.' : 'Nicht in der Akte.'}`
                 : last.reveals === 'none'
                   ? 'Die Antwort war ehrlich.'
-                  : 'Kommt in die Akte.'}
+                  : lastKnown
+                    ? 'Steht schon in der Akte.'
+                    : 'Kommt in die Akte.'}
             </p>
           </div>
         )}

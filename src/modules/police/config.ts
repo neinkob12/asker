@@ -40,9 +40,13 @@ export const OPERATION_TIERS = [
   },
 ] as const;
 
-/** Händler wird, wer eines davon erreicht (zurück zum Kleindealer erst unter allen DEALER_DOWN-Werten). */
+/**
+ * Händler wird, wer eines davon erreicht. DEALER_DOWN sind Haltewerte: Händler bleibt, wer noch einen davon erreicht,
+ * zurück zum Kleindealer erst unter allen (Hysterese bei Spots, Leuten und Umsatz; Veedel, Leutnants und Lager zählen
+ * in ganzen Stücken, da gibt es kein Band).
+ */
 export const DEALER_UP = { veedel: 1, spots: 4, people: 5, lieutenants: 1, warehouses: 2, revenue: 6000 } as const;
-export const DEALER_DOWN = { veedel: 0, spots: 3, people: 4, lieutenants: 0, warehouses: 1, revenue: 4500 } as const;
+export const DEALER_DOWN = { veedel: 1, spots: 3, people: 4, lieutenants: 1, warehouses: 2, revenue: 4500 } as const;
 /**
  * Großhändler: ab KINGPIN_UP_VEEDEL kontrollierten Veedeln (mit mindestens KINGPIN_MIN_PEOPLE Leuten im Einsatz, wer
  * mit zwei Läufern viel selbst verkauft, ist noch kein Großhändler) oder sehr vielen Spots plus Liegeplatz und mehreren

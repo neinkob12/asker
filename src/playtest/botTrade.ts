@@ -220,7 +220,8 @@ function deliverReady(state: GameState, run: BotRun): void {
     const items = shippableItems(state, port, order);
     const grams = items.reduce((s, i) => s + i.amount, 0);
     const value = items.reduce((s, i) => s + i.amount * i.offer, 0);
-    const truck = freeVehicles(state, 'rotterdam').find((v) => v.model === 'truck');
+    // Der Lkw fährt nur ab Rotterdam, wo er steht (trade.deliver); aus den anderen Häfen fährt die Spedition.
+    const truck = port === 'rotterdam' ? freeVehicles(state, 'rotterdam').find((v) => v.model === 'truck') : undefined;
     let vehicleId: number | null = null;
     if (truck) {
       const extra = deliveryCheckChance(state, customer, port, truck.id) - deliveryCheckChance(state, customer, port);

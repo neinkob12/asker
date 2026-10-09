@@ -19,9 +19,9 @@
 // (keyedDice), damit die Produktion den gemeinsamen Würfelstrom nicht verschiebt; vor dem ersten Anruf passiert nichts.
 //
 // Öffentliche API: growState, isGrowStarted, regionStatus, openRegions, getFincas, getFinca, fincaSites, siteTaken,
-//   fincaWorkers, fincaGardener, workersNeeded, fincaQuality, expectedHarvest, fincaRunningCost, cropDays, landPrice,
-//   leasePerWeek, greenhouseCost, nextGenetics, regionAttention, cartelPaid, costPerGram, harvestLog, goalShares,
-//   growGoals, REGION_ECONOMY, GENETICS, PACKINGS, FINCA_SITES
+//   fincaWorkers, hiredWorkers, fincaGardener, workersNeeded, fincaQuality, expectedHarvest, fincaRunningCost, cropDays,
+//   landPrice, leasePerWeek, greenhouseCost, nextGenetics, regionAttention, cartelPaid, costPerGram, harvestLog,
+//   goalShares, growGoals, REGION_ECONOMY, GENETICS, PACKINGS, FINCA_SITES
 // Befehle: 'grow.openRegion', 'grow.buyFinca', 'grow.leaseFinca', 'grow.hire', 'grow.dismiss', 'grow.plant',
 //   'grow.buildGreenhouse', 'grow.upgradeGenetics', 'grow.setPacking', 'grow.setCartel', 'grow.bribe'
 // Ereignisse: 'grow.called', 'grow.regionOpened', 'grow.fincaAcquired', 'grow.planted', 'grow.harvested',
@@ -359,10 +359,15 @@ export function workersNeeded(finca: Pick<Finca, 'hectares'>): number {
   return Math.ceil(finca.hectares * WORKERS_PER_HA);
 }
 
+/** Angestellte Arbeiter einer Finca, auch an einem Tag ohne Lohn (Regler, Hinweise); für die Ernte fincaWorkers. */
+export function hiredWorkers(state: GameState, finca: Finca): number {
+  return finca.workerIds.filter((id) => getStaffMember(state, id)?.status === 'active').length;
+}
+
 export function fincaWorkers(state: GameState, finca: Finca): number {
   // Ohne Lohn arbeitet niemand.
   if (finca.unpaidWages) return 0;
-  return finca.workerIds.filter((id) => getStaffMember(state, id)?.status === 'active').length;
+  return hiredWorkers(state, finca);
 }
 
 export function fincaGardener(state: GameState, finca: Finca) {
@@ -582,10 +587,18 @@ function regionState(ctx: Ctx, regionId: string): GrowRegion {
   return s.regions[regionId];
 }
 
+/** Pacht aller gepachteten Fincas für einen Tag (so viel sauberes Geld lassen Löhne und Dünger liegen). */
+function leaseReserve(state: GameState): number {
+  return state.modules.grow.fincas
+    .filter((f) => f.tenure === 'leased')
+    .reduce((sum, f) => sum + Math.round(leasePerWeek(f) / 7), 0);
+}
+
 /**
- * Löhne und Dünger: bar vor Ort (Schwarzgeld), sonst sauberes Geld; false, wenn beides nicht reicht. Die Pacht geht nur
- * sauber; deshalb zuerst schwarz (Auftrag 43: vorher fraßen Löhne das saubere Geld, und die Finca ging an der Pacht
- * verloren, obwohl genug Schwarzgeld da war).
+ * Löhne und Dünger: bar vor Ort (Schwarzgeld), sonst sauberes Geld, aber nur so viel, dass die Pacht für einen Tag
+ * bleibt; false, wenn das nicht reicht (dann arbeiten die Leute an dem Tag nicht). Die Pacht geht nur sauber; deshalb
+ * zuerst schwarz und die Reserve (Auftrag 43, D4: vorher fraßen Löhne das saubere Geld, und die Finca ging an der Pacht
+ * verloren).
  */
 function payLocal(
   ctx: Ctx,
@@ -597,6 +610,7 @@ function payLocal(
   if (amount <= 0) return true;
   const tag = { category, cityId };
   if (wallet.canAfford(ctx.state, amount, 'dirty')) return wallet.pay(ctx, amount, 'dirty', reason, tag);
+  if (!wallet.canAfford(ctx.state, amount + leaseReserve(ctx.state), 'clean')) return false;
   return wallet.pay(ctx, amount, 'clean', reason, tag);
 }
 

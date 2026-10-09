@@ -8,7 +8,15 @@
 // dem Eintreiben), spielt der Bau auf einer Kopie so oft, bis der Ausgang passt (jeder Versuch eine Spielminute
 // später, mit anderen Würfeln). Alles kommt fest aus Seed 1, wie die übrigen Test-Spielstände (testSaves.ts).
 
-import { type CommandResult, clock, type GameState, loadSimulation, MINUTES_PER_HOUR, type Simulation } from '../core';
+import {
+  type CommandResult,
+  clock,
+  type GameState,
+  loadSimulation,
+  MINUTES_PER_HOUR,
+  type Simulation,
+  wallet,
+} from '../core';
 import { discoverModules } from '../core/discover';
 import { activeEncounters, autoResolveEncounter } from '../modules/encounters';
 import { getGangStatus, getGangs, isGangBroken, protectionAmount, raidCrew, raidTargets } from '../modules/gangs';
@@ -240,13 +248,15 @@ const BUILDERS: Record<MinigameKind, Build> = {
     const busy = playerBusy(sim.state, CITY);
     if (busy) fail(id, busy);
     if (getWarehouses(sim.state, CITY).length < 2) {
-      // Ein zweites Lager, ohne dass der Stand danach reich aussieht: Das Geld dafür kommt und geht.
+      // Ein zweites Lager, ohne dass der Stand danach reich aussieht: Das Geld dafür kommt und geht. Beides läuft
+      // über die Geldbörse, damit die Kasse dieselben Beträge zeigt wie das Konto.
       const site = warehouseSites(CITY).find((w) => !isWarehouseOwned(sim.state, w.id));
       if (!site) fail(id, 'kein zweites Lager zu kaufen.');
-      const clean = sim.state.wallet.clean;
-      sim.state.wallet.clean += 200_000;
+      wallet.earn(sim.ctx('scenario'), site.cost, 'clean', `Test-Stand: Geld für ${site.name}`, {
+        category: 'income.other',
+        cityId: CITY,
+      });
       ok(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: site.id } }), id, 'Lager kaufen');
-      sim.state.wallet.clean = clean;
     }
     stockUp(sim);
     const [from, to] = getWarehouses(sim.state, CITY);

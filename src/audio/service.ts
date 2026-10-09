@@ -32,7 +32,7 @@ export interface LoopVoice {
   stop(time: number): void;
 }
 
-/** Griff auf eine laufende Schleife (audio.loop). Ohne Ton (gesperrt, kein AudioContext) tut er nichts. */
+/** Griff auf eine Schleife (audio.loop). Läuft der Ton noch nicht, startet sie später; ohne Web Audio tut er nichts. */
 export interface LoopHandle {
   set(params: LoopParams): void;
   stop(): void;
@@ -98,6 +98,8 @@ const MUSIC_RETRY_MAX_MS = 60_000;
 
 /** So lange wartet ein Satz auf das Modell (Download beim ersten Anruf), dann spricht der Browser. */
 const READY_TIMEOUT_MS = 90_000;
+/** Meldet das bereite Modell so lange (ms) keinen Satz und kein Ende, gilt die Zeile als hängengeblieben. */
+export const SYNTH_IDLE_MS = 30_000;
 
 /** Datensparmodus des Geräts: Dann lädt das Spiel das Modell nicht von selbst (nur aus dem Cache). */
 function dataSaver(): boolean {
@@ -130,6 +132,8 @@ export class AudioService {
   private readonly listeners = new Set<() => void>();
   private readonly lastPlayed = new Map<string, number>();
   private readonly ambienceLevels = new Map<AmbienceId, number>();
+  /** Ton-Schleifen, die angefragt wurden, bevor der Ton lief (deferLoop). */
+  private readonly pendingLoops = new Set<() => void>();
   private readonly createContext: () => AudioContext | null;
   private speakerInstance: Speaker | null;
   /** Wie viele Sätze gerade gesprochen werden (Musik so lange leiser). */
@@ -218,6 +222,7 @@ export class AudioService {
     const next: AudioStatus = !hidden && ctx.state === 'running' ? 'running' : 'suspended';
     if (next === this.status) return;
     this.status = next;
+    this.startPendingLoops();
     this.emit();
   }
 
@@ -236,6 +241,7 @@ export class AudioService {
     }
     if (!ctx) {
       this.status = 'unsupported';
+      this.pendingLoops.clear();
       this.emit();
       return;
     }
@@ -260,6 +266,7 @@ export class AudioService {
     this.resumeContext();
     // Safari startet den Kontext erst nach resume(): Bis der Zustand "running" meldet, bleibt der Status "suspended".
     this.status = ctx.state === 'running' ? 'running' : 'suspended';
+    this.startPendingLoops();
     for (const [id, level] of this.ambienceLevels) this.ambience.set(id, level);
     if (this.settings.musicOn) this.startTrack();
     this.emit();
@@ -318,12 +325,14 @@ export class AudioService {
    * Ton-Schleife starten (mit registerSound als `kind: 'loop'` angemeldet), z.B. Motor oder Martinshorn:
    * `const engine = audio.loop('minigames.chase.engine', { volume: 0.7 })`, dann pro Bild `engine.set({ rpm })` und
    * am Ende `engine.stop()`. Läuft über den Effekt-Bus: Lautstärke, Stummschalten und Gespräch gelten wie für alle
-   * Effekte. Vor der ersten Interaktion kommt ein Griff zurück, der nichts tut.
+   * Effekte. Läuft der Ton noch nicht (vor der ersten Interaktion, Tab gerade zurück), merkt sich der Griff die Werte
+   * und die Schleife startet, sobald der Ton läuft; ohne Web Audio tut er nichts.
    */
   loop(id: string, params: LoopParams = {}): LoopHandle {
     const ctx = this.ctx;
     const custom = this.custom.get(id);
-    if (!ctx || !this.sfxBus || this.status !== 'running' || custom?.kind !== 'loop') return SILENT_LOOP;
+    if (custom?.kind !== 'loop' || this.status === 'unsupported') return SILENT_LOOP;
+    if (!ctx || !this.sfxBus || this.status !== 'running') return this.deferLoop(id, params);
     const out = ctx.createGain();
     const t = ctx.currentTime + 0.01;
     out.gain.setValueAtTime(0, t);
@@ -355,6 +364,33 @@ export class AudioService {
         setTimeout(() => out.disconnect(), (LOOP_FADE_OUT + 0.3) * 1000);
       },
     };
+  }
+
+  /** Griff auf eine Schleife, die erst startet, wenn der Ton läuft (startPendingLoops); bis dahin sammelt er die Werte. */
+  private deferLoop(id: string, params: LoopParams): LoopHandle {
+    let latest = { ...params };
+    let live: LoopHandle | null = null;
+    const start = () => {
+      this.pendingLoops.delete(start);
+      live = this.loop(id, latest);
+    };
+    this.pendingLoops.add(start);
+    return {
+      set: (next) => {
+        if (live) live.set(next);
+        else if (this.pendingLoops.has(start)) latest = { ...latest, ...next };
+      },
+      stop: () => {
+        this.pendingLoops.delete(start);
+        live?.stop();
+      },
+    };
+  }
+
+  /** Der Ton läuft (wieder): Schleifen starten, die angefragt wurden, solange er stand. */
+  private startPendingLoops(): void {
+    if (this.status !== 'running') return;
+    for (const start of [...this.pendingLoops]) start();
   }
 
   /** Eigenen Sound anmelden, z.B. registerSound('gangs.gunshot', { kind: 'file', url: 'audio/sfx/schuss.ogg' }). */
@@ -578,27 +614,36 @@ export class AudioService {
     return engine ? engine.state(piperVoiceFor(spec).id) : null;
   }
 
-  /** Modell laden, auch nach einem Fehler noch einmal (Einstellungen). */
+  /** Modell laden, auch nach einem Fehler noch einmal (Einstellungen). Ein entferntes darf dann wieder von selbst laden. */
   loadVoiceModel(id: PiperVoiceId): void {
+    const removed = this.settings.removedVoices;
+    if (removed.includes(id)) this.update({ removedVoices: removed.filter((v) => v !== id) });
     void this.engine()?.load(id, { retry: true });
   }
 
-  /** Modell vom Gerät löschen (Einstellungen). */
+  /** Modell vom Gerät löschen (Einstellungen). Es lädt erst wieder über "Laden", nicht still beim nächsten Anruf. */
   removeVoiceModel(id: PiperVoiceId): void {
-    this.engine()?.remove(id);
+    const engine = this.engine();
+    if (!engine) return;
+    const removed = this.settings.removedVoices;
+    if (!removed.includes(id)) this.update({ removedVoices: [...removed, id] });
+    engine.remove(id);
   }
 
   /** Darf das Modell für diese Figur gerade sprechen (läuft, lädt oder darf laden)? */
   private modelAllowed(engine: PiperEngine, spec: VoiceSpec): boolean {
-    const state = engine.state(piperVoiceFor(spec).id);
+    const id = piperVoiceFor(spec).id;
+    const state = engine.state(id);
     if (state.kind === 'error') return false;
-    if (state.kind === 'idle') return state.cached === true || !dataSaver();
+    // Nicht im Browser: lädt von selbst, außer das Gerät spart Daten oder der Spieler hat es entfernt.
+    if (state.kind === 'idle')
+      return state.cached === true || (!dataSaver() && !this.settings.removedVoices.includes(id));
     return true;
   }
 
   /**
    * Modell einer Figur schon einmal laden, wenn ihr Anruf klingelt: aus dem Cache in Sekunden, sonst als Download
-   * (einmalig, bleibt im Browser), außer das Gerät spart Daten.
+   * (einmalig, bleibt im Browser), außer das Gerät spart Daten oder der Spieler hat das Modell entfernt.
    */
   prepareVoice(spec: VoiceSpec): void {
     if (!this.settings.voices) return;
@@ -690,9 +735,12 @@ export class AudioService {
     let job: SynthJob | null = null;
     let browserStop: (() => void) | null = null;
     let sentences = 0;
+    /** Sicherheitsnetz: läuft ab, wenn das Modell zu lange keinen Satz und kein Ende meldet. */
+    let idle: ReturnType<typeof setTimeout> | undefined;
     const cancel = () => {
       if (cancelled || finished) return;
       cancelled = true;
+      clearTimeout(idle);
       playback.stop();
       job?.cancel();
       browserStop?.();
@@ -720,18 +768,37 @@ export class AudioService {
         fallback();
         return;
       }
+      // Hängt die Synthese (kein Satz, kein Ende), endet die Zeile trotzdem: mit den Sätzen, die schon da sind,
+      // sonst mit der Stimme des Browsers. Was danach noch vom Modell kommt, fällt weg.
+      let settled = false;
+      const giveUp = () => {
+        if (settled || cancelled) return;
+        settled = true;
+        job?.cancel();
+        if (sentences > 0) playback.end();
+        else fallback();
+      };
+      const watch = () => {
+        clearTimeout(idle);
+        idle = setTimeout(giveUp, SYNTH_IDLE_MS);
+      };
+      watch();
       job = engine.synthesize(model.id, text, params, (chunk) => {
-        if (cancelled) return;
+        if (cancelled || settled) return;
         sentences++;
         playback.add(chunk.pcm, chunk.sampleRate);
+        watch();
       });
       try {
         await job.promise;
-        if (!cancelled) playback.end();
+        if (!cancelled && !settled) playback.end();
       } catch {
-        if (cancelled) return;
+        if (cancelled || settled) return;
         if (sentences > 0) playback.end();
         else fallback();
+      } finally {
+        settled = true;
+        clearTimeout(idle);
       }
     })();
     return cancel;

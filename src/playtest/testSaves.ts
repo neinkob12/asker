@@ -1,9 +1,9 @@
 // Test-Spielstände zum Laden (Spielstände › Test-Spielstände, oder ?spielstand=<id> in der Adresse): Der Bot spielt
 // echte Durchgänge, und an den Abschnitten des Bogens wird ein Stand festgehalten (manche danach für einen Moment
-// zurechtgerückt). Drei Läufe pro Seed reichen für alle: Köln (bis kurz vor komplett), Deutschland (alle Städte in der
-// festen Reihenfolge ARRIVAL_CITIES, in jeder die Ankunft, die Mehrheit und „fast komplett“) und der Hafen (Verkauf bis
-// zum Titel Europa). Dazu ein Stand je Minispiel (minigameSaves.ts, aus „Boss von Köln“ bzw. der Hafen-Phase). Die
-// fertigen Dateien liegen in
+// zurechtgerückt). Vier Läufe pro Seed reichen für alle: die ersten Tage (vorsichtiger Bot), Köln (bis kurz vor
+// komplett), Deutschland (alle Städte in der festen Reihenfolge ARRIVAL_CITIES, in jeder die Ankunft, die Mehrheit und
+// „fast komplett“) und der Hafen (Verkauf bis zum Titel Europa). Dazu ein Stand je Minispiel (minigameSaves.ts, aus
+// „Boss von Köln“ bzw. der Hafen-Phase). Die fertigen Dateien liegen in
 // public/spielstaende/ (neu erzeugen mit `npm run saves:build`, scripts/build-test-saves.mjs); testSaves.test.ts prüft,
 // dass sie sich laden lassen und tun, was sie sollen. Test-Spielstände tragen meta.scenario und kommen nicht in die
 // Bestenliste.
@@ -17,7 +17,7 @@ import { getFincas, growGoals } from '../modules/grow';
 import { campaignProgress, controllerOf, PLAYER_FACTION } from '../modules/territory';
 import { getCustomers, OWN_ORIGINS, originStock } from '../modules/trade';
 import { allVeedel } from '../modules/veedel';
-import { DEFAULT_BOT, newBotStats, playFor } from './bot';
+import { CAREFUL_BOT, DEFAULT_BOT, newBotStats, playFor } from './bot';
 import { type MinigameBases, minigameSaves } from './minigameSaves';
 import { playToGermany, rightHandReady, sellAndArrive } from './scenario';
 
@@ -104,22 +104,38 @@ function take(kept: Kept, id: string, seed: number): GameState {
   return structuredClone(state);
 }
 
+const startRuns = new Map<number, Kept>();
+
+/**
+ * Köln, die ersten Tage: ein eigener kurzer Lauf über KOELN_START_HOURS mit dem vorsichtigen Bot (CAREFUL_BOT: zwei
+ * Läufer, kein Ausbau, also noch kein Leutnant und kein Veedel; Kleindealer). Der Bot des großen Laufs heuert gleich
+ * mehrere Läufer an und ernennt in derselben Stunde den ersten Leutnant (Händler); einen Moment „Läufer, aber noch kein
+ * Leutnant“ gibt es dort nicht.
+ */
+function startRun(seed: number): Kept {
+  return cached(startRuns, seed, (kept) => {
+    const sim = Simulation.create(discoverModules(), { seed, mode: 'normal', runId: `test-koeln-anfang-${seed}` });
+    playFor(sim, KOELN_START_HOURS * MINUTES_PER_HOUR, newBotStats(), CAREFUL_BOT);
+    if (sim.state.outcome.gameOver) throw new Error(`Seed ${seed}: Game Over (${sim.state.outcome.gameOver.reason}).`);
+    kept.set('koeln-anfang', keep(sim.state, 'koeln-anfang', seed));
+  });
+}
+
 const koelnRuns = new Map<number, Kept>();
 
 /**
- * Köln: Der Bot spielt stundenweise, bis 11 von 12 Veedeln dir gehören. Unterwegs festgehalten: die ersten Tage
- * (KOELN_START_HOURS), das erste eigene Veedel und die Mehrheit (Boss von Köln). Am Ende "Köln fast komplett": 50.000 €
- * Schwarzgeld und eine Rechte Hand auf höchster Stufe mit allen Aufgaben außer der Geldwäsche (sonst gäbe sie gleich
- * einen Teil der 50.000 € in die Wäsche; für die Vollmacht schaltet man sie ein). Gespeichert um xx:59 Uhr; im zwölften
- * Veedel hast du schon die Mehrheit, mit der nächsten vollen Stunde (eine Spielminute nach dem Laden) gehört es dir:
- * Übernahme, Sieg-Bildschirm "Köln komplett", eine halbe Stunde später ruft Fiete aus Hamburg an (die ersten Stunden
- * ohne Polizeikontrolle, damit der Anruf nicht in eine Verfolgung fällt).
+ * Köln: Der Bot spielt stundenweise, bis 11 von 12 Veedeln dir gehören. Unterwegs festgehalten: das erste eigene
+ * Veedel und die Mehrheit (Boss von Köln). Am Ende "Köln fast komplett": 50.000 € Schwarzgeld und eine Rechte Hand auf
+ * höchster Stufe mit allen Aufgaben außer der Geldwäsche (sonst gäbe sie gleich einen Teil der 50.000 € in die Wäsche;
+ * für die Vollmacht schaltet man sie ein). Gespeichert um xx:59 Uhr; im zwölften Veedel hast du schon die Mehrheit, mit
+ * der nächsten vollen Stunde (eine Spielminute nach dem Laden) gehört es dir: Übernahme, Sieg-Bildschirm "Köln
+ * komplett", eine halbe Stunde später ruft Fiete aus Hamburg an (die ersten Stunden ohne Polizeikontrolle, damit der
+ * Anruf nicht in eine Verfolgung fällt).
  */
 function koelnRun(seed: number): Kept {
   return cached(koelnRuns, seed, (kept) => {
     const sim = Simulation.create(discoverModules(), { seed, mode: 'normal', runId: `test-koeln-komplett-${seed}` });
     const stats = newBotStats();
-    const start = sim.state.time;
     const reached = (id: string, now: boolean) => {
       if (now && !kept.has(id)) kept.set(id, keep(sim.state, id, seed));
     };
@@ -127,15 +143,22 @@ function koelnRun(seed: number): Kept {
     sim.on('campaign.milestone', ({ kind, cityId }) =>
       reached('boss-von-koeln', kind === 'majority' && cityId === 'koeln'),
     );
-    for (let hour = 0; hour < 60 * 24 && ownedInKoeln(sim.state).length < 11; hour++) {
-      playFor(sim, MINUTES_PER_HOUR, stats);
+    const assertNoGameOver = () => {
       if (sim.state.outcome.gameOver)
         throw new Error(`Seed ${seed}: Game Over (${sim.state.outcome.gameOver.reason}).`);
-      reached('koeln-anfang', sim.state.time - start >= KOELN_START_HOURS * MINUTES_PER_HOUR);
+    };
+    for (let hour = 0; hour < 60 * 24; hour++) {
+      // Jede Stunde bis xx:59 mit Bot, die letzte Minute einzeln: dieselben Züge und Schritte wie playFor über eine
+      // Stunde. Gezählt wird um xx:59, vor dem stündlichen Tick der Reviere: Der kann das zwölfte Veedel schon kippen,
+      // wenn das elfte erst in dieser Stunde gefallen ist, und dann fehlte der Moment "elf, das zwölfte fällt gleich".
+      playFor(sim, MINUTES_PER_HOUR - 1, stats);
+      assertNoGameOver();
+      if (ownedInKoeln(sim.state).length >= 11) break;
+      sim.step();
+      assertNoGameOver();
       reached('koeln-veedel', ownedInKoeln(sim.state).length > 0);
     }
-    // Ohne Bot bis kurz vor die nächste volle Stunde; offene Konfrontationen würfeln die Leute aus.
-    while (clock.minute(sim.state.time) !== MINUTES_PER_HOUR - 1) sim.step();
+    // Jetzt ist es xx:59 (der Bot ist um xx:50 zuletzt dran gewesen); offene Konfrontationen würfeln die Leute aus.
     const ctx = sim.ctx('scenario');
     for (const encounter of [...activeEncounters(sim.state)]) autoResolveEncounter(ctx, encounter.id);
     const owned = ownedInKoeln(sim.state);
@@ -266,7 +289,7 @@ function harborRun(seed: number): Kept {
 }
 
 /** Köln: die ersten Tage (ein paar Spots, die ersten Läufer). */
-export const buildKoelnAnfang = (seed = 1) => take(koelnRun(seed), 'koeln-anfang', seed);
+export const buildKoelnAnfang = (seed = 1) => take(startRun(seed), 'koeln-anfang', seed);
 /** Köln: das erste eigene Veedel. */
 export const buildKoelnVeedel = (seed = 1) => take(koelnRun(seed), 'koeln-veedel', seed);
 /** Boss von Köln: die Mehrheit der Kölner Veedel. */

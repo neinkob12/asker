@@ -33,7 +33,7 @@ import {
   MINUTES_PER_DAY,
   wallet,
 } from '../../core';
-import { activeCity, cityAt, getCity, isCityUnlocked } from '../city';
+import { activeCity, cityAt, getCity, isCityUnlocked, saleRecord } from '../city';
 import { veedelCity } from '../veedel';
 import {
   CUT_AGENT_COST,
@@ -379,10 +379,38 @@ export function getStock(state: GameState, filter: StockFilter = {}): number {
   return sum;
 }
 
-/** Liegt irgendwo Ware? Bricht beim ersten Posten ab (die Pleite-Regel fragt das jede Spielminute). */
+/**
+ * Liegt irgendwo Ware, die dir gehört? Bricht beim ersten Posten ab (die Pleite-Regel fragt das jede Spielminute). Nach
+ * dem Verkauf des Geschäfts zählen die Lager der verkauften Städte nicht mehr: Was dort liegt, gehört den Statthaltern
+ * (Ware in Rotterdam und im Ausland zählt trade).
+ */
 function hasAnyStock(state: GameState): boolean {
-  for (const lots of Object.values(state.modules.goods.stock)) for (const lot of lots) if (lot.amount > 0) return true;
+  const sold = saleRecord(state)?.cities;
+  for (const [warehouseId, lots] of Object.entries(state.modules.goods.stock)) {
+    if (sold?.includes(warehouseCity(warehouseId))) continue;
+    for (const lot of lots) if (lot.amount > 0) return true;
+  }
   return false;
+}
+
+/**
+ * Verkauf des Geschäfts (Auftrag 40): Die Ware in den Lagern der verkauften Städte geht an die Statthalter, sie war zum
+ * Einkaufspreis im Verkaufspreis (city.saleStockValue). Die Lager sind danach leer. Ware im Hafen von Rotterdam und im
+ * Ausland liegt nicht hier (trade) und bleibt.
+ */
+function handOverStock(ctx: Ctx, cities: readonly string[]): void {
+  const stock = ctx.state.modules.goods.stock;
+  let grams = 0;
+  for (const [warehouseId, lots] of Object.entries(stock)) {
+    if (!cities.includes(warehouseCity(warehouseId)) || lots.length === 0) continue;
+    grams += stockWeight(lots.filter((l) => l.amount > 0));
+    stock[warehouseId] = [];
+  }
+  if (grams <= 0) return;
+  journal.add(
+    ctx,
+    `Die Ware in deinen alten Lagern (${formatAmount(Math.round(grams))}) gehört jetzt den Statthaltern, sie war im Verkaufspreis.`,
+  );
 }
 
 /** Mittlere Qualität des Bestands (nach Menge), 0 ohne Bestand. */
@@ -674,7 +702,8 @@ export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
   if (!site) return { ok: false, reason: 'Diesen Standort gibt es nicht.' };
   if (isWarehouseOwned(ctx.state, warehouseId)) return { ok: false, reason: `${site.name} gehört dir schon.` };
   if (!isCityUnlocked(ctx.state, site.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
-  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, 'expansion')) {
+  // Gebucht wird in die Stadt des Standorts (wie beim Ausbau), nicht in die gerade aktive.
+  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, { category: 'expansion', cityId: site.cityId })) {
     return {
       ok: false,
       reason: `Dafür brauchst du ${formatEuro(site.cost)} sauberes Geld. Wasch vorher Schwarzgeld.`,
@@ -831,7 +860,8 @@ export default defineModule({
   on: {
     'sale.completed': (ctx, { veedelId, spotId, productId, amount }) =>
       countSale(ctx, veedelCity(veedelId), spotId, productId, amount),
+    'business.sold': (ctx, { cities }) => handOverStock(ctx, cities),
   },
-  // Pleite-Regel: Wer noch Ware hat, kann weitermachen.
+  // Pleite-Regel: Wer noch Ware hat, kann weitermachen (nach dem Verkauf nur Ware, die noch dir gehört).
   solvency: (state) => hasAnyStock(state),
 });

@@ -17,7 +17,7 @@ import {
   texts,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, isCityLive } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import {
   fitArticles,
@@ -91,7 +91,7 @@ import {
   WARN_AT,
   WARN_PREPARE_COST,
 } from './config';
-import { GANGS, type Gang, type GangMethod } from './data';
+import { GANGS, type Gang, type GangMethod, gangNameIn } from './data';
 import { remember } from './memory';
 import { type GangStatus, gangVeedel, getGang, isAtPeace, isGangBroken } from './state';
 import { INCIDENT_TEXTS } from './texts';
@@ -132,6 +132,8 @@ export interface GangIncident {
   trail?: BurglaryTrail;
   /** Laufende Konfrontation zum Vorfall (Täter suchen, Sicherheit am Spot). */
   encounterId?: number;
+  /** Die Stadt des Vorfalls schläft gerade oder hat geschlafen und ist noch nicht wieder aufgewacht (wakeIncident). */
+  resting?: boolean;
 }
 
 /** Gang-Leute an einem deiner Spots. */
@@ -579,6 +581,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
       warehouse,
       goods,
       gang: gang?.name ?? '',
+      crew: gang?.crew ?? '',
       name: insider?.name ?? 'jemand',
     },
   );
@@ -591,7 +594,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   });
   journal.add(
     ctx,
-    `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gang.name}.` : ''}`,
+    `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gangNameIn(gang, 'dative')}.` : ''}`,
     'bad',
   );
   // Ins Protokoll einer Gang nur, wenn die Spur zu ihr führt: Wer es wirklich war, weißt du sonst nicht.
@@ -684,7 +687,11 @@ function poach(ctx: Ctx, gang: Gang): boolean {
   });
   incident.messageId = messages.send(ctx, {
     contact: staffContact(m),
-    text: texts.pick(ctx, 'staff:poach', INCIDENT_TEXTS.poach, { gang: gang.name, extra: formatEuro(extra) }),
+    text: texts.pick(ctx, 'staff:poach', INCIDENT_TEXTS.poach, {
+      gang: gang.name,
+      crew: gang.crew,
+      extra: formatEuro(extra),
+    }),
     options: incidentOptions(ctx.state, incident),
     expiresIn: INCIDENT_EXPIRY,
   });
@@ -714,10 +721,13 @@ function resolvePoach(ctx: Ctx, incident: GangIncident, choice: string): Command
     }
     const veedelId = m.assignment?.kind === 'spot' ? getSpot(ctx.state, m.assignment.targetId)?.veedelId : undefined;
     removeMember(ctx, m.id, 'quit');
+    // Er geht zur Gang wie beim Gehenlassen: Sie hat einen Mann mehr.
+    const joined = gang ? statusOf(ctx, gang.id) : undefined;
+    if (joined) joined.people += 1;
     if (veedelId) addHeat(ctx, veedelId, POACH_TALK_HEAT);
     journal.add(
       ctx,
-      `${m.name} lässt sich nicht drohen und geht zu ${gang?.name ?? 'der Konkurrenz'}. Und redet.`,
+      `${m.name} lässt sich nicht drohen und geht zu ${gang ? gangNameIn(gang, 'dative') : 'der Konkurrenz'}. Und redet.`,
       'bad',
       {
         staffId: m.id,
@@ -726,7 +736,9 @@ function resolvePoach(ctx: Ctx, incident: GangIncident, choice: string): Command
     return { ok: true };
   }
   removeMember(ctx, m.id, 'quit');
-  journal.add(ctx, `${m.name} wechselt zu ${gang?.name ?? 'der Konkurrenz'}.`, 'bad', { staffId: m.id });
+  journal.add(ctx, `${m.name} wechselt zu ${gang ? gangNameIn(gang, 'dative') : 'der Konkurrenz'}.`, 'bad', {
+    staffId: m.id,
+  });
   const s = gang ? statusOf(ctx, gang.id) : undefined;
   if (s) s.people += 1;
   return { ok: true };
@@ -757,6 +769,7 @@ function intimidate(ctx: Ctx, gang: Gang): boolean {
         text: texts.pick(ctx, 'staff:intimidation', INCIDENT_TEXTS.intimidationReport, {
           ...spotVars(spot),
           gang: gang.name,
+          crew: gang.crew,
         }),
         options,
         expiresIn: INTIMIDATION_DURATION,
@@ -783,7 +796,7 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
     const paid = ctx.dispatch({ type: 'gangs.payTribute', payload: { gangId: gang.id } });
     if (!paid.ok) return paid;
     endIntimidation(ctx, spot.id);
-    journal.add(ctx, `Schutzgeld an ${gang.name}: Ihre Leute ziehen ${atSpot(spot)} ab.`, 'info', {
+    journal.add(ctx, `Schutzgeld an ${gangNameIn(gang, 'accusative')}: Ihre Leute ziehen ${atSpot(spot)} ab.`, 'info', {
       spotId: spot.id,
     });
     return paid;
@@ -791,7 +804,9 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
   if (choice !== 'security') return { ok: true };
   const crew = securityCrew(ctx.state, spot.id);
   if (crew.length === 0) return { ok: false, reason: 'Du hast gerade keine freien Sicherheitsleute.' };
-  if (ctx.chance(INTIMIDATION_LEAVE_CHANCE) || activeEncounters(ctx.state).length > 0) {
+  // Läuft schon eine Konfrontation, kann keine zweite starten: erst die klären (sonst zögen sie ohne Wurf ab).
+  if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Gerade läuft schon eine Konfrontation.' };
+  if (ctx.chance(INTIMIDATION_LEAVE_CHANCE)) {
     endIntimidation(ctx, spot.id);
     journal.add(ctx, `Deine Sicherheit taucht ${atSpot(spot)} auf. ${gang.name} zieht ab.`, 'good', {
       spotId: spot.id,
@@ -880,12 +895,13 @@ function resolveBlackmail(ctx: Ctx, incident: GangIncident, choice: string): Com
   if (!gang || !w) return { ok: true };
   if (choice === 'pay') {
     const amount = incident.amount ?? 0;
-    if (!wallet.pay(ctx, amount, 'dirty', `Schweigegeld ${gang.name}`, { category: 'tribute', cityId: w.cityId })) {
+    const to = gangNameIn(gang, 'accusative');
+    if (!wallet.pay(ctx, amount, 'dirty', `Schweigegeld an ${to}`, { category: 'tribute', cityId: w.cityId })) {
       return { ok: false, reason: 'Nicht genug Geld.' };
     }
     const s = statusOf(ctx, gang.id);
     if (s) s.money += amount;
-    journal.add(ctx, `Schweigegeld an ${gang.name} gezahlt (${formatEuro(amount)}). Der ${w.name} bleibt geheim.`);
+    journal.add(ctx, `Schweigegeld an ${to} gezahlt (${formatEuro(amount)}). Der ${w.name} bleibt geheim.`);
     return { ok: true };
   }
   const veedelId = warehouseVeedel(w);
@@ -948,7 +964,7 @@ function warnRival(ctx: Ctx, gang: Gang): boolean {
     incidentOptions(ctx.state, incident),
     INCIDENT_EXPIRY,
   );
-  journal.add(ctx, `${gang.name} warnt dich vor ${enemy.name}.`, 'good');
+  journal.add(ctx, `${gang.name} warnt dich vor ${gangNameIn(enemy, 'dative')}.`, 'good');
   ctx.emit('gang.goodTurn', { gangId: gang.id, kind: 'warnRival' });
   return true;
 }
@@ -1001,14 +1017,21 @@ function resolveGoodTurn(ctx: Ctx, incident: GangIncident, choice: string): Comm
   if (incident.kind === 'favor') {
     if (choice !== 'accept') return { ok: true };
     const w = incident.warehouseId ? getWarehouse(ctx.state, incident.warehouseId) : undefined;
-    const amount = incident.amount ?? 0;
-    wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gang.name}`, { category: 'income.other', cityId: gang.cityId });
+    // Bezahlt wird aus der Kasse der Gang, höchstens so viel, wie drin ist.
+    const amount = Math.min(incident.amount ?? 0, Math.max(0, s.money));
+    s.money -= amount;
+    if (amount > 0) {
+      wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gangNameIn(gang, 'accusative')}`, {
+        category: 'income.other',
+        cityId: gang.cityId,
+      });
+    }
     addRelation(s, FAVOR_RELATION);
     const veedelId = w ? warehouseVeedel(w) : null;
     if (veedelId) addHeat(ctx, veedelId, FAVOR_HEAT);
     journal.add(
       ctx,
-      `Ware von ${gang.name} zwischengelagert: ${formatEuro(amount)}, die Beziehung wird besser.`,
+      `Ware von ${gangNameIn(gang, 'dative')} zwischengelagert: ${formatEuro(amount)}, die Beziehung wird besser.`,
       'good',
     );
     return { ok: true };
@@ -1110,6 +1133,13 @@ export function upkeepIncidents(ctx: Ctx): void {
       removeIncident(ctx, incident.id);
       continue;
     }
+    // Nur die Stadt, die live ist (Auftrag 30): Vorfälle der schlafenden Stadt ruhen bis zum Aufwachen.
+    if (incident.cityId && !isCityLive(ctx.state, incident.cityId)) {
+      incident.resting = true;
+      continue;
+    }
+    // Aufgewacht, aber city.switched noch nicht zugestellt (Wechsel im selben Schritt wie dieser Tick).
+    if (incident.resting && wakeIncident(ctx, incident)) continue;
     if (incident.reported === false) {
       if (incident.plannedAt !== undefined) {
         if (incident.plannedAt <= ctx.now) runBurglary(ctx, incident);
@@ -1126,6 +1156,54 @@ export function upkeepIncidents(ctx: Ctx): void {
     if (incident.expiresAt > ctx.now) continue;
     respond(ctx, incident.id, INCIDENT_CHOICES[incident.kind][0]);
   }
+}
+
+/**
+ * Ereignis city.switched: Die Vorfälle der Stadt, die einschläft, ruhen ab jetzt (auch wenn bis zur Rückkehr kein
+ * Stundentakt kommt); die der Stadt, die aufwacht, werden gleich aufgeweckt.
+ */
+export function onCitySwitched(ctx: Ctx, from: string, to: string): void {
+  for (const incident of [...ctx.state.modules.gangs.incidents]) {
+    if (incident.cityId === from) incident.resting = true;
+    else if (incident.cityId === to) wakeIncident(ctx, incident);
+  }
+}
+
+/**
+ * Die Stadt des Vorfalls ist wieder live. Lief seine Frist in der Ruhe ab, verfällt er ohne Wirkung: keine vorsichtige
+ * Wahl, nur die Fragen der Nachricht verschwinden. Sonst läuft er mit der Frist weiter, die er hat. Ein geplanter
+ * Einbruch, dessen Nacht in die Ruhe fiel, kommt erst in der nächsten Nacht zur selben Stunde, nicht gleich bei deiner
+ * Rückkehr. Gibt zurück, ob der Vorfall weg ist.
+ */
+function wakeIncident(ctx: Ctx, incident: GangIncident): boolean {
+  delete incident.resting;
+  // Mit laufender Konfrontation räumt upkeepIncidents wie gewohnt auf.
+  if (incident.encounterId !== undefined) return false;
+  if (incident.expiresAt <= ctx.now) {
+    // Ein Einbruch, der vor der Ruhe geschah, aber nie gemeldet wurde: Der Verlust gehört wenigstens ins Journal.
+    if (incident.reported === false && incident.plannedAt === undefined) noteMissedBurglary(ctx, incident);
+    retract(ctx, incident);
+    removeIncident(ctx, incident.id);
+    return true;
+  }
+  if (incident.plannedAt !== undefined && incident.plannedAt <= ctx.now) {
+    const days = Math.floor((ctx.now - incident.plannedAt) / MINUTES_PER_DAY) + 1;
+    incident.plannedAt += days * MINUTES_PER_DAY;
+    incident.reportAt = nextReport(incident.plannedAt);
+    incident.expiresAt = incident.reportAt + INCIDENT_EXPIRY;
+  }
+  return false;
+}
+
+/** Einbruch, dessen Meldung und Frist ganz in die Ruhe der Stadt fielen: nur noch ein Eintrag im Journal, ohne Fragen. */
+function noteMissedBurglary(ctx: Ctx, incident: GangIncident): void {
+  if (!incident.amount || !incident.productId) return;
+  const warehouse = getWarehouse(ctx.state, incident.warehouseId ?? '')?.name ?? 'Lager';
+  journal.add(
+    ctx,
+    `Einbruch ${warehousePlace(warehouse, 'in')}, während du weg warst: ${goodsText(incident.productId, incident.amount)} gestohlen.`,
+    'bad',
+  );
 }
 
 /** Kurztext eines Vorfalls für die Gangs-Seite. */

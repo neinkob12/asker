@@ -10,7 +10,8 @@
 //   getStaff(state, filter), getStaffMember(state, id), isEmployed, getStats(state, id),
 //   runnerAt(state, spotId) (egal welcher Status), activeRunnerAt(state, spotId) (arbeitet gerade dort), securityAt(state, { spotId | warehouseId }), findAvailable(state, { role }), staffVeedel(state, member),
 //   expectedWage(state, id), expectedWageFor(role, level, demand), dailyWages(state), serveTime(member),
-//   effectiveWage(member) (in Haft nur Stillhaltegeld, verletzt halber Lohn), payrollDue(state) (heute Nacht fällig),
+//   effectiveWage(member) (in Haft nur Stillhaltegeld, verletzt halber Lohn), wageDue(state, member) (das mit dem
+//   Buchhalter, so wie gebucht), payrollDue(state) (heute Nacht fällig),
 //   talkChance(member) (redet beim Entlassen?), isAbsent(member), wageCategory(member) (Kategorie in der Kasse),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
 //   bonus(state, key), bonusProvider, bailCost, jailDuration, levelProgress, betrayalChance,
@@ -355,7 +356,9 @@ function askAboutArrest(ctx: Ctx, m: StaffMember): void {
   messages.send(ctx, {
     contact: staffContact(lead ?? m),
     text: lead
-      ? `${m.name} sitzt bis Tag ${day}. Kostet jetzt nur Stillhaltegeld. Was machen wir?`
+      ? m.jailSupport
+        ? `${m.name} sitzt bis Tag ${day}. Kostet jetzt nur Stillhaltegeld. Was machen wir?`
+        : `${m.name} sitzt bis Tag ${day}. Ohne Stillhaltegeld kostet das nichts, aber wer nichts kriegt, redet eher. Was machen wir?`
       : `Ich ruf über den Anwalt an: Die halten mich bis Tag ${day} fest. Was machen wir?`,
     options,
     expiresIn: Math.max(60, until - ctx.now),
@@ -371,7 +374,9 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
     actor === 'player' ? '' : ` (${getStaffMember(ctx.state, actor.replace('staff:', ''))?.name ?? 'Leutnant'})`;
   journal.add(
     ctx,
-    `${veedelName(veedelId)} taucht ab${by}: ${pulled === 1 ? 'eine Person' : `${pulled} Leute`} bis ${clock.formatTime(until)} von der Straße.`,
+    pulled === 0
+      ? `${veedelName(veedelId)} taucht ab${by}: Dort steht gerade niemand von deinen Leuten auf der Straße.`
+      : `${veedelName(veedelId)} taucht ab${by}: ${pulled === 1 ? 'eine Person' : `${pulled} Leute`} bis ${clock.formatTime(until)} von der Straße.`,
     'info',
     { veedelId },
   );

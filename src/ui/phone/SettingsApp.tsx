@@ -56,8 +56,8 @@ function Section(props: {
   );
 }
 
-/** Stand eines Sprachmodells in einem Satz. */
-function voiceStateText(state: VoiceModelState, voice: PiperVoice): string {
+/** Stand eines Sprachmodells in einem Satz. removed: vom Spieler entfernt, lädt nicht mehr von selbst. */
+function voiceStateText(state: VoiceModelState, voice: PiperVoice, removed: boolean): string {
   const size = formatMegabytes(voice.bytes);
   switch (state.kind) {
     case 'ready':
@@ -69,7 +69,10 @@ function voiceStateText(state: VoiceModelState, voice: PiperVoice): string {
     case 'error':
       return state.message;
     default:
-      return state.cached ? `${size} auf diesem Gerät` : `Nicht geladen · ${size}, einmalig von Hugging Face`;
+      if (state.cached) return `${size} auf diesem Gerät`;
+      return removed
+        ? 'Entfernt · lädt erst wieder über „Laden“'
+        : `Nicht geladen · ${size}, einmalig von Hugging Face`;
   }
 }
 
@@ -94,7 +97,7 @@ function VoiceModels() {
                 {voice.feminine ? 'Frauenstimme' : 'Männerstimme'} „{voice.name}“
               </span>
               <span class={`set-voice__hint ${state.kind === 'error' ? 'is-bad' : ''}`}>
-                {voiceStateText(state, voice)}
+                {voiceStateText(state, voice, audio.settings.removedVoices.includes(voice.id))}
               </span>
               {state.kind === 'loading' && (
                 <ProgressBar value={state.loaded / Math.max(1, state.total)} label={`${voice.name} lädt`} />
@@ -114,7 +117,8 @@ function VoiceModels() {
       })}
       <p class="set-voices__note">
         Die Stimmen rechnet das Sprachmodell Piper auf diesem Gerät; die Modelle kommen einmalig von Hugging Face und
-        bleiben im Browser. Beim ersten Anruf laden sie von selbst (nicht im Datensparmodus).
+        bleiben im Browser. Beim ersten Anruf laden sie von selbst (nicht im Datensparmodus und nicht nach dem
+        Entfernen).
       </p>
     </div>
   );

@@ -21,14 +21,15 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { cityReport } from '../../finance';
 import { ROTTERDAM_SHARE, SALE_PROFIT_DAYS } from '../config';
 import {
   cityName,
   isBusinessSold,
   jansenContact,
   ownedCities,
+  rotterdamLaunderingFee,
   saleBlocker,
+  saleCityDailyProfit,
   saleOffer,
   saleRecord,
   saleStatus,
@@ -93,7 +94,7 @@ function SalePanel() {
             {
               icon: 'moneyBag',
               color: 'dirty',
-              value: formatEuro(record.price - record.rotterdamPrice),
+              value: formatEuro(record.price - record.rotterdamPrice - rotterdamLaunderingFee(record.rotterdamPrice)),
               label: 'Geblieben',
             },
           ]}
@@ -127,14 +128,11 @@ function SalePanel() {
         color="money"
         value={formatEuro(offer.dailyProfit)}
         note={`Der Preis: ${SALE_PROFIT_DAYS} Tagesgewinne, Schnitt der letzten sieben Tage.`}
-        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden. Die Ware in deinen Lagern bleibt bei den Statthaltern, sie zahlen sie zum Einkaufspreis dazu. Dein Konto bleibt, wie es ist.`}
+        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau und ohne Anheuern. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden, bezahlt mit sauberem Geld. Die Ware in deinen Lagern bleibt bei den Statthaltern, sie zahlen sie zum Einkaufspreis dazu. Dein Konto bleibt, wie es ist.`}
       >
         <List>
           {ownedCities(state).map((id) => {
-            const r = cityReport(state, id, 7, 1);
-            const share = r.rows.find((row) => row.category === 'share.righthand')?.amount ?? 0;
-            const expansion = r.rows.find((row) => row.category === 'expansion')?.amount ?? 0;
-            const perDay = Math.round((r.profit - share - expansion) / 7);
+            const perDay = Math.round(saleCityDailyProfit(state, id));
             return (
               <ListItem key={id} value={formatEuro(perDay)}>
                 <ItemContent icon="building" color="place" title={cityName(id)} />
@@ -143,6 +141,13 @@ function SalePanel() {
           })}
         </List>
       </Group>
+      <Group
+        title="Wäsche für Rotterdam"
+        icon="washing"
+        color="dirty"
+        value={formatEuro(offer.rotterdamFee)}
+        note="Rotterdam zahlst du sauber: Jansens Reederei wäscht den Preis, die Gebühr geht von dem ab, was dir bleibt."
+      />
       {offer.stockAmount > 0 && (
         <Group
           title="Ware in deinen Lagern"
@@ -196,6 +201,8 @@ registerPanel({ id: 'city.sale', title: () => 'Verkauf', component: SalePanel })
 function SoldDialog(props: { price: number; rotterdamPrice: number }) {
   const ui = useUi();
   const close = () => ui.closeDialog();
+  // Rotterdam samt der Gebühr der Wäsche (sauber bezahlt): So rechnet sich das Startkapital.
+  const rotterdam = props.rotterdamPrice + rotterdamLaunderingFee(props.rotterdamPrice);
   return (
     <MapDialog label="Verkauft" onClose={close} class="city-sold" scrim="none" detent="large">
       <div class="city-sold__glow" aria-hidden="true" />
@@ -211,11 +218,11 @@ function SoldDialog(props: { price: number; rotterdamPrice: number }) {
         </div>
         <div class="city-sold__stat">
           <span class="city-sold__label is-place">Rotterdam</span>
-          <strong>−{formatEuro(props.rotterdamPrice)}</strong>
+          <strong>−{formatEuro(rotterdam)}</strong>
         </div>
         <div class="city-sold__stat">
           <span class="city-sold__label is-brand">Startkapital</span>
-          <strong>{formatEuro(props.price - props.rotterdamPrice)}</strong>
+          <strong>{formatEuro(props.price - rotterdam)}</strong>
         </div>
         <button type="button" class="city-sold__next" onClick={close}>
           Nach Rotterdam

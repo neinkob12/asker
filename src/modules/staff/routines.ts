@@ -2,11 +2,11 @@
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
 import { type Ctx, clock, formatEuro, type GameState, journal, messages, texts, wallet, withPeriod } from '../../core';
-import { cityName, raidWarningBonus } from '../city';
+import { activeCity, cityName, raidWarningBonus } from '../city';
 import { canServeCustomer, waitingAt } from '../customers';
 import { formatProductAmount, getStock, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
-import { getSpot } from '../spots';
+import { atSpotStart, getSpot } from '../spots';
 import { veedelCity, veedelName } from '../veedel';
 import {
   BETRAYAL_COOLDOWN,
@@ -37,22 +37,23 @@ import {
   assign,
   bonus,
   bonusProvider,
-  effectiveWage,
   expectedWage,
   hidingReturn,
   invalidateStaffIndex,
   isSpecialist,
   liveMembers,
+  placeVeedel,
   relationPace,
   removeMember,
   revealStat,
+  securityAt,
   serveTime,
   setStatus,
   staffContact,
   staffVeedel,
   talkChance,
   wageCategory,
-  wageFactor,
+  wageDue,
 } from './members';
 import { STAFF_TEXTS } from './texts';
 import { relationsOf, traitFactor, traitLoyaltyDay } from './traits';
@@ -211,8 +212,26 @@ function returnFromHiding(ctx: Ctx): void {
     let back = 0;
     for (const { staffId, assignment } of hiding.returns) {
       const m = s.members.find((x) => x.id === staffId);
-      if (m?.status !== 'active' || m.assignment) continue;
-      if (m.role === 'runner' && assignment.kind === 'spot' && activeRunnerAt(ctx.state, assignment.targetId)) continue;
+      if (!m || m.assignment) continue;
+      // In Haft oder verletzt (z. B. aus einer Konfrontation): Der Platz wartet wie bei einer Festnahme am Spot,
+      // returnToPost prüft beim Zurückkommen, ob er noch frei ist.
+      if (m.status === 'jailed' || m.status === 'injured') {
+        if (!m.returnTo) m.returnTo = { ...assignment };
+        continue;
+      }
+      if (m.status !== 'active') continue;
+      // Ein Läufer bzw. eine Sicherheit pro Spot (wie assignCommand und returnToPost): Steht dort inzwischen jemand
+      // anderes, bleibt die Person frei, und das Journal sagt es.
+      if (assignment.kind === 'spot' && spotTaken(ctx.state, m, assignment.targetId)) {
+        const spot = getSpot(ctx.state, assignment.targetId);
+        journal.add(
+          ctx,
+          `${m.name} bleibt ohne Einsatz: ${spot ? atSpotStart(spot) : 'Am alten Platz'} steht inzwischen jemand anderes.`,
+          'info',
+          { staffId: m.id, spotId: assignment.targetId },
+        );
+        continue;
+      }
       assign(ctx, m.id, assignment);
       back++;
     }
@@ -227,6 +246,13 @@ function returnFromHiding(ctx: Ctx): void {
       );
     }
   }
+}
+
+/** Steht am Spot schon jemand mit derselben Rolle (aktiver Läufer bzw. Sicherheit im Einsatz)? */
+function spotTaken(state: GameState, m: StaffMember, spotId: string): boolean {
+  if (m.role === 'runner') return !!activeRunnerAt(state, spotId);
+  if (m.role === 'security') return securityAt(state, { spotId }).length > 0;
+  return false;
 }
 
 /** Um Mitternacht: Löhne, Loyalität, neue Erkenntnisse, Erfahrung der Spezialisten, Verrat. */
@@ -267,7 +293,7 @@ function payWages(ctx: Ctx): void {
   for (const m of members) {
     // In Haft nur Stillhaltegeld, verletzt der halbe Lohn (effectiveWage); ein Buchhalter in der Stadt drückt alle
     // Löhne dort um seinen Anteil (Auftrag 46e, wageFactor).
-    const amount = Math.round(effectiveWage(m) * wageFactor(ctx.state, m.cityId));
+    const amount = wageDue(ctx.state, m);
     const category = m.status === 'jailed' ? 'wages.jail' : m.status === 'injured' ? 'wages.injured' : wageCategory(m);
     const reason =
       m.status === 'jailed'
@@ -370,7 +396,8 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
   let amount = 0;
   if (kind === 'goods') {
     // Vom Produkt, von dem am meisten da ist, fällt es am wenigsten auf.
-    const row = [...stockSummary(ctx.state)].sort((a, b) => b.amount - a.amount)[0];
+    // Nur die Ware der Stadt, die live ist: Aus anderen Städten nimmt take nichts (Auswahl und Diebstahl gleich).
+    const row = [...stockSummary(ctx.state, undefined, activeCity(ctx.state))].sort((a, b) => b.amount - a.amount)[0];
     const want = row ? Math.min(THEFT_GOODS_MAX, Math.ceil(row.amount * THEFT_GOODS_SHARE)) : 0;
     amount = row && want > 0 ? take(ctx, { productId: row.productId, amount: want, partial: true }).taken : 0;
     if (!row || amount === 0) return betray(ctx, m, 'money');
@@ -390,7 +417,8 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
     removeMember(ctx, m.id, 'quit');
     journal.add(ctx, `${m.name} hat hingeschmissen.`, 'bad', { staffId: m.id });
   } else {
-    const veedelId = staffVeedel(ctx.state, m) ?? m.returnTo?.targetId ?? null;
+    // Verletzt (ohne Einsatz): das Veedel des Platzes, an den die Person zurückkehrt, nicht die ID des Spots.
+    const veedelId = staffVeedel(ctx.state, m) ?? placeVeedel(ctx.state, m.returnTo);
     amount = TALK_HEAT;
     if (veedelId) addHeat(ctx, veedelId, amount);
     journal.add(ctx, `${m.name} hat geredet. Die Bullen wissen jetzt mehr.`, 'bad', { staffId: m.id });

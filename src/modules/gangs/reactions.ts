@@ -46,9 +46,10 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
   if (!gang || !s) return;
   const r = payload.result;
   if (r) {
-    // Was du gewinnst, verliert die Gang, und umgekehrt.
+    // Was du gewinnst, verliert die Gang, und umgekehrt. Beute, die bei dir mangels Lager verfallen ist, hat die Gang
+    // trotzdem verloren.
     s.people = Math.max(0, s.people - r.opponentLosses);
-    s.goods = Math.max(0, s.goods - r.goods);
+    s.goods = Math.max(0, s.goods - r.goods - (r.goodsForfeited ?? 0));
     s.money = Math.max(0, s.money - r.money);
     // Beziehung aus dem Ergebnis, z.B. wenn du dich freigekauft hast (encounters, Weg "payoff").
     if (r.relation) addRelation(s, r.relation);
@@ -61,12 +62,13 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
     // Freigekauft: Sie haben bekommen, was sie wollten. Kein Sieg für dich, keine neue Wut, keine Nachricht.
     if (payload.mode === 'payoff') return;
     if (payload.outcome === 'success') {
+      // Du hast den Überfall abgewehrt: Das merkt sich die Gang (nicht, wenn sie gewonnen hat).
       addHostility(s, 10);
       addRelation(s, -5);
+      remember(ctx, gang.id, 'raidRepelled');
       if (alive) say(ctx, gang, 'raidWon');
     } else if (payload.outcome === 'failure') {
       addHostility(s, -HOSTILITY_AFTER_LESSON);
-      remember(ctx, gang.id, 'raidRepelled');
       if (alive) say(ctx, gang, 'raidLost');
     }
   } else if (kind === 'attack') {

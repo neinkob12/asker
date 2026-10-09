@@ -380,12 +380,13 @@ function expand(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     note(ctx, rh, `${spot.name} freigeschaltet (${formatEuro(spot.unlockCost ?? 0)}).`);
     return;
   }
-  // Ein zweites Lager, wenn es nur eins gibt und sauberes Geld da ist.
+  // Ein zweites Lager, wenn es nur eins gibt und sauberes Geld da ist; es zählt aufs Tagesbudget für Ausbau.
   if (getWarehouses(state, city).length >= 2) return;
   const site = warehouseSites(city)
-    .filter((w) => !isWarehouseOwned(state, w.id) && w.cost <= state.wallet.clean)
+    .filter((w) => !isWarehouseOwned(state, w.id) && w.cost <= state.wallet.clean && w.cost <= budget)
     .sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
   if (site && ctx.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: site.id } }, { actor }).ok) {
+    fp.spent += site.cost;
     fp.done.expanded += 1;
     note(ctx, rh, `${site.name} als Lager gekauft (${formatEuro(site.cost)} sauber).`);
   }

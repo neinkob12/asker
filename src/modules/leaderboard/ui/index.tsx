@@ -99,15 +99,15 @@ const timeout = () =>
 /** Übermittlungen, die gerade laufen (der Bildschirm wartet darauf), und was zuletzt ankam (nichts doppelt schicken). */
 const inFlight = new Map<string, Promise<void>>();
 const lastSent = new Map<string, string>();
+/** Was gerade unterwegs ist, und der neuere Stand, der währenddessen kam (geht danach hinterher). */
+const sending = new Map<string, string>();
+const queued = new Map<string, string>();
 
-function submit(state: GameState): Promise<void> {
+export function submit(state: GameState): Promise<void> {
   // Test-Spielstände (meta.scenario) hat der Bot gespielt: Sie kommen nicht in die Bestenliste.
   if (!enabled() || state.meta.scenario) return Promise.resolve();
   const summary = runSummary(state);
   const runId = summary.runId;
-  // Game Over meldet über die Reaktion und über den Bildschirm: Läuft schon eine Übermittlung, wartet der zweite darauf.
-  const running = inFlight.get(runId);
-  if (running) return running;
   const body = JSON.stringify({
     ...summary,
     token: token(runId),
@@ -115,6 +115,19 @@ function submit(state: GameState): Promise<void> {
     // Titel ist der Rang (Auftrag 36); ohne Rang der Meilenstein „Boss von Köln“ (Auftrag 46d: früher aus den Quests).
     title: summary.title || milestoneTitle(state),
   });
+  return send(runId, body);
+}
+
+function send(runId: string, body: string): Promise<void> {
+  // Game Over meldet über die Reaktion und über den Bildschirm: Läuft schon eine Übermittlung, wartet der zweite darauf.
+  // Ein neuerer Stand (z.B. Game Over, während der Tagesbeginn noch unterwegs ist) geht danach hinterher, statt
+  // verloren zu gehen; die laufende Übermittlung endet erst mit ihm.
+  const running = inFlight.get(runId);
+  if (running) {
+    if (sending.get(runId) === body) queued.delete(runId);
+    else queued.set(runId, body);
+    return running;
+  }
   if (lastSent.get(runId) === body) return Promise.resolve();
   const request = fetch(ENDPOINT, {
     method: 'POST',
@@ -127,8 +140,15 @@ function submit(state: GameState): Promise<void> {
       if (response.ok) lastSent.set(runId, body);
     })
     .catch(() => undefined)
-    .finally(() => inFlight.delete(runId));
+    .then(() => {
+      inFlight.delete(runId);
+      sending.delete(runId);
+      const next = queued.get(runId);
+      queued.delete(runId);
+      return next === undefined ? undefined : send(runId, next);
+    });
   inFlight.set(runId, request);
+  sending.set(runId, body);
   return request;
 }
 
@@ -171,11 +191,9 @@ function BoardView(props: { limit?: number; submitFirst?: boolean; quietFail?: b
   const runId = state.meta.runId;
   const [board, setBoard] = useState<Board | null>(null);
   const [failed, setFailed] = useState(false);
+  const off = !enabled();
   useEffect(() => {
-    if (!enabled()) {
-      setFailed(true);
-      return;
-    }
+    if (off) return;
     let alive = true;
     if (props.submitFirst) submit(state);
     load(runId)
@@ -186,6 +204,8 @@ function BoardView(props: { limit?: number; submitFirst?: boolean; quietFail?: b
     };
   }, [runId]);
 
+  // Lokal ist die Liste bewusst aus (kein Server): kein Fehler, nur ein neutraler Hinweis.
+  if (off) return props.quietFail ? null : <Hint>Die Bestenliste gibt es nur in der Online-Version.</Hint>;
   if (failed) return props.quietFail ? null : <Hint>Die Bestenliste ist gerade nicht erreichbar.</Hint>;
   if (!board) return <p class="lb__loading">Bestenliste lädt …</p>;
   if (board.entries.length === 0) return <Hint>Noch niemand drin. Du bist der Erste.</Hint>;

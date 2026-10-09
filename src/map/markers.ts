@@ -67,6 +67,9 @@ export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { m
   if (options.onClick) {
     const onClick = options.onClick;
     element.addEventListener('click', (e) => {
+      // Während der Kartenauswahl (GameMap.pickLocation, Klasse is-picking am Container) gehört der Klick der Karte:
+      // weiterreichen, damit GameMap den Ort nimmt, und der Marker öffnet nichts. Sonst blieb die Auswahl offen.
+      if (map.getContainer().classList.contains('is-picking')) return;
       e.stopPropagation();
       onClick();
     });

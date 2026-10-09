@@ -283,17 +283,18 @@ describe('TourRunner', () => {
     expect(host.speedValue).toBe(2);
   });
 
-  it('reset bei neuem Spiel: alles weg, als übersprungen, Tempo bleibt unangetastet', async () => {
+  it('reset bei neuem Spiel: alles weg, Ergebnis reset, das Tempo von vor der Tour gilt wieder', async () => {
     const host = fakeHost();
     const runner = new TourRunner(host);
     const first = runner.start(simple('eins', 2));
     const second = runner.start(simple('zwei', 2));
     await flush();
-    runner.reset();
-    expect(await first).toBe('skipped');
-    expect(await second).toBe('skipped');
-    expect(runner.active()).toBeNull();
     expect(host.speedValue).toBe(0);
+    runner.reset();
+    expect(await first).toBe('reset');
+    expect(await second).toBe('reset');
+    expect(runner.active()).toBeNull();
+    expect(host.speedValue).toBe(2);
   });
 
   it('meldet jeden Schrittwechsel an Zuhörer und zählt tick hoch', async () => {

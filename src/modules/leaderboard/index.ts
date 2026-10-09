@@ -11,7 +11,8 @@ import { getLots, getProduct } from '../goods';
 import { getBatches } from '../laundering';
 import { getRelation, getSuppliers } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
-import { GOODS_FALLBACK_SHARE } from './config';
+import { getShipments, OWN_ORIGINS, originStock, ownedPorts, portStock } from '../trade';
+import { GOODS_FALLBACK_SHARE, HARBOR_GOODS_SHARE } from './config';
 
 export interface LeaderboardState {
   /** Höchstes Vermögen im Durchgang (Euro). */
@@ -43,10 +44,16 @@ export interface RunSummary {
   rank: number;
 }
 
+/** Wert von Ware im Hafen, am Kai oder im Ausfuhrlager (ohne Einkaufspreis je Posten, `HARBOR_GOODS_SHARE`). */
+function harborValue(productId: string, amount: number): number {
+  return amount * (getProduct(productId)?.basePrice ?? 0) * HARBOR_GOODS_SHARE;
+}
+
 /**
  * Vermögen: Schwarzgeld, sauberes Geld, Geld in der Wäsche (schon abgebucht, kommt sauber zurück) und Ware im Lager
  * (konservativ: zum Einkaufspreis des Postens, höchstens zum Straßenpreis; ohne Einkaufspreis mit Abschlag, siehe
- * `GOODS_FALLBACK_SHARE`), abzüglich der Schulden bei Lieferanten (sonst treibt ein Kredit die Zahl).
+ * `GOODS_FALLBACK_SHARE`), dazu Ware im Hafen, am Kai und im Ausfuhrlager (`HARBOR_GOODS_SHARE`), abzüglich der
+ * Schulden bei Lieferanten (sonst treibt ein Kredit die Zahl).
  */
 export function netWorth(state: GameState): number {
   let goods = 0;
@@ -54,6 +61,21 @@ export function netWorth(state: GameState): number {
     const street = getProduct(lot.productId)?.basePrice ?? 0;
     const unit = lot.unitCost > 0 ? Math.min(lot.unitCost, street) : street * GOODS_FALLBACK_SHARE;
     goods += lot.amount * unit;
+  }
+  // Hafen-Phase (Auftrag 40 bis 42): Die Ware ist bezahlt, sobald sie bestellt ist; im Hafen, am Kai (Lager voll) und im
+  // Ausfuhrlager der Fincas gehört sie dir. Früher zählte sie gar nicht, jeder Container kostete Vermögen.
+  for (const portId of ownedPorts(state)) {
+    for (const [productId, lot] of Object.entries(portStock(state, portId))) {
+      goods += harborValue(productId, lot.amount);
+    }
+  }
+  for (const shipment of getShipments(state)) {
+    if (shipment.status === 'quay') goods += harborValue(shipment.productId, shipment.amount);
+  }
+  for (const origin of OWN_ORIGINS) {
+    for (const [productId, lot] of Object.entries(originStock(state, origin.id))) {
+      goods += harborValue(productId, lot.amount);
+    }
   }
   let washing = 0;
   for (const batch of getBatches(state)) washing += batch.amount - batch.fee;
@@ -91,7 +113,7 @@ function update(state: GameState): void {
 export default defineModule({
   id: 'leaderboard',
   version: 1,
-  dependsOn: ['goods', 'territory', 'laundering', 'suppliers'],
+  dependsOn: ['goods', 'territory', 'laundering', 'suppliers', 'trade'],
   init: (ctx) => ({ peakWorth: netWorth(ctx.state), peakVeedel: 0 }),
   tickEvery: 30,
   tick: (ctx) => update(ctx.state),

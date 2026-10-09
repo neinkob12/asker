@@ -7,7 +7,7 @@
 // Köln: wenn Köln komplett ist oder die aktive Stadt nicht Köln ist (contractsOpen). Peters Kontakt (quest:peter) gehört
 // jetzt dem Tutorial (tutorial/config.ts); alte Quest-Chats bleiben im Spielstand lesbar.
 //
-// Öffentliche API: contractsOpen(state), contractOffers(state), activeContract(state), contractProgress(state),
+// Öffentliche API: contractsOpen(state), contractOffers(state, cityId?), activeContract(state), contractProgress(state),
 //   contractHistory(state), contractStats(state), canAcceptContract(state, offer), contractValue(offer),
 //   rewardText(reward), CONTRACT_TEMPLATES, CONTRACT_CONTACTS, getContractTemplate, getContractContact
 // Befehle: 'quests.acceptContract'
@@ -24,7 +24,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, liveVeedel } from '../city';
+import { activeCity, cityName, isBusinessSold, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
@@ -112,8 +112,9 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-export function contractOffers(state: GameState): readonly ContractOffer[] {
-  return state.modules.quests?.offers ?? [];
+/** Angebote dieser Woche für eine Stadt (ohne Angabe die aktive, die einer anderen Stadt gelten hier nicht). */
+export function contractOffers(state: GameState, cityId = activeCity(state)): readonly ContractOffer[] {
+  return (state.modules.quests?.offers ?? []).filter((o) => o.cityId === cityId);
 }
 
 export function activeContract(state: GameState): ActiveContract | null {
@@ -188,8 +189,11 @@ function rewardWarehouse(state: GameState): Warehouse | null {
   return here.find((w) => w.id === DEFAULT_WAREHOUSE) ?? here[0] ?? getWarehouses(state)[0] ?? null;
 }
 
-/** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
-function grant(ctx: Ctx, reward: ContractReward, reason: string): string {
+/**
+ * Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. Geld bucht die
+ * Kasse in die Stadt des Vertrags (cityId), nicht in die gerade aktive.
+ */
+function grant(ctx: Ctx, reward: ContractReward, reason: string, cityId: string): string {
   const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
@@ -204,7 +208,7 @@ function grant(ctx: Ctx, reward: ContractReward, reason: string): string {
       return warehouse.cityId === activeCity(ctx.state) ? text : `${text} (im Lager ${warehouse.name})`;
     }
     case 'money':
-      wallet.earn(ctx, reward.amount, reward.money, reason, 'income.other');
+      wallet.earn(ctx, reward.amount, reward.money, reason, { category: 'income.other', cityId });
       return text;
     case 'reputation':
       changeReputation(ctx, reward.amount, 'Wochenvertrag');
@@ -241,11 +245,14 @@ function nextMonday(time: number): number {
   return dayStart + daysAhead * 1440;
 }
 
-/** Lieferant, bei dem es Vertrauen gibt: zufällig einer der freigeschalteten in der Stadt, die noch nicht 100 haben. */
+/** Lieferanten, bei denen es Vertrauen geben kann: die freigeschalteten in der Stadt, die noch nicht 100 haben. */
+function trustOptions(state: GameState, cityId: string) {
+  return getSuppliers(state, cityId).filter((s) => isUnlocked(state, s.id) && getRelation(state, s.id).trust < 100);
+}
+
+/** Lieferant, bei dem es Vertrauen gibt: zufällig einer aus trustOptions. */
 function trustSupplier(ctx: Ctx, cityId: string): string | null {
-  const options = getSuppliers(ctx.state, cityId).filter(
-    (s) => isUnlocked(ctx.state, s.id) && getRelation(ctx.state, s.id).trust < 100,
-  );
+  const options = trustOptions(ctx.state, cityId);
   if (options.length === 0) return null;
   return ctx.pick(options).id;
 }
@@ -259,7 +266,14 @@ function offerContracts(ctx: Ctx): void {
   // Alte, nicht angenommene Angebote sind vorbei.
   retractOffers(ctx);
   c.offers = [];
-  const pool = CONTRACT_TEMPLATES.filter((t) => !t.available || t.available(ctx.state, cityId, tier));
+  // Gibt es bei keinem Lieferanten mehr Vertrauen, fallen Vorlagen weg, die sonst gar nichts zahlen würden (Umsatz
+  // beim Kleindealer: Geld gibt es dort keins). Ohne Würfel, die Würfelfolge bleibt sonst gleich.
+  const trustOpen = trustOptions(ctx.state, cityId).length > 0;
+  const pool = CONTRACT_TEMPLATES.filter(
+    (t) =>
+      (!t.available || t.available(ctx.state, cityId, tier)) &&
+      (trustOpen || contractRewards(t, tier, null).length > 0),
+  );
   const chosen: ContractTemplate[] = [];
   const rest = [...pool];
   while (chosen.length < CONTRACT_OFFERS && rest.length > 0) {
@@ -324,6 +338,9 @@ function retractOffers(ctx: Ctx): void {
 export function canAcceptContract(state: GameState, offer: ContractOffer): CommandResult {
   if (activeContract(state)) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
   if (state.time >= offer.deadline) return { ok: false, reason: 'Die Woche ist vorbei.' };
+  // Ein Angebot gilt nur in seiner Stadt (nach der Fahrt in eine andere wäre es dort nicht zu schaffen).
+  if (offer.cityId !== activeCity(state))
+    return { ok: false, reason: `Das Angebot gilt für ${cityName(offer.cityId)}.` };
   const template = getContractTemplate(offer.templateId);
   if (!template) return { ok: false, reason: 'Diesen Vertrag gibt es nicht mehr.' };
   if (template.streak) {
@@ -378,7 +395,7 @@ function finishContract(ctx: Ctx, result: 'done' | 'failed'): void {
   if (result === 'done') {
     c.stats.done += 1;
     const reason = `Wochenvertrag: ${getContractContact(active.contactId)?.name.split(' (')[0] ?? active.title}`;
-    const rewards = active.rewards.map((r) => grant(ctx, r, reason)).join(', ');
+    const rewards = active.rewards.map((r) => grant(ctx, r, reason, active.cityId)).join(', ');
     journal.add(ctx, `Vertrag erfüllt: ${active.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
     if (contact && template) messages.send(ctx, { contact, text: template.doneText, silent: true });
   } else {
@@ -471,6 +488,12 @@ export default defineModule({
     },
     // Verkauft (Auftrag 43): Der Wochenvertrag ist vorbei.
     'business.sold': (ctx) => leaveContracts(ctx),
+    // Angekommen in einer Stadt: Angebote anderer Städte sind vorbei (ihre Chat-Nachrichten hat city schon
+    // zurückgezogen). Ein laufender Vertrag bleibt und zählt weiter nur in seiner Stadt.
+    'city.arrived': (ctx, { cityId }) => {
+      const c = ctx.state.modules.quests;
+      c.offers = c.offers.filter((o) => o.cityId === cityId);
+    },
     // "Nein danke" auf ein Vertragsangebot: Das Angebot ist weg.
     'message.answered': (ctx, { messageId, optionId }) => {
       const c = ctx.state.modules.quests;

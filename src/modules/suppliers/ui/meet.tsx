@@ -60,6 +60,7 @@ function MeetDialog(props: { supplierIds: string[] }) {
       <p class="sup-meet__kicker">{suppliers.length === 1 ? 'Neuer Lieferant' : 'Neue Lieferanten'}</p>
       {suppliers.map((supplier) => {
         const contact = contactOf(supplier);
+        const unlocked = isUnlocked(state, supplier.id);
         return (
           <div key={supplier.id} class="sup-meet__person">
             <Avatar
@@ -70,8 +71,8 @@ function MeetDialog(props: { supplierIds: string[] }) {
             />
             <div class="sup-meet__text">
               <strong class="sup-meet__name">{supplier.contactName}</strong>
-              <span class="sup-meet__role">{roleLine(supplier, isUnlocked(state, supplier.id))}</span>
-              <p class="sup-meet__quote">„{introText(supplier)}“</p>
+              <span class="sup-meet__role">{roleLine(supplier, unlocked)}</span>
+              <p class="sup-meet__quote">„{introText(supplier, unlocked)}“</p>
             </div>
           </div>
         );
@@ -96,6 +97,8 @@ function MeetOpener() {
   const pending = queue.find((p) => !p.shown && p.runId === state.meta.runId) ?? null;
   // Erst, wenn der Spieler frei ist (kein Dialog, kein Menü, am Handy-Bildschirm das Handy zu): popupMayOpen.
   const free = popupMayOpen(ui.state, mobile);
+  // `ui` steht nicht in den Abhängigkeiten: useUi() liefert bei jedem Zeichnen ein neues Objekt (Zustand live,
+  // Funktionen fest). Sonst startete der Timer bei jedem Spielschritt neu und das Pop-up käme nur in der Pause.
   useEffect(() => {
     if (!pending || !free) return;
     const timer = window.setTimeout(() => {
@@ -104,7 +107,7 @@ function MeetOpener() {
       ui.openDialog('suppliers.meet', { supplierIds: pending.supplierIds });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [pending, free, mobile, ui]);
+  }, [pending, free, mobile]);
   return null;
 }
 

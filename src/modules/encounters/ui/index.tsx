@@ -48,13 +48,15 @@ function stampOf(encounter: Encounter): { label: string; tone: 'success' | 'retr
   return { label: 'Verloren', tone: 'failure' };
 }
 
-/** Was es gekostet hat, als Chips: Geld, Ware, Verletzte, Festgenommene, Heat. */
+/** Was es gekostet hat, als Chips: Geld, Taxi, Ware, Verletzte, Festgenommene, Heat. */
 function costChips(state: GameState, encounter: Encounter) {
   const r = encounter.result;
   if (!r) return [];
   const chips: { label: string; icon: string; color: 'danger' | 'warn' | 'money' | 'people' | 'law' }[] = [];
   if (r.money < 0) chips.push({ label: `${formatEuro(r.money)}`, icon: 'moneyBag', color: 'danger' });
   if (r.money > 0) chips.push({ label: `+${formatEuro(r.money)}`, icon: 'moneyBag', color: 'money' });
+  // Taxi der Crew: kein Verlust an die Gegenseite (nicht in money), gekostet hat es trotzdem.
+  if (r.travel && r.travel > 0) chips.push({ label: `Taxi ${formatEuro(-r.travel)}`, icon: 'car', color: 'danger' });
   if (r.goods < 0) chips.push({ label: `${formatAmount(r.goods)}`, icon: 'bag', color: 'danger' });
   if (r.goods > 0) chips.push({ label: `+${formatAmount(r.goods)}`, icon: 'bag', color: 'money' });
   const name = (id: string) => getStaffMember(state, id)?.name ?? 'Jemand';

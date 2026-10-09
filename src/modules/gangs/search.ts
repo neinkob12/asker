@@ -10,6 +10,7 @@ import { addHeat } from '../police';
 import { veedelName } from '../veedel';
 import { statusOf } from './common';
 import { SEARCH_BONUS, SEARCH_MIN, SEARCH_NOISE_HEAT } from './config';
+import { gangNameIn } from './data';
 import { getGang } from './state';
 
 /**
@@ -79,7 +80,12 @@ export function onSearchFinished(ctx: Ctx, payload: GameEvents['minigame.finishe
   }
   const who = payload.by === 'rightHand' ? 'Deine Rechte Hand findet' : 'Du findest';
   if (payload.won) {
-    journal.add(ctx, `${who} in der Bude des Schuldners von ${gang.name} ${formatEuro(amount)}.`, 'good', at);
+    journal.add(
+      ctx,
+      `${who} in der Bude des Schuldners von ${gangNameIn(gang, 'dative')} ${formatEuro(amount)}.`,
+      'good',
+      at,
+    );
     return;
   }
   const noise = payload.picks.includes('noise');
@@ -89,7 +95,7 @@ export function onSearchFinished(ctx: Ctx, payload: GameEvents['minigame.finishe
     ctx,
     noise
       ? `${found}, und die Nachbarn haben alles gehört${veedelId ? `. Die Bullen fragen in ${veedelName(veedelId)} rum` : ''}.`
-      : `${found} in der Bude des Schuldners von ${gang.name}.`,
+      : `${found} in der Bude des Schuldners von ${gangNameIn(gang, 'dative')}.`,
     noise ? 'bad' : 'info',
     at,
   );

@@ -21,15 +21,15 @@ import {
 import { activeCity } from '../../city';
 import { travelMinutes } from '../../roads';
 import { getSpot, getSpots, type Spot } from '../../spots';
-import { expectedWageFor, getStaff, getStaffMember, roleName } from '../../staff';
+import { getStaff, getStaffMember, roleName } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
+  appointWage,
   canBeLieutenant,
   DEFAULT_SETTINGS,
   getPost,
   isLieutenant,
   LIEUTENANT_MIN_LEVEL,
-  lieutenantDemand,
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
 } from '../index';
@@ -225,7 +225,8 @@ function ConfirmStep(props: { staffId: string; spotIds: string[]; onBack: () => 
   const { state } = useGame();
   const m = getStaffMember(state, props.staffId);
   if (!m) return null;
-  const wage = Math.max(m.wage, expectedWageFor(m.role, m.level, lieutenantDemand(props.spotIds.length)));
+  // Wie appoint ihn setzt: mit Lohnniveau der Stadt und Eigenschaften.
+  const wage = appointWage(state, m.id, props.spotIds.length);
   return (
     <>
       <Group title="Bestätigen" icon="crew" color="people">

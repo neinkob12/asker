@@ -58,6 +58,7 @@ import {
   greenhouseCost,
   growGoals,
   harvestToHarborDays,
+  hiredWorkers,
   isGrowStarted,
   landPrice,
   leasePerWeek,
@@ -555,7 +556,8 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
   const economy = REGION_ECONOMY[finca.regionId];
   const crops = economy?.crops ?? [];
   const phase = fincaPhase(state, finca);
-  const workers = fincaWorkers(state, finca);
+  // Angestellt, nicht „arbeitet heute“: An einem Tag ohne Lohn zeigte der Regler 0, und „+“ heuerte neue Leute an.
+  const workers = hiredWorkers(state, finca);
   const needed = workersNeeded(finca);
   const gardener = fincaGardener(state, finca);
   const harvest = expectedHarvest(state, finca);
@@ -639,11 +641,13 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         color="people"
         value={`${formatEuro(fincaWages(state, finca))}/Tag bar`}
         note={
-          workers < needed
-            ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.`
-            : finca.tenure === 'leased'
-              ? `Dazu Pacht ${formatEuro(Math.round(leasePerWeek(finca) / 7))}/Tag sauber.`
-              : undefined
+          finca.unpaidWages
+            ? 'Heute ohne Lohn bleiben die Leute zu Hause; um Mitternacht wird wieder gezahlt.'
+            : workers < needed
+              ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.`
+              : finca.tenure === 'leased'
+                ? `Dazu Pacht ${formatEuro(Math.round(leasePerWeek(finca) / 7))}/Tag sauber.`
+                : undefined
         }
       >
         <Stepper

@@ -5,7 +5,17 @@
 
 import { useEffect } from 'preact/hooks';
 import { clock, type LngLat, SPEEDS } from '../../../core';
-import { addHtmlMarker, createVehicle, el, FAR_ZOOM, type MapLayer, onMapFrame, pointAlong } from '../../../map';
+import {
+  addFootpath,
+  addHtmlMarker,
+  createVehicle,
+  el,
+  FAR_ZOOM,
+  type FootpathHandle,
+  type MapLayer,
+  onMapFrame,
+  pointAlong,
+} from '../../../map';
 import {
   Button,
   hourCountdown,
@@ -24,8 +34,14 @@ import { cityName, cityTravel, getCity } from '../index';
 /** Tempo vor "Fahrt überspringen", damit es nach der Ankunft wieder gilt (pro Durchgang). */
 let skipped: { runId: string; speed: number } | null = null;
 
-/** Kamera klebt am Auto (Draufsicht); Ziehen an der Karte löst sie, "Folgen" holt sie zurück. */
+/**
+ * Kamera klebt am Auto (Draufsicht); Ziehen an der Karte oder ein Flug woandershin (Übersicht, Stadtmenü, ein Spot) löst
+ * sie, "Folgen" holt sie zurück.
+ */
 let following = true;
+
+/** Kennzeichen am eigenen jumpTo der Verfolgung: Nur Ziehen und Zoomen ohne dieses Kennzeichen lösen die Kamera. */
+const FOLLOW_EVENT = { cityTravelFollow: true } as const;
 
 /**
  * Kamerafahrt (immer Draufsicht, Norden oben): Die ersten Sekunden klebt sie nah am Auto, wie man losfährt, dann zieht sie
@@ -83,7 +99,14 @@ function TravelCard() {
         <Button small icon="speed3" onClick={skip}>
           Fahrt überspringen
         </Button>
-        <Button small variant="subtle" icon="map" onClick={() => ui.flyToDeutschland()}>
+        <Button
+          small
+          variant="subtle"
+          icon="map"
+          onClick={() => {
+            following = true;
+          }}
+        >
           Folgen
         </Button>
       </div>
@@ -126,15 +149,23 @@ export const travelLayer: MapLayer = {
     // Auto und Kamera laufen im gemeinsamen Kartentakt aus EINEM Wert (shown): So sitzt das Auto immer genau in der Mitte,
     // und es springt nicht von Spielschritt zu Spielschritt.
     let car: ReturnType<typeof createVehicle> | null = null;
+    // Vom Mittelpunkt der Stadt zur Straße und am Ziel zurück geht es zu Fuß (das Auto fährt nur die Straße).
+    let walks: FootpathHandle[] = [];
+    const clearWalks = () => {
+      for (const walk of walks) walk.remove();
+      walks = [];
+    };
     let trip: { key: string; path: LngLat[]; startedAt: number; target: number; shown: number } | null = null;
     let travelling = false;
     let zoom = CLOSE_ZOOM;
     const syncMarker = () => {
       element.hidden = !travelling || map.getZoom() > FAR_ZOOM;
     };
-    // Wer selbst an der Karte zieht oder zoomt, will nicht mehr verfolgt werden.
-    const release = (e: { originalEvent?: unknown }) => {
-      if (e.originalEvent) following = false;
+    // Wer selbst an der Karte zieht oder zoomt, will nicht mehr verfolgt werden. Ebenso, wer die Kamera woandershin
+    // schickt: Flüge (flyTo, Zoom-Knöpfe) haben kein originalEvent, starten aber immer mit zoomstart. Liefe die
+    // Verfolgung weiter, bräche ihr jumpTo den Flug im nächsten Bild ab. Das eigene jumpTo trägt FOLLOW_EVENT.
+    const release = (e: { type: string; cityTravelFollow?: boolean }) => {
+      if (!e.cityTravelFollow) following = false;
     };
     const frame = (now: number, dt: number) => {
       if (!trip || !car) return;
@@ -151,12 +182,15 @@ export const travelLayer: MapLayer = {
       // Die ersten Momente gleitet die Kamera zum Auto, danach sitzt sie fest auf ihm.
       const k = elapsed < 1.2 ? 1 - Math.exp(-dt * 5) : 1;
       const c = map.getCenter();
-      map.jumpTo({
-        center: [c.lng + (position.lng - c.lng) * k, c.lat + (position.lat - c.lat) * k],
-        zoom,
-        pitch: 0,
-        bearing: 0,
-      });
+      map.jumpTo(
+        {
+          center: [c.lng + (position.lng - c.lng) * k, c.lat + (position.lat - c.lat) * k],
+          zoom,
+          pitch: 0,
+          bearing: 0,
+        },
+        FOLLOW_EVENT,
+      );
     };
     const stopFrame = onMapFrame(frame, 'city.travel');
     map.on('zoomend', syncMarker);
@@ -172,6 +206,7 @@ export const travelLayer: MapLayer = {
           element.hidden = true;
           car?.remove();
           car = null;
+          clearWalks();
           trip = null;
           return;
         }
@@ -180,7 +215,10 @@ export const travelLayer: MapLayer = {
         const t = travelProgress(state.time, travel.departedAt, travel.arrivesAt);
         if (!car || !trip || key !== trip.key) {
           car?.remove();
-          const path = interCityRoute(from.center, to.center).path;
+          clearWalks();
+          const route = interCityRoute(from.center, to.center);
+          const path = route.drive;
+          walks = [addFootpath(map, route.walkFrom), addFootpath(map, route.walkTo)];
           car = createVehicle(map, { path, kind: 'car', title: `Du · ${cityName(travel.to)}`, progress: t });
           car.setLabel('Du');
           trip = { key, path, startedAt: performance.now(), target: t, shown: t };
@@ -198,6 +236,7 @@ export const travelLayer: MapLayer = {
         map.off('zoomstart', release);
         stopFrame();
         car?.remove();
+        clearWalks();
         marker.remove();
       },
     };

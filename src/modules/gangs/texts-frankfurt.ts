@@ -197,7 +197,7 @@ export const FRANKFURT_VOICES: Readonly<Record<string, GangVoice>> = {
       'Dr. Wehrle. {amount} zu {price}. Abholung in {veedel}, Tiefgarage.',
       'Ein Angebot unter Geschäftsleuten: {amount} für {price}, in {veedel}.',
       'Überschussbestände: {amount}, {price}. Lieferung nach {veedel} möglich.',
-      'Exklusiv für Sie: {amount} zu {price}. Gültig bis Börsenschluss, in {veedel}.',
+      'Exklusiv für Sie: {amount} zu {price}. Befristet gültig, in {veedel}.',
     ],
     allianceOffer: [
       '{enemy} stört den Markt. Eine Partnerschaft gegen sie kostet Sie {price}.',
@@ -315,7 +315,7 @@ export const FRANKFURT_VOICES: Readonly<Record<string, GangVoice>> = {
       'Abgelehnt. Wie ein Gast ohne Geld.',
     ],
     offer: [
-      'Ich hab {amount} über, gute Ware. {price}, abholen in {veedel}. Bis Sperrstund.',
+      'Ich hab {amount} über, gute Ware. {price}, abholen in {veedel}. Wart net zu lang.',
       'Gisela. {amount} für {price}. Hinterhof in {veedel}.',
       'Aus dem Keller: {amount}, {price}. In {veedel}, frag nach der Wirtin.',
       'Des Fest war kleiner als gedacht. {amount} übrig, {price}. {veedel}.',

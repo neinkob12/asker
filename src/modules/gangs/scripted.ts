@@ -5,12 +5,12 @@
 // anderen Modulen (das Tutorial startet darauf seine Tour).
 
 import { type Ctx, journal, wallet } from '../../core';
-import { getWarehouses, stockSummary, take } from '../goods';
+import { formatProductAmount, getWarehouses, productName, stockSummary, take } from '../goods';
 import { getSpot, spotCity } from '../spots';
 import { getInfluence } from '../territory';
 import { veedelName } from '../veedel';
 import { say } from './common';
-import type { Gang } from './data';
+import { type Gang, gangNameIn } from './data';
 import { getGangStatus, getGangs, veedelGang } from './state';
 
 export interface ScriptedRaidRequest {
@@ -67,19 +67,26 @@ export function scriptedRaid(ctx: Ctx, request: ScriptedRaidRequest): ScriptedRa
 
   // Ware: ein fester Anteil jeder Ware in jedem Lager der Stadt, aufgerundet, damit auch kleine Posten etwas abgeben.
   let goodsLost = 0;
+  // Pro Ware für das Journal (Gramm, Stück und ml nicht zusammenzählen).
+  const lostByProduct: Record<string, number> = {};
   for (const warehouse of getWarehouses(ctx.state, cityId)) {
     for (const row of stockSummary(ctx.state, warehouse.id)) {
       const amount = Math.min(row.amount, Math.ceil(row.amount * request.goodsShare));
       if (amount <= 0) continue;
-      goodsLost += take(ctx, { productId: row.productId, amount, warehouseId: warehouse.id, partial: true }).taken;
+      const taken = take(ctx, { productId: row.productId, amount, warehouseId: warehouse.id, partial: true }).taken;
+      goodsLost += taken;
+      if (taken > 0) lostByProduct[row.productId] = (lostByProduct[row.productId] ?? 0) + taken;
     }
   }
+  const goodsText = Object.entries(lostByProduct)
+    .map(([productId, amount]) => `${formatProductAmount(productId, amount)} ${productName(productId)}`)
+    .join(', ');
   // Bargeld: ein Anteil des Schwarzgelds, auf ganze Euro.
   const cashLost = wallet.lose(
     ctx,
     Math.floor(wallet.balance(ctx.state, 'dirty') * request.cashShare),
     'dirty',
-    `Überfall von ${gang.name}`,
+    `Überfall von ${gangNameIn(gang, 'dative')}`,
     { category: 'loss.gang', spotId: spot.id },
   );
 
@@ -87,7 +94,7 @@ export function scriptedRaid(ctx: Ctx, request: ScriptedRaidRequest): ScriptedRa
   if (s) s.lastAttackAt = ctx.now;
   journal.add(
     ctx,
-    `${gang.name} hat den ${spot.name} überfallen: ${goodsLost} g Ware aus deinen Lagern und ${Math.round(cashLost)} € Bargeld sind weg.`,
+    `${gang.name} hat den ${spot.name} überfallen: ${goodsText ? `${goodsText} aus deinen Lagern und ` : ''}${Math.round(cashLost)} € Bargeld sind weg.`,
     'bad',
     { spotId: spot.id },
   );

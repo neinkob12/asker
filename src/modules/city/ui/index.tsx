@@ -263,15 +263,20 @@ function CityChip() {
 
 registerHudItem({ id: 'city.chip', order: 5, placement: 'more', icon: 'building', component: CityChip });
 
-/** Die Kamera folgt der aktiven Stadt: nach dem Laden eines Spielstands und beim Umschalten. */
+/**
+ * Die Kamera folgt der aktiven Stadt: nach dem Laden eines Spielstands und beim Umschalten. Unterwegs in die Stadt, die
+ * schon aktiv ist (nach dem Verkauf nach Rotterdam), folgt sie dem Auto und fliegt erst bei der Ankunft hinein: Ein Flug
+ * löst die Verfolgung (travel.tsx).
+ */
 function CitySync() {
   const { state } = useGame();
   const ui = useUi();
   const active = activeCity(state);
   const runId = state.meta.runId;
+  const onTheWay = cityTravel(state)?.to === active;
   useEffect(() => {
-    if (ui.mapView() !== `city:${active}`) ui.flyToCity(active);
-  }, [active, runId]);
+    if (!onTheWay && ui.mapView() !== `city:${active}`) ui.flyToCity(active);
+  }, [active, runId, onTheWay]);
   return null;
 }
 

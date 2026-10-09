@@ -40,6 +40,7 @@ import {
   VEHICLE_MODELS,
   vehicleName,
   vehiclePrice,
+  vehicleSpec,
   vehicleStatus,
 } from '../../fleet';
 import { productName } from '../../goods';
@@ -360,11 +361,26 @@ function OrdersView(props: { onView: (view: View) => void }) {
         setAsk(null);
       },
     });
+    // Lkw stehen in Rotterdam und fahren nur von dort; ab einem anderen Hafen bleibt die Spedition.
     const trucks = freeVehicles(state, HARBOR_CITY);
-    for (const v of trucks) {
+    const fromHere = port === HARBOR_CITY;
+    if (!fromHere && trucks.length > 0) {
       actions.push({
-        label: `${vehicleName(state, v.id)}: ohne Fracht, Kontrolle ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
+        label: `Eigener Lkw: steht in Rotterdam, nicht in ${harborPorts().find((p) => p.id === port)?.name ?? port}`,
         icon: 'truck',
+        disabled: true,
+        onSelect: () => setAsk(null),
+      });
+    }
+    for (const v of fromHere ? trucks : []) {
+      // Passt die Ladung nicht hinein, steht der Lkw ausgegraut da (wie bei Fenna, truckFor).
+      const fits = vehicleSpec(state, v.id).capacity >= grams;
+      actions.push({
+        label: fits
+          ? `${vehicleName(state, v.id)}: ohne Fracht, Kontrolle ${pct(deliveryCheckChance(state, customer, port, v.id))}`
+          : `${vehicleName(state, v.id)}: zu klein für ${kg(grams)}`,
+        icon: 'truck',
+        disabled: !fits,
         onSelect: () => {
           dispatch({ type: 'trade.deliver', payload: { orderId: o.id, portId: port, vehicleId: v.id } });
           setAsk(null);
@@ -372,7 +388,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
       });
     }
     // Ohne freien Lkw (Auftrag 43): Wo es einen gibt.
-    if (trucks.length === 0) {
+    if (fromHere && trucks.length === 0) {
       actions.push({
         label: 'Eigener Lkw: unter „Hafen“ kaufen',
         icon: 'plusCircle',

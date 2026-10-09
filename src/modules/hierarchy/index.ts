@@ -46,7 +46,9 @@ import {
   addLoyalty,
   addXp,
   assign,
+  cityWageFactor,
   expectedWage,
+  expectedWageFor,
   getStaff,
   getStaffMember,
   isEmployed,
@@ -58,7 +60,9 @@ import {
   setDemand,
   setWage,
   staffContact,
+  traitFactor,
 } from '../staff';
+import { deliversTo, supplierById } from '../suppliers';
 import { tutorialAllows } from '../tutorial';
 import { getVeedel, veedelName } from '../veedel';
 import { tick as lieutenantTick, onRaidWarning } from './ai';
@@ -414,6 +418,9 @@ export function canBeLieutenant(state: GameState, staffId: string): CommandResul
   if (m.assignment?.kind === 'office' || isRightHand(state, staffId)) {
     return { ok: false, reason: `${m.name} ist deine Rechte Hand.` };
   }
+  // Eine abberufene Rechte Hand fährt ihre Lieferung noch zu Ende.
+  if (m.assignment?.kind === 'delivery')
+    return { ok: false, reason: `${m.name} ist gerade mit einer Lieferung unterwegs.` };
   if (m.status !== 'active') return { ok: false, reason: `${m.name} ist gerade nicht einsatzbereit.` };
   if (m.level < LIEUTENANT_MIN_LEVEL) {
     return { ok: false, reason: `${m.name} braucht mindestens Level ${LIEUTENANT_MIN_LEVEL}.` };
@@ -463,6 +470,18 @@ export function lieutenantDemand(spotCount: number): number {
   return LIEUTENANT_DEMAND_BY_SPOTS[i];
 }
 
+/**
+ * Lohn nach dem Ernennen mit so vielen Spots, wie appoint ihn setzt: der Anspruch mit Lohnniveau der Stadt und
+ * Eigenschaften (wie expectedWage), nie weniger als bisher. Für die Bestätigung (sie zeigte den Anspruch ohne
+ * Stadt und Eigenschaften, in Hamburg z.B. ein Viertel zu wenig).
+ */
+export function appointWage(state: GameState, staffId: string, spotCount: number): number {
+  const m = getStaffMember(state, staffId);
+  if (!m) return 0;
+  const base = expectedWageFor(m.role, m.level, lieutenantDemand(spotCount));
+  return Math.max(m.wage, Math.round(base * cityWageFactor(m.cityId) * traitFactor(m, 'wage')));
+}
+
 /** Lager, aus dem seine Spots verkaufen (das nächste zur Mitte seiner Spots). */
 export function homeWarehouse(state: GameState, staffId: string): Warehouse | undefined {
   const spots = lieutenantSpots(state, staffId);
@@ -493,13 +512,28 @@ function cloneRules(rules: readonly OrderRule[]): OrderRule[] {
   return rules.map((r) => ({ ...r, paused: null }));
 }
 
-/** Regeln aus der Vorlage übernehmen: ein festes Lager nur, wenn es in der Stadt des neuen Leutnants liegt. */
+/**
+ * Regeln aus der Vorlage übernehmen: ein festes Lager nur, wenn es in der Stadt des neuen Leutnants liegt, ein fester
+ * Lieferant (samt Paket) nur, wenn er dorthin liefert (sonst ruhte die Regel mit "hat die Ware gerade nicht").
+ */
 function templateRules(rules: readonly OrderRule[], cityId: string): OrderRule[] {
-  return rules.map((r) => ({
-    ...r,
-    paused: null,
-    warehouseId: r.warehouseId && warehouseCity(r.warehouseId) === cityId ? r.warehouseId : null,
-  }));
+  return rules.map((r) => {
+    const supplier = r.supplierId ? supplierById(r.supplierId) : undefined;
+    const elsewhere = !!supplier && !deliversTo(supplier, cityId);
+    return {
+      ...r,
+      paused: null,
+      warehouseId: r.warehouseId && warehouseCity(r.warehouseId) === cityId ? r.warehouseId : null,
+      ...(elsewhere
+        ? {
+            // Die Ware des Pakets bleibt die Ware der Regel.
+            productId: r.productId ?? supplier?.packages.find((p) => p.id === r.packageId)?.productId ?? null,
+            supplierId: null,
+            packageId: null,
+          }
+        : {}),
+    };
+  });
 }
 
 function newPost(ctx: Ctx, staffId: string, spotIds: string[], settings?: LieutenantSettings): LieutenantPost {

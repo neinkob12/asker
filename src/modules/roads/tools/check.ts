@@ -85,14 +85,20 @@ export function checkRoads(state: GameState): RoadProblem[] {
   return problems;
 }
 
+/** Lieferanten einer Stadt, die über die Autobahn hereinfahren (deren Einfahrt geprüft wird). */
+export function entrySuppliers(state: GameState, cityId: string, center: LngLat) {
+  return getSuppliers(state, cityId).filter((s) => s.kind === 'city' && distanceMeters(s, center) > LOCAL_RADIUS);
+}
+
 function checkCity(
   state: GameState,
   { cityId, spots, warehouses, port, center }: ReturnType<typeof allPlaces>[number],
 ): RoadProblem[] {
   const problems: RoadProblem[] = [];
-  const entries: Place[] = getSuppliers(state, cityId)
-    .filter((s) => s.kind === 'city' && distanceMeters(s, center) > LOCAL_RADIUS)
-    .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, supplierVia(s, cityId), center) }));
+  const entries: Place[] = entrySuppliers(state, cityId, center).map((s) => ({
+    name: `Autobahn-Einfahrt aus ${s.name}`,
+    ...roadEntryFrom(s, supplierVia(s, cityId), center),
+  }));
   // Orte, die schon zu weit weg liegen, nicht noch einmal in jeder Route melden.
   const far = new Set<string>();
   for (const place of [...spots, ...warehouses, ...(port ? [port] : []), ...entries]) {
@@ -140,10 +146,10 @@ function checkCity(
 export function checkedCounts(state: GameState): { places: number; routes: number } {
   let places = 0;
   let routes = 0;
-  for (const { cityId, spots, warehouses, port } of allPlaces(state)) {
+  for (const { cityId, spots, warehouses, port, center } of allPlaces(state)) {
     const ports = port ? 1 : 0;
-    places +=
-      spots.length + warehouses.length + ports + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
+    // Nur die Einfahrten, die checkCity auch prüft (nahe Lieferanten fahren nicht über die Autobahn herein).
+    places += spots.length + warehouses.length + ports + entrySuppliers(state, cityId, center).length;
     routes += warehouses.length * (spots.length * 2 + 2 * ports);
   }
   return { places, routes };

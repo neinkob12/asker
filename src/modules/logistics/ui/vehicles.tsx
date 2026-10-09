@@ -4,8 +4,8 @@
 
 import { formatAmount, type GameState } from '../../../core';
 import { Hint, SegmentedControl, Select } from '../../../ui';
-import { freeVehicles, getVehicles, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
-import { ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
+import { freeVehicles, getVehicles, isShip, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
+import { choiceOnWay, ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
 
 export const AUTO = '';
 
@@ -14,6 +14,16 @@ export function vehicleChoice(value: string): VehicleChoice | undefined {
   if (value === AUTO) return undefined;
   if (value === 'private') return 'private';
   return Number(value);
+}
+
+/**
+ * Was die Auswahl (VehicleSelect ohne all) wirklich zeigt: das gewählte Fahrzeug, solange es frei in der Stadt steht,
+ * sonst „Passendes Fahrzeug“ (es ist unterwegs, beschlagnahmt oder weg). Befehle schicken diesen Wert, nicht den
+ * alten aus dem Zustand, sonst fährt nicht, was angezeigt wird.
+ */
+export function shownVehicle(state: GameState, cityId: string, value: string): string {
+  if (value === AUTO || value === 'private') return value;
+  return freeVehicles(state, cityId).some((v) => String(v.id) === value) ? value : AUTO;
 }
 
 /** Auswahl nur zeigen, wenn es in der Stadt eigene Fahrzeuge gibt (sonst fährt immer das Privatauto). */
@@ -26,8 +36,9 @@ export function VehicleSelect(props: {
   all?: boolean;
   label?: string;
 }) {
+  // Schiffe fahren nie auf der Straße, auch nicht fest auf einer Route.
   const vehicles = props.all
-    ? getVehicles(props.state, props.cityId).filter((v) => v.seizedAt === null)
+    ? getVehicles(props.state, props.cityId).filter((v) => v.seizedAt === null && !isShip(v))
     : freeVehicles(props.state, props.cityId);
   if (getVehicles(props.state, props.cityId).length === 0) return null;
   const options = [
@@ -42,8 +53,16 @@ export function VehicleSelect(props: {
   return <Select label={props.label ?? 'Fahrzeug'} wide value={value} options={options} onChange={props.onChange} />;
 }
 
-/** Autobahn, Landstraße oder nachts, mit dem Satz zur gewählten Strecke. */
-export function ChoiceControl(props: { value: RouteChoice; onChange: (value: RouteChoice) => void }) {
+/**
+ * Autobahn, Landstraße oder nachts, mit dem Satz zur gewählten Strecke. Zwischen zwei Städten (interCity) gibt es keine
+ * Landstraße: Der Satz sagt dann, dass die Fahrt die A1 nimmt (choiceOnWay).
+ */
+export function ChoiceControl(props: {
+  value: RouteChoice;
+  onChange: (value: RouteChoice) => void;
+  interCity?: boolean;
+}) {
+  const onAutobahn = choiceOnWay(props.value, props.interCity ?? false) !== props.value;
   return (
     <div class="logi-choice">
       <SegmentedControl
@@ -53,7 +72,11 @@ export function ChoiceControl(props: { value: RouteChoice; onChange: (value: Rou
         options={ROUTE_CHOICE_ORDER.map((id) => ({ value: id, label: ROUTE_CHOICES[id].name }))}
         onChange={props.onChange}
       />
-      <Hint>{ROUTE_CHOICES[props.value].hint}</Hint>
+      <Hint>
+        {onAutobahn
+          ? 'Zwischen den Städten gibt es nur die A1: gleiche Zeit und gleicher Zoll wie mit Autobahn.'
+          : ROUTE_CHOICES[props.value].hint}
+      </Hint>
     </div>
   );
 }

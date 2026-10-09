@@ -205,6 +205,11 @@ export interface EncounterResult {
   money: number;
   /** Waren-Änderung in Einheiten. */
   goods: number;
+  /**
+   * Gewonnene Ware, die verfallen ist, weil die Stadt der Konfrontation kein eigenes Lager hat (nicht in goods,
+   * nirgends eingelagert). Fehlt, wenn nichts verfallen ist.
+   */
+  goodsForfeited?: number;
   /** Leute der Gegenseite, die ausgeschaltet wurden. */
   opponentLosses: number;
   staffInjured: string[];

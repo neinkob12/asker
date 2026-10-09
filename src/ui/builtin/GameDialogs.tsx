@@ -120,8 +120,8 @@ function download(filename: string, content: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function describe(info: SaveInfo | undefined): string {
-  if (!info) return 'leer';
+function describe(info: SaveInfo | undefined, unreadable: boolean): string {
+  if (!info) return unreadable ? 'unlesbar (beschädigt oder neuere Version)' : 'leer';
   const mode = info.mode === 'hardcore' ? ' · Hardcore' : '';
   return `${clock.formatLong(info.time)}${mode}${info.gameOver ? ' · Game Over' : ''}`;
 }
@@ -133,6 +133,16 @@ export function SavesDialog() {
   // version erzwingt das Neulesen nach Speichern oder Löschen.
   const saves = useMemo(() => session.listSaves(), [session, version]);
   const bySlot = new Map(saves.map((s) => [s.slot, s]));
+  // Plätze mit Daten, die das Spiel nicht lesen kann, nicht als leer zeigen (Speichern sichert sie vorher).
+  const unreadable = useMemo(
+    () =>
+      new Set(
+        [AUTOSAVE_SLOT, ...MANUAL_SLOTS].filter(
+          (slot) => !saves.some((s) => s.slot === slot) && session.saves.unreadable(slot),
+        ),
+      ),
+    [session, saves],
+  );
   const hasGame = session.state !== null && !session.sim?.isOver;
 
   const guard = (fn: () => void, success: string) => () => {
@@ -226,7 +236,7 @@ export function SavesDialog() {
               }
             >
               <strong>{slot === AUTOSAVE_SLOT ? 'Autosave' : `Speicherplatz ${i}`}</strong>
-              <div class="ui-hint">{describe(info)}</div>
+              <div class="ui-hint">{describe(info, unreadable.has(slot))}</div>
             </ListItem>
           );
         })}

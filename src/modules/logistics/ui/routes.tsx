@@ -35,9 +35,11 @@ import {
   unitWeight,
   warehouseCity,
   warehouseFree,
+  warehousePlace,
 } from '../../goods';
 import { getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
 import {
+  choiceOnWay,
   driverWhereabouts,
   getRoute,
   getRoutes,
@@ -51,6 +53,7 @@ import {
   type RouteItem,
   type RouteRun,
   routeName,
+  type Trip,
 } from '../index';
 import { AUTO, ChoiceControl, VehicleSelect } from './vehicles';
 
@@ -123,8 +126,9 @@ function RouteGroup(props: { route: Route; onEdit: () => void }) {
     { label: `${daysText(route.days)} ${clock.formatTime(route.departure)}`, icon: 'clock', color: 'system' },
     { label: loadText(route), icon: 'package', color: 'goods' },
   ];
-  if (route.choice !== 'autobahn')
-    chips.push({ label: ROUTE_CHOICES[route.choice].name, icon: 'moon', color: 'place' });
+  // Zwischen den Städten fährt auch die Landstraße die A1 (choiceOnWay), dann steht nur „über die A1“ da.
+  const choice = choiceOnWay(route.choice, fromCity !== toCity);
+  if (choice !== 'autobahn') chips.push({ label: ROUTE_CHOICES[choice].name, icon: 'moon', color: 'place' });
   if (route.vehicleId !== null)
     chips.push({ label: vehicleName(state, route.vehicleId), icon: 'truck', color: 'goods' });
   if (fromCity !== toCity) chips.push({ label: 'über die A1', icon: 'route', color: 'place' });
@@ -449,7 +453,11 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
 
         <Group title="Weg" icon="moon" color="place" value={ROUTE_CHOICES[draft.choice].name}>
           <div class="logi-route-choice">
-            <ChoiceControl value={draft.choice} onChange={(choice) => set({ choice })} />
+            <ChoiceControl
+              value={draft.choice}
+              interCity={fromCity !== toCity}
+              onChange={(choice) => set({ choice })}
+            />
           </div>
         </Group>
 
@@ -603,6 +611,21 @@ function RoutesPanel() {
   );
 }
 
+/**
+ * Was ein Fahrer mit seiner Fahrt gerade tut (Seite „Fahrer“): Eine geplante Nachtfahrt fährt erst noch los, eine Fahrt
+ * am vollen Lager steht dort; nur sonst ist er unterwegs und kommt zu einer Zeit an.
+ */
+export function driverTripText(state: GameState, trip: Trip): { chip: string; color: CategoryColor; meta: string } {
+  const to = placeOf(state, trip.toId)?.name ?? 'Lager';
+  if (trip.status === 'planned') {
+    const at = clock.formatTime(trip.startedAt);
+    return { chip: `ab ${at}`, color: 'goods', meta: `fährt um ${at} nach ${to}` };
+  }
+  if (trip.status === 'waiting')
+    return { chip: 'Lager voll', color: 'warn', meta: `wartet ${warehousePlace(to, 'at')}` };
+  return { chip: `an ${clock.formatTime(trip.arrivesAt)}`, color: 'goods', meta: `fährt nach ${to}` };
+}
+
 /** Seite "Fahrer": wo jeder Fahrer ist, was er gerade fährt, seine nächste Route. */
 function DriversPanel() {
   const { state, dispatch } = useGame();
@@ -618,10 +641,10 @@ function DriversPanel() {
             {drivers.map((m) => {
               const where = driverWhereabouts(state, m.id);
               const trip = where.trip;
+              const doing = trip ? driverTripText(state, trip) : null;
               const chips: ChipSpec[] = [{ label: cityName(where.cityId), icon: 'pin', color: 'place' }];
               if (m.status !== 'active') chips.push({ label: STATUS_NAMES[m.status], color: 'danger' });
-              else if (trip)
-                chips.push({ label: `an ${clock.formatTime(trip.arrivesAt)}`, icon: 'truck', color: 'goods' });
+              else if (doing) chips.push({ label: doing.chip, icon: 'truck', color: doing.color });
               else chips.push({ label: m.assignment ? 'im Einsatz' : 'frei', color: m.assignment ? 'warn' : 'money' });
               if (where.next) {
                 chips.push({
@@ -630,14 +653,13 @@ function DriversPanel() {
                   color: 'system',
                 });
               }
-              const to = trip ? (placeOf(state, trip.toId)?.name ?? 'Lager') : null;
               return (
                 <ListItem key={m.id} onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
                   <ItemContent
                     icon="user"
                     color="people"
                     title={m.name}
-                    meta={trip ? `fährt nach ${to}` : where.next ? 'wartet auf die nächste Route' : 'keine Route'}
+                    meta={doing ? doing.meta : where.next ? 'wartet auf die nächste Route' : 'keine Route'}
                     tags={chips}
                   />
                 </ListItem>

@@ -11,6 +11,8 @@
 //   der du bist), channelFree(state, id), canUnlockChannel(state, id), launderingFee(state), launderingDuration(amount, id?),
 //   launderingCapacity(state), amountInProgress(state, id?), getBatches(state), batchProgress(state, batch),
 //   getLaunderingStats(state), LAUNDERING_CHANNELS, MIN_LAUNDERING_AMOUNT
+//   Verkauf des Geschäfts: launderedCost(clean, id) (Schwarzgeld und Gebühr für genau so viel sauberes Geld),
+//   launderAtOnce(ctx, clean, id, cityId) (sofort, ohne Wartezeit und Obergrenze)
 // Befehle: 'laundering.launder', 'laundering.unlock'
 // Ereignisse: 'laundering.started', 'laundering.completed', 'laundering.unlocked'
 
@@ -94,7 +96,14 @@ declare module '../../core' {
       readyAt: number;
       channel: LaunderingChannelId;
     };
-    'laundering.completed': { amount: number; fee: number; batchId?: number; channel?: LaunderingChannelId };
+    'laundering.completed': {
+      amount: number;
+      fee: number;
+      batchId?: number;
+      channel?: LaunderingChannelId;
+      /** Stadt, in der die Wäsche begann (fehlt bei alten Ständen). */
+      cityId?: string;
+    };
     'laundering.unlocked': { channel: LaunderingChannelId; pay: 'clean' | 'dirty'; cost: number };
   }
 }
@@ -127,7 +136,40 @@ export function getChannels(state: GameState): readonly LaunderingChannel[] {
  * mehr Erlös und spart Löhne, sonst wird nichts günstiger); state bleibt für die Aufrufer in der Schnittstelle.
  */
 export function channelFee(_state: GameState, id: LaunderingChannelId): number {
+  return feeOf(id);
+}
+
+/** Gebühr eines Wegs ohne Spielstand (siehe channelFee). */
+function feeOf(id: LaunderingChannelId): number {
   return Math.round(Math.max(MIN_LAUNDERING_FEE, getChannel(id).fee) * 1000) / 1000;
+}
+
+/**
+ * Wäsche auf einen Schlag (Verkauf des Geschäfts, Rotterdam wird sauber bezahlt): So viel Schwarzgeld geht über den
+ * Weg, dass genau `clean` sauberes Geld herauskommt. Die Gebühr ist wie bei jeder Wäsche ein Anteil des Schwarzgelds,
+ * das hineingeht. Ohne Spielstand, für Preis und Anzeige.
+ */
+export function launderedCost(clean: number, id: LaunderingChannelId): { dirty: number; fee: number } {
+  const dirty = Math.round(Math.max(0, clean) / (1 - feeOf(id)));
+  return { dirty, fee: dirty - Math.max(0, clean) };
+}
+
+/**
+ * Sofort waschen, ohne Wartezeit und Obergrenze (nur für den Verkauf des Geschäfts): bucht die Umbuchung als
+ * 'transfer' und die Gebühr als 'laundering' in die Stadt cityId und zählt in die Statistik. Gibt die Gebühr zurück,
+ * null (und ändert nichts), wenn das Schwarzgeld nicht reicht.
+ */
+export function launderAtOnce(ctx: Ctx, clean: number, id: LaunderingChannelId, cityId: string): number | null {
+  const { dirty, fee } = launderedCost(clean, id);
+  if (!wallet.canAfford(ctx.state, dirty, 'dirty')) return null;
+  const name = getChannel(id).name;
+  wallet.pay(ctx, dirty - fee, 'dirty', `Geldwäsche ${name}`, { category: 'transfer', cityId });
+  wallet.pay(ctx, fee, 'dirty', `Gebühr ${name}`, { category: 'laundering', cityId });
+  wallet.earn(ctx, dirty - fee, 'clean', `Geldwäsche ${name}`, { category: 'transfer', cityId });
+  const s = ctx.state.modules.laundering;
+  s.totalLaundered += dirty;
+  s.totalFees += fee;
+  return fee;
 }
 
 /** Dauer einer Wäsche über einen Weg in Spielminuten. */
@@ -212,6 +254,8 @@ export function getLaunderingStats(state: GameState): LaunderingState {
 export function canUnlockChannel(state: GameState, id: LaunderingChannelId): CommandResult {
   const c = getChannel(id);
   if (isChannelUnlocked(state, id)) return { ok: false, reason: 'Schon freigeschaltet.' };
+  // Jansens Reederei kommt nur mit dem Verkauf (business.sold), nicht über den Befehl.
+  if (c.harborOnly) return { ok: false, reason: `${c.name} kommt erst mit Rotterdam.` };
   // Auftrag 46b: Im Tutorial erst der Kiosk, die anderen Wege ab Stufe 9.
   if (!tutorialAllows(state, 'laundering.allWays')) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!c.unlock) return { ok: true };
@@ -367,7 +411,13 @@ function tick(ctx: Ctx): void {
     s.totalLaundered += b.amount;
     s.totalFees += b.fee;
     journal.add(ctx, `${formatEuro(b.amount - b.fee)} sind sauber (Gebühr ${formatEuro(b.fee)}).`, 'good');
-    ctx.emit('laundering.completed', { amount: b.amount, fee: b.fee, batchId: b.id, channel: b.channel });
+    ctx.emit('laundering.completed', {
+      amount: b.amount,
+      fee: b.fee,
+      batchId: b.id,
+      channel: b.channel,
+      ...(b.cityId ? { cityId: b.cityId } : {}),
+    });
   }
 }
 

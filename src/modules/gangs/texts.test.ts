@@ -70,6 +70,7 @@ describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
     warehouse: 'Lager Ehrenfeld',
     goods: '40 g Gras',
     gang: 'Hafenkolonne',
+    crew: 'Leute der Hafenkolonne',
     name: 'Kalle',
     extra: '30 €',
     spot: 'Landungsbrücken',
@@ -78,12 +79,12 @@ describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
   };
   /** Platzhalter, die in jeder Variante eines Anlasses vorkommen müssen. */
   const needs: Record<keyof typeof INCIDENT_TEXTS, string[]> = {
-    burglaryGang: ['warehouse', 'goods', 'gang'],
+    burglaryGang: ['warehouse', 'goods', 'crew'],
     burglaryJunkies: ['warehouse', 'goods'],
     burglaryInsider: ['warehouse', 'goods', 'name'],
     burglaryFoiled: ['warehouse'],
-    poach: ['gang', 'extra'],
-    intimidationReport: ['spot', 'gang'],
+    poach: ['crew', 'extra'],
+    intimidationReport: ['spot', 'crew'],
   };
 
   it('jeder Anlass hat mindestens vier verschiedene Varianten', () => {

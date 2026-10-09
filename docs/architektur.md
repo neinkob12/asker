@@ -130,9 +130,11 @@ Geldwäsche bucht den gewaschenen Betrag als Umbuchung (`transfer`, kein Gewinn 
 getrennt (`laundering`).
 
 **Pleite-Regel:** Module können `solvency(state)` angeben ("kann der Spieler dank mir weitermachen?").
-Melden alle `false`, löst der Kern `game.over` mit `bankrupt` aus. Stand jetzt: `goods` (Ware im Lager) und
-`suppliers` (Lieferung unterwegs, genug Schwarzgeld oder Kredit für ein Paket; bei einem gesperrten Lieferanten
-zählt, ob das Geld für Schulden plus Paket reicht).
+Melden alle `false`, löst der Kern `game.over` mit `bankrupt` aus. Stand jetzt: `goods` (Ware im Lager; nach dem
+Verkauf des Geschäfts nur Lager, die nicht an die Statthalter gingen), `suppliers` (Lieferung unterwegs, genug
+Schwarzgeld oder Kredit für ein Paket; bei einem gesperrten Lieferanten zählt, ob das Geld für Schulden plus Paket
+reicht), `logistics` (Ware am Kai, Fahrt unterwegs) und nach dem Verkauf `trade` (Ware in einem Hafen, Container oder
+Lieferung unterwegs, Geld auf dem Konto, schwarz oder sauber, für den billigsten Container).
 
 ### Spielstände (`persistence.ts`, `saves.ts`, `session.ts`)
 
@@ -157,7 +159,7 @@ zählt, ob das Geld für Schulden plus Paket reicht).
 
   | Lauf | Test-Spielstände |
   | --- | --- |
-  | Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang` (Tag 3), `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
+  | Köln, die ersten Tage (eigener kurzer Lauf mit dem vorsichtigen Bot, Tag 3); Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang`, `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
   | Deutschland (`playToGermany` mit `cityOrder` = `ARRIVAL_CITIES`: Hamburg, Berlin, München, Frankfurt) | pro Stadt `ankunft-<stadt>` (erste Ankunft, `city.arrived`, bevor der Bot dort etwas tut: keine Leute, keine Rechte Hand, keine Routen), `boss-von-<stadt>` (im Schritt der Mehrheit) und `<stadt>-komplett` (Stand beim vorletzten Veedel, zurechtgerückt wie Köln mit `nearlyComplete`: Rechte Hand bereit, das letzte Veedel fällt nach einer Spielminute, danach meldet sich die nächste Stadt bzw. Jansen); `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
   | Hafen (Verkauf bis zum Titel Europa) | `hafen` (Ankunft in Rotterdam), `hafen-europa` (eigenes Schiff, Kunden in Europa), `produktion` (zwei Fincas, erste Ernte im Ausfuhrlager), `produzent`, `europa` |
   | Minispiele (Auftrag 46, `src/playtest/minigameSaves.ts`, kein eigener Lauf: aus `boss-von-koeln` bzw. `hafen`) | `minispiel-<art>` für jede der zehn Arten: Das Minispiel steht an, ausgelöst auf dem echten Weg des Moduls (Kontrolle am Spot ohne Wurf `police.playerChase`, Überfall mit Zuschlagen, Tipp `tipOffAgainstPlayer`, eigene Fahrt mit `checkAt`, Zivis ohne Wurf `startUndercoverShift`, Überfall bzw. Eintreiben auf einer Kopie so oft gespielt, bis Tresor bzw. Bude anstehen, `trade.buy`, Sammellieferung mit `problem: 'seized'` und Antwort „Papiere fälschen“, `recruiting.interview`). Nach dem Laden öffnet sich der Rahmen von selbst, die Folgen laufen wie im Spiel |
@@ -437,7 +439,9 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   eines Fahrzeugs begrenzt nur, wenn man es wählt. Auf Routen fasst das Privatauto 5 kg (`INTERCITY_CAPACITY`, wie
   bisher). Fliegt eine Ladung auf, ist das Fahrzeug zur Hälfte beschlagnahmt. Jede Fahrt
   mit Ware wählt die Strecke (`ROUTE_CHOICES`): Autobahn wie bisher, Landstraße (`roads` mit `AVOID_MOTORWAY`, mindestens
-  ein Fünftel länger, Kontrollen halb so oft) oder nachts (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen, nur bei Abfahrt in der Nacht; bis dahin ist die
+  ein Fünftel länger, Kontrollen halb so oft; nur in der Stadt: Zwischen zwei Städten gibt es keine Landstraßen-Daten,
+  jede Fahrt nimmt die Autobahn (`interCityRoute`) mit derselben Zeit und demselben Zoll, `choiceOnWay`) oder nachts
+  (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen, nur bei Abfahrt in der Nacht; bis dahin ist die
   Fahrt `planned`, Container bleiben am Kai und können dort noch vom Zoll gefunden werden). Der Liegeplatz hat Stufen
   (`BERTH_LEVELS`: Halle am Kai, Kran): Ware länger sicher, weniger Zoll, Laden schneller. Jansen und Daan bieten Container
   (`container: 'full'`, 5 bzw. 6 kg, billig pro Gramm) und halbe Container (`'shared'`, noch billiger, mit 12 % fliegt die
@@ -1064,7 +1068,10 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Verkaufsformel** (`city/config.ts`): Preis = `SALE_PROFIT_DAYS` (90) Tagesgewinne aller Städte; Tagesgewinn =
   Schnitt der letzten `SALE_AVERAGE_DAYS` (7) abgeschlossenen Tage aus der Kasse, je Stadt das Ergebnis vor dem Anteil
   der Statthalter und ohne Ausbau (`businessDailyProfit`), mindestens `SALE_PRICE_MIN`. Rotterdam kostet
-  `ROTTERDAM_SHARE` (0,65) davon, der Rest ist das Startkapital (`salePriceFor`, `saleOffer`). Begründung: 90 Tage sind
+  `ROTTERDAM_SHARE` (0,65) davon, der Rest ist das Startkapital (`salePriceFor`, `saleOffer`). Rotterdam ist legal und
+  wird sauber bezahlt: Der Anteil geht beim Verkauf über Jansens Reederei durch die Wäsche
+  (`ROTTERDAM_LAUNDERING_CHANNEL`, Gebühr aus `laundering/config.ts`, `launderAtOnce`), die Gebühr (`rotterdamFee`,
+  Kategorie `laundering`) geht vom Startkapital ab. Begründung: 90 Tage sind
   ein Quartal Statthalter-Ergebnis, ein runder, großer Betrag (beim Bot 1,5 bis 2,2 Mio. €); zwei Drittel davon für
   Rotterdam lassen etwa 30 Tagesgewinne als Startkapital (0,5 bis 0,8 Mio. €): genug für die Container der ersten zwei
   Wochen, nicht für alle Kunden auf einmal. Mit drei Vierteln platzten beim Bot in der ersten Woche Bestellungen (Geld
@@ -1072,7 +1079,8 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Nach dem Verkauf** (`business.sold`, `isBusinessSold`, `saleRecord`): Rotterdam ist ein Ort im Ausland
   (`ABROAD_CITIES`, `CityDef.abroad`, keine Veedel), du fährst hin, die Stadt wird aktiv. Die deutschen Städte schlafen
   nicht mehr für dich (`closeSleepers` und `closeLiveDay` ruhen, keine Kasse pro Stadt), Fahrten und Wechsel dorthin gehen
-  nicht mehr, Rang Importeur. Module räumen per Ereignis auf: `logistics` (Routen, Nachkauf), `laundering` (Jansens
+  nicht mehr, Rang Importeur. Module räumen per Ereignis auf: `goods` (die Ware in den Lagern der verkauften Städte
+  geht an die Statthalter, sie war im Preis; Eintrag im Journal), `logistics` (Routen, Nachkauf), `laundering` (Jansens
   Reederei als vierter Weg, `harborOnly`), `trade` (Kunden, Abnahmevertrag, Jansens Halle mit `START_STOCK`). `quests`
   bietet keine Wochenverträge mehr an (`contractsOpen`). Code, der die Veedel der aktiven Stadt nimmt, muss mit einer leeren Liste leben
   (z.B. `police.hottestVeedel`, `territory.checkMilestones`).
@@ -1551,11 +1559,7 @@ selbst im `before` (am Handy-Bildschirm legt `onMap` das Handy für Karte und HU
 `toursSeen` steht; das deckt das Erreichen der Stufe (`tutorial.stageReached`) und das Laden eines Spielstands ab. Am
 Ende schickt die Oberfläche `tutorial.tourSeen { stage }`, bei Erklär-Stufen (`EXPLAIN_STAGES` 0, 3, 4, 10) dazu
 `tutorial.advance`, nach Stufe 0 `ui.setSpeed(1)`. Der „Weiter“-Knopf der Stufen-Karte erscheint nur noch, wenn die
-Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 5 einen Lieferanten
-antippen (`waitFor { ui }`) und die erste Bestellung (`shipment.ordered`), 7 ein Leutnant, 10 ein Buchhalter, 11 die
-Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist überspringbar, falls
-die Voraussetzung fehlt. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
-(`MOMENT_STAGES`). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
+Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 5 einen Lieferanten antippen (`waitFor { ui }`) und die erste Bestellung (`shipment.ordered`), 7 ein Leutnant, 10 ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist überspringbar, falls die Voraussetzung fehlt; Überspringen zählt als gesehen, ein neues oder geladenes Spiel beendet die Tour mit `'reset'` und vermerkt nichts. Die Tour der Stufe 9 startet erst mit der Beschlagnahme (`MOMENT_STAGES`); geht das Tutorial ohne sie weiter, kommt sie mit Stufe 10 (ohne den Satz zum Zoll). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
 Lieferung in Köln (`shipment.arrived`, Lager im HUD) und nach dem ersten Fahrer (`staff.hired`, Abholen am Kai und
 Routen; Routen gibt es nur zwischen zwei Lagern, der Kai ist keins). „Tutorial beenden“ beendet auch die Tour und
 markiert alle als gesehen; die Migration 2 markiert in laufenden Ständen alle Touren bis zur Stufe als gesehen.

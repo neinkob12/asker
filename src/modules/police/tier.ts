@@ -98,12 +98,12 @@ function isDealerUp(f: OperationFacts): boolean {
 
 function isDealerStill(f: OperationFacts): boolean {
   return (
-    f.veedel > DEALER_DOWN.veedel ||
-    f.spots > DEALER_DOWN.spots ||
-    f.people > DEALER_DOWN.people ||
-    f.lieutenants > DEALER_DOWN.lieutenants ||
+    f.veedel >= DEALER_DOWN.veedel ||
+    f.spots >= DEALER_DOWN.spots ||
+    f.people >= DEALER_DOWN.people ||
+    f.lieutenants >= DEALER_DOWN.lieutenants ||
     f.berth ||
-    f.warehouses > DEALER_DOWN.warehouses ||
+    f.warehouses >= DEALER_DOWN.warehouses ||
     f.revenue >= DEALER_DOWN.revenue
   );
 }

@@ -35,6 +35,11 @@ export const MAX_SCORE = 100_000_000;
 /** Drosselung: höchstens so viele Einträge pro IP und Zeitfenster. Ein Spieler schickt höchstens alle ~1,2 Minuten (Tempo 4) einen. */
 export const RATE_LIMIT = 120;
 export const RATE_WINDOW_SECONDS = 600;
+/**
+ * Höchstens so viele Veedel nehmen wir an: alle spielbaren Städte zusammen (fünf Städte mit je zwölf Veedeln = 60),
+ * mit Luft für weitere Städte. Früher 50, als nur Köln spielbar war: Wer mehr hielt, stand still mit 50 Veedeln da.
+ */
+export const MAX_VEEDEL = 100;
 
 export interface Entry {
   runId: string;
@@ -62,14 +67,19 @@ function clampInt(value: unknown, min: number, max: number): number | null {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/**
+ * Text ohne Steuer- und Formatzeichen, gekürzt auf max Zeichen. Steuerzeichen (Zeilenumbruch, Tab) werden zu einem
+ * Leerzeichen (sonst klebt „Jakob\nMüller“ zusammen), gekürzt wird nach Codepunkten (sonst bleibt von einem Emoji an
+ * der Grenze ein halbes Ersatzpaar stehen).
+ */
 function cleanText(value: unknown, max: number): string {
-  return typeof value === 'string'
-    ? value
-        .replace(/[\p{Cc}\p{Cf}]/gu, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, max)
-    : '';
+  if (typeof value !== 'string') return '';
+  const text = value
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\p{Cf}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Array.from(text).slice(0, max).join('');
 }
 
 /**
@@ -146,7 +156,7 @@ export function parseEntry(body: unknown, now: number): Entry | null {
   const runId = cleanText(b.runId, 64);
   if (!/^[A-Za-z0-9_-]{4,64}$/.test(runId)) return null;
   const days = clampInt(b.days, 1, 100_000);
-  const veedel = clampInt(b.veedel, 0, 50);
+  const veedel = clampInt(b.veedel, 0, MAX_VEEDEL);
   const quests = clampInt(b.quests ?? 0, 0, 100);
   if (days === null || veedel === null || quests === null) return null;
   const score = clampInt(b.score, 0, maxScore(days));
@@ -201,6 +211,22 @@ async function redis(commands: RedisCommand[]): Promise<unknown[]> {
     if (r.error) throw new Error(r.error);
     return r.result;
   });
+}
+
+/**
+ * Eintrag schreiben, aber nur, wenn er nicht schlechter ist als der gespeicherte (gleich gut zählt, z.B. Game Over mit
+ * dem Spitzenwert von vorher). Prüfen und Schreiben laufen als ein Lua-Skript in Redis, also atomar: Getrennt lasen zwei
+ * fast gleichzeitige Einträge desselben Durchgangs beide den alten Wert, und der schlechtere schrieb nach dem besseren.
+ * KEYS: Liste, Details. ARGV: Punkte, runId, Eintrag als JSON. Antwort 1 = geschrieben, 0 = schlechter, nichts getan.
+ */
+const IMPROVE_SCRIPT = `local old = redis.call('ZSCORE', KEYS[1], ARGV[2])
+if old and tonumber(ARGV[1]) < tonumber(old) then return 0 end
+redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+redis.call('HSET', KEYS[2], ARGV[2], ARGV[3])
+return 1`;
+
+function improveCommand(entry: Entry): RedisCommand {
+  return ['EVAL', IMPROVE_SCRIPT, 2, BOARD, RUNS, entry.score, entry.runId, JSON.stringify(entry)];
 }
 
 function json(data: unknown, status = 200): Response {
@@ -275,20 +301,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const hash = await hashToken(token);
     // Das erste Token eines Durchgangs wird festgehalten (HSETNX ist atomar); danach muss es passen.
-    const [claimed, stored, existing] = await redis([
+    const [claimed, stored] = await redis([
       ['HSETNX', TOKENS, entry.runId, hash],
       ['HGET', TOKENS, entry.runId],
-      ['ZSCORE', BOARD, entry.runId],
     ]);
     if (Number(claimed) !== 1 && stored !== hash) return json({ error: 'Nicht dein Durchgang.' }, 403);
-    const old = existing === null || existing === undefined ? null : Number(existing);
-    // Derselbe Durchgang: nur verbessern (nach Game Over einen alten Stand laden zählt nicht doppelt).
-    if (old === null || entry.score >= old) {
-      await redis([
-        ['ZADD', BOARD, entry.score, entry.runId],
-        ['HSET', RUNS, entry.runId, JSON.stringify(entry)],
-      ]);
-    }
+    // Derselbe Durchgang: nur verbessern (nach Game Over einen alten Stand laden zählt nicht doppelt), in einem Schritt.
+    await redis([improveCommand(entry)]);
     // Alles unterhalb der besten KEEP Einträge wegwerfen (auch die Details und Tokens).
     const [outside] = await redis([['ZRANGE', BOARD, 0, -(KEEP + 1)]]);
     if (Array.isArray(outside) && outside.length > 0) {

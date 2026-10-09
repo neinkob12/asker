@@ -6,7 +6,8 @@
 //
 // Platzhalter: {goods} (z.B. "50 g Gras"), {reason} (Grund aus problems.ts, als Satzteil), {delay} (Dauer),
 // {cost} (Aufpreis oder Schmiergeld), {debt}, {extra} (Ware obendrauf), {warehouse}, {share} (Teillieferung).
-// papersSaved/papersFailed (Feedback vom 07.10.2026): Ausgang, wenn du die Papiere für den Zoll selbst machst.
+// papersSaved/papersFailed (Feedback vom 07.10.2026): Ausgang, wenn du die Papiere für den Zoll selbst machst. Auch
+// deine Rechte Hand kann sie machen, das Lob gilt daher dem, der sie gemacht hat, nicht ausdrücklich dir.
 
 export type SupplierTextKey =
   /** Nach dem Freischalten. */
@@ -91,7 +92,7 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     ],
     papersSaved: [
       'Wahnsinn! Die haben deine Papiere geschluckt, Stempel drauf, ich fahr weiter!',
-      'Durch! Papiere sauber, die {goods} kommen! Du bist ein Künstler!',
+      'Durch! Papiere sauber, die {goods} kommen! Wer die gemacht hat, ist ein Künstler!',
       'Ha! Der Zöllner hat nix gemerkt! Bin wieder auf der Bahn!',
     ],
     papersFailed: [

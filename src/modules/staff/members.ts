@@ -323,10 +323,18 @@ export function effectiveWage(member: StaffMember): number {
   return member.wage;
 }
 
+/**
+ * Was um Mitternacht für die Person wirklich abgebucht wird: effectiveWage mal dem Buchhalter der Stadt (wageFactor,
+ * Auftrag 46e). Eine Rechnung für die Buchung (payWages) und alle Angaben in der Oberfläche.
+ */
+export function wageDue(state: GameState, member: StaffMember): number {
+  return Math.round(effectiveWage(member) * wageFactor(state, member.cityId));
+}
+
 /** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter, Haft und Verletzung anteilig). */
 export function payrollDue(state: GameState): number {
   // Auftrag 46e: Ein Buchhalter in der Stadt macht die Löhne dort günstiger (wageFactor), so wie payWages sie bucht.
-  return liveMembers(state).reduce((sum, m) => sum + Math.round(effectiveWage(m) * wageFactor(state, m.cityId)), 0);
+  return liveMembers(state).reduce((sum, m) => sum + wageDue(state, m), 0);
 }
 
 /**

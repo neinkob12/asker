@@ -7,8 +7,12 @@
 // Hier stehen nur Daten und reine Funktionen (Vorlagen, Figuren, Werte); den Ablauf macht index.ts.
 
 import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
+import { activeCity } from '../city';
+import { getOrder } from '../customers';
 import { getProduct, QUALITY_TIERS } from '../goods';
 import { hottestVeedel } from '../police';
+import { getSpot } from '../spots';
+import { getStaffMember } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { allVeedel, veedelCity } from '../veedel';
 
@@ -158,6 +162,18 @@ export const CONTRACT_CONTACTS: readonly Contact[] = [
 const goodQuality = () => QUALITY_TIERS.find((t) => t.id === 'good')?.min ?? 0.65;
 
 const inCity = (veedelId: string, offer: ContractOffer) => veedelCity(veedelId) === offer.cityId;
+// Zähler zählen nur, was in der Stadt des Angebots geschieht: über das Veedel des Auftrags bzw. Spots, die Stadt
+// der Person oder die Stadt im Ereignis (fehlt sie in alten Ständen, die aktive, wie beim Buchen).
+const orderInCity = (state: GameState, orderId: number, offer: ContractOffer) => {
+  const order = getOrder(state, orderId);
+  return !!order && inCity(order.veedelId, offer);
+};
+const spotInCity = (state: GameState, spotId: string, offer: ContractOffer) => {
+  const spot = getSpot(state, spotId);
+  return !!spot && inCity(spot.veedelId, offer);
+};
+const eventInCity = (state: GameState, cityId: string | undefined, offer: ContractOffer) =>
+  (cityId ?? activeCity(state)) === offer.cityId;
 const controlled = (state: GameState, cityId: string) =>
   controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === cityId).length;
 
@@ -212,7 +228,10 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: '{n} Lieferungen ausfahren',
     pitch: 'Meine Gäste bestellen nach Hause. Fahr diese Woche {n} Lieferungen aus, dann gehören sie dir.',
     doneText: 'Pünktlich und diskret. Genau so.',
-    count: { 'order.finished': (p) => (p.kind === 'delivery' && p.status === 'done' ? 1 : 0) },
+    count: {
+      'order.finished': (p, s, o) =>
+        p.kind === 'delivery' && p.status === 'done' && orderInCity(s, p.orderId, o) ? 1 : 0,
+    },
     bonus: 'teamXp',
     weight: 1,
   },
@@ -225,7 +244,10 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     pitch: 'Ich hab Abnehmer für große Mengen. Zieh diese Woche {n}× einen Großhandels-Deal durch.',
     doneText: 'Saubere Geschäfte. Wir sehen uns.',
     available: (_s, _c, tier) => tier >= 1,
-    count: { 'order.finished': (p) => (p.kind === 'wholesale' && p.status === 'done' ? 1 : 0) },
+    count: {
+      'order.finished': (p, s, o) =>
+        p.kind === 'wholesale' && p.status === 'done' && orderInCity(s, p.orderId, o) ? 1 : 0,
+    },
     bonus: 'clean',
     weight: 1.3,
   },
@@ -277,7 +299,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: '{n} neue Stammkunden',
     pitch: 'Wer bleibt, ist mehr wert als zehn Laufkunden. Gewinn diese Woche {n} neue Stammkunden.',
     doneText: 'Die kommen wieder, glaub mir.',
-    count: { 'customer.regularGained': () => 1 },
+    count: { 'customer.regularGained': (p, s, o) => (spotInCity(s, p.spotId, o) ? 1 : 0) },
     bonus: 'reputation',
     weight: 1,
   },
@@ -289,7 +311,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: '{n} Einheiten einkaufen',
     pitch: 'Mein Lieferant will Umsatz sehen, sonst gibt es nichts für dich. Kauf diese Woche {n} Einheiten ein.',
     doneText: 'Er ist zufrieden. Und ich auch.',
-    count: { 'shipment.ordered': (p) => p.amount },
+    count: { 'shipment.ordered': (p, s, o) => (eventInCity(s, p.cityId, o) ? p.amount : 0) },
     bonus: 'goods',
     weight: 0.9,
   },
@@ -318,7 +340,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: '{n} Leute einstellen',
     pitch: 'Ein paar Jungs aus dem Veedel brauchen Arbeit. Stell diese Woche {n} Leute ein.',
     doneText: 'Die Familien danken es dir.',
-    count: { 'staff.hired': () => 1 },
+    count: { 'staff.hired': (p, s, o) => (getStaffMember(s, p.staffId)?.cityId === o.cityId ? 1 : 0) },
     bonus: 'loyalty',
     weight: 0.8,
   },
@@ -332,7 +354,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     doneText: 'Sauber. Im wahrsten Sinne.',
     euro: true,
     available: (_s, _c, tier) => tier >= 1,
-    count: { 'laundering.completed': (p) => p.amount },
+    count: { 'laundering.completed': (p, s, o) => (eventInCity(s, p.cityId, o) ? p.amount : 0) },
     bonus: 'heat',
     weight: 0.9,
   },
@@ -344,14 +366,14 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: '{n} neue Spots',
     pitch: 'Da draußen gibt es noch Ecken ohne dich. Mach diese Woche {n} neue Spots auf.',
     doneText: 'Mehr Ecken, mehr Kundschaft. Gut so.',
-    count: { 'spots.unlocked': one, 'spots.founded': one },
+    count: { 'spots.unlocked': spotOpened, 'spots.founded': spotOpened },
     bonus: 'teamXp',
     weight: 1,
   },
 ];
 
-function one(): number {
-  return 1;
+function spotOpened(p: { veedelId: string }, _s: GameState, o: ContractOffer): number {
+  return inCity(p.veedelId, o) ? 1 : 0;
 }
 
 export function getContractTemplate(id: string): ContractTemplate | undefined {

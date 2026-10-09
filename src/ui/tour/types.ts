@@ -54,7 +54,11 @@ export interface TourDef {
   skippable?: boolean;
 }
 
-export type TourOutcome = 'done' | 'skipped';
+/**
+ * Wie eine Tour endet: 'done' (alle Schritte), 'skipped' (Überspringen bzw. `skip()`), 'reset' (neues oder geladenes
+ * Spiel: Die Tour gehörte zum alten, nichts davon gilt für das neue).
+ */
+export type TourOutcome = 'done' | 'skipped' | 'reset';
 
 /** `ui.tour.*`: Touren starten und beenden. Die Tour ist reine Oberfläche, nichts davon steht im Spielstand. */
 export interface TourApi {

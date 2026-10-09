@@ -442,8 +442,11 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     // Zurück erst deutlich darunter.
     expect(nextTier(facts({ veedel: 5, spots: 4, people: 6 }), 2)).toBe(2);
     expect(nextTier(facts({ veedel: 4, spots: 4, people: 6 }), 2)).toBe(1);
-    expect(nextTier(facts({ spots: 3, people: 4, revenue: 5000 }), 1)).toBe(1);
-    expect(nextTier(facts({ spots: 3, people: 4, revenue: 3000 }), 1)).toBe(0);
+    expect(nextTier(facts({ spots: 2, people: 3, revenue: 5000 }), 1)).toBe(1);
+    // Haltewerte: Mit drei Spots oder vier Leuten bleibt der Händler Händler, erst darunter ist er Kleindealer.
+    expect(nextTier(facts({ spots: 3, people: 3, revenue: 3000 }), 1)).toBe(1);
+    expect(nextTier(facts({ spots: 2, people: 4, revenue: 3000 }), 1)).toBe(1);
+    expect(nextTier(facts({ spots: 2, people: 3, revenue: 3000 }), 1)).toBe(0);
   });
 
   it('Umsatz pro Tag: Schnitt über volle Tage, der angefangene Tag drückt ihn nicht', () => {

@@ -15,7 +15,11 @@ export interface MapDialogProps {
   onClose: () => void;
   children?: ComponentChildren;
   class?: string;
-  /** Hintergrund über der Kartenfläche: 'dim' (abgedunkelt, Klick schließt) oder 'none' (Karte bleibt sichtbar). */
+  /**
+   * Hintergrund über der Kartenfläche: 'dim' (abgedunkelt, Klick schließt) oder 'none' (Karte bleibt sichtbar und
+   * bedienbar: Ziehen und Zoomen schließen den Dialog nicht; ein Klick auf ein Gebiet öffnet dessen Seite im Handy
+   * und schließt ihn wie jeder Seitenwechsel).
+   */
   scrim?: 'dim' | 'none';
   /** Höhe als Blatt am Handy-Bildschirm. */
   detent?: SheetDetent;
