@@ -155,7 +155,7 @@
   transition: right var(--dock-duration) var(--dock-ease);
 }
 /* Weggelegtes Handy: Die Lasche am rechten Rand (phone.css, .phone-tab) bekommt Platz, sonst lag sie auf der Kachel
-   „Ruf · Reviere“ und auf den aufgeklappten Karten (Auftrag 43, N6). */
+   „Ruf, Reviere“ und auf den aufgeklappten Karten (Auftrag 43, N6). */
 .shell.is-desktop:not(.has-phone) .hud {
   right: calc(var(--map-right) + 52px);
 }
@@ -490,7 +490,7 @@
   width: 1px;
   background: rgba(0, 0, 0, 0.45);
 }
-/* Kachel mit aufklappbarer Karte (Lager, Ruf · Reviere): Karte darunter, Glas, Knopf zum Ziel */
+/* Kachel mit aufklappbarer Karte (Lager, Ruf, Reviere): Karte darunter, Glas, Knopf zum Ziel */
 .hud-pill-wrap {
   position: relative;
   margin: 0;
@@ -565,6 +565,9 @@
 }
 .hud-label.is-place {
   color: var(--cat-place);
+}
+.hud-label.is-people {
+  color: var(--cat-people);
 }
 
 /* Spieltempo: Segmente 40 × 36, Pause gold, aktiv hell */
@@ -1159,7 +1162,7 @@ kbd {
     column-gap: var(--space-2);
     row-gap: var(--space-2);
   }
-  /* Lager und Ruf · Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
+  /* Lager und Ruf, Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
   .hud-tiles {
     justify-self: stretch;
     flex-wrap: wrap;
@@ -1174,6 +1177,10 @@ kbd {
   .hud-tiles > * {
     flex: 1 1 calc((100% - 2 * var(--space-2)) / 3);
     min-width: 0;
+  }
+  /* Genau vier Kacheln (Rang, Lager, Ruf, Reviere): zwei mal zwei statt drei und eine allein über die ganze Breite. */
+  .hud-tiles:has(> :nth-child(4):last-child) > * {
+    flex-basis: calc((100% - var(--space-2)) / 2);
   }
   .hud-tiles .hud-pill {
     width: 100%;

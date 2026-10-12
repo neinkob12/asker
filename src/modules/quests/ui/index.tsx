@@ -163,11 +163,12 @@ function ContractsPage() {
   const history = contractHistory(state);
   return (
     <div class="contract-list">
+      {/* Nicht noch einmal „Wochenverträge“, so heißt schon die Seite. */}
       <Group
-        title="Wochenverträge"
+        title={active ? 'Dein Vertrag' : 'Angebote'}
         icon="handshake"
         color="money"
-        value={active ? 'läuft' : offers.length > 0 ? `${offers.length} Angebote` : undefined}
+        count={active ? undefined : offers.length || undefined}
         note={
           active || offers.length > 0
             ? 'Einer pro Woche, Frist Sonntag 23:59.'

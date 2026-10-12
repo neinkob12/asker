@@ -180,7 +180,7 @@ function TrackingCard() {
           <Icon name={tracking.stage === 'road' ? 'truck' : 'ship'} strokeWidth={2} />
         </span>
         <span class="logi-track__text">
-          <span class="logi-track__label">Lieferung live{tracking.more > 0 ? ` · +${tracking.more}` : ''}</span>
+          <span class="logi-track__label">Lieferung live{tracking.more > 0 ? ` · ${tracking.more} weitere` : ''}</span>
           <strong>{tracking.title}</strong>
           <span class="logi-track__status">{tracking.status}</span>
         </span>

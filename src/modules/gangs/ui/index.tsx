@@ -190,13 +190,8 @@ function GangRow(props: { gang: Gang }) {
           <Emblem gang={gang} size="sm" />
           <span class="ui-item__main">
             <span class="ui-item__title">{gang.name}</span>
-            <Chips
-              class="ui-item__tags"
-              items={[
-                { label: `Stärke ${Math.round(gangPower(state, gang.id))}`, icon: 'fist', color: 'danger' },
-                { label: `${turf.length} Veedel`, icon: 'flag', color: 'place' },
-              ]}
-            />
+            {/* Die Stärke steht schon im Kopf darüber (Balken mit Zahl), hier nur die Reviere. */}
+            <Chips class="ui-item__tags" items={[{ label: `${turf.length} Veedel`, icon: 'flag', color: 'place' }]} />
           </span>
         </span>
       </ListItem>

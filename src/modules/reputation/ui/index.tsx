@@ -1,5 +1,5 @@
-// Oberfläche des Rufs: Kachel „Ruf · Reviere“ im HUD (mit aufklappbarer Karte) und ein Abschnitt mit den letzten
-// Gründen im Tab "Reviere".
+// Oberfläche des Rufs: Kacheln „Ruf“ und „Reviere“ im HUD (je mit aufklappbarer Karte) und ein Abschnitt mit den
+// letzten Gründen im Tab "Reviere".
 
 import { formatNumber } from '../../../core';
 import {
@@ -27,9 +27,10 @@ import { getReputation, recentReputationChanges, reputationLabel, reputationTier
 import './reputation.css';
 
 /**
- * HUD über der Karte: Ruf und Reviere in einer Kachel (Auftrag 26). Leiste 0–100 mit den Stufen, daneben die Zahl
- * der Veedel. Beim Drüberfahren oder Antippen klappt eine Karte auf: die Stufe, die darunter und die darüber mit je
- * einem Satz, und die Reviere als kleine Liste. Der Knopf unten führt zu den Revieren.
+ * HUD über der Karte: Ruf (Leiste 0–100 mit den Stufen) und Reviere (Zahl der Veedel) als zwei Kacheln mit eigener
+ * Farbe; in einer Kachel neben „Rang“ waren Rang und Ruf kaum zu unterscheiden. Beim Drüberfahren oder Antippen
+ * klappt eine Karte auf: beim Ruf die Stufe, die darunter und die darüber mit je einem Satz, bei den Revieren die
+ * eigenen Veedel. Der Knopf unten führt zu den Revieren.
  */
 /**
  * Nach dem Verkauf (Auftrag 43): Ruf als Lieferant statt Ruf und Reviere (es gibt keine Veedel mehr). Pünktlich und
@@ -72,30 +73,23 @@ function PlayerReputationHud() {
   const tier = tiers[index];
   const below = tiers[index - 1];
   const above = tiers[index + 1];
-  const cityId = activeCity(state);
-  const city = cityName(cityId);
-  const progress = campaignProgress(state, cityId);
-  const mine = controlledBy(state, PLAYER_FACTION)
-    .filter((id) => veedelCity(id) === cityId)
-    .map(veedelName)
-    .sort();
   return (
     <HudPill
       data-tour="hud.reputation"
       icon="star"
-      color="brand"
-      label="Ruf · Reviere"
+      color="people"
+      label="Ruf"
       value={`${shown} ${tier.name}`}
       tone={shown < 20 ? 'bad' : shown < 40 ? 'warn' : undefined}
-      title={`Ruf ${shown} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
+      title={`Ruf ${shown} von 100: ${tier.name}`}
       onClick={() => ui.selectTab('territory')}
       detailsAction="Reviere öffnen"
       details={
         <div class="rep-flyout">
           <div class="rep-flyout__now">
-            <span class="hud-label is-brand">Ruf</span>
+            <span class="hud-label is-people">Ruf</span>
             <strong>
-              {shown} · {tier.name}
+              {shown} {tier.name}
             </strong>
           </div>
           <p class="rep-flyout__text">{tier.effect}</p>
@@ -117,39 +111,63 @@ function PlayerReputationHud() {
               </li>
             )}
           </ul>
-          <div class="rep-flyout__now">
-            <span class="hud-label is-place">Reviere</span>
-            <strong>
-              {progress.controlled}/{progress.total}
-              {progress.complete
-                ? ` · ${city} komplett`
-                : !majorityMakesBoss(cityId)
-                  ? progress.majorityReached
-                    ? ' · Mehrheit'
-                    : ''
-                  : progress.majorityReached
-                    ? ` · Boss von ${city}`
-                    : ` · ab ${progress.majority} Boss`}
-            </strong>
-          </div>
-          <p class="rep-flyout__text">
-            {mine.length === 0 ? 'Noch kein Veedel unter deiner Kontrolle.' : mine.join(', ')}
-          </p>
         </div>
       }
     >
       <span class="hud-rep">
         <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
-        <span
-          class="hud-rep__veedel"
-          data-tour="hud.territory"
-          title={`${progress.controlled} von ${progress.total} Veedeln`}
-        >
-          <Icon name="flag" />
-          {progress.controlled}/{progress.total}
-        </span>
       </span>
     </HudPill>
+  );
+}
+
+/** Kachel Reviere: kontrollierte Veedel der aktiven Stadt, Karte mit den eigenen Veedeln und dem nächsten Ziel. */
+function TerritoryHud() {
+  const { state } = useGame();
+  const ui = useUi();
+  // Gleiche Regel wie beim Ruf: im Tutorial ab dem ersten Stammkunden, nach dem Verkauf gibt es keine Veedel mehr.
+  if (!tutorialAllows(state, 'hud.reputation') || isBusinessSold(state)) return null;
+  const cityId = activeCity(state);
+  const city = cityName(cityId);
+  const progress = campaignProgress(state, cityId);
+  const mine = controlledBy(state, PLAYER_FACTION)
+    .filter((id) => veedelCity(id) === cityId)
+    .map(veedelName)
+    .sort();
+  const goal = progress.complete
+    ? `${city} komplett`
+    : !majorityMakesBoss(cityId)
+      ? progress.majorityReached
+        ? 'Mehrheit'
+        : null
+      : progress.majorityReached
+        ? `Boss von ${city}`
+        : `ab ${progress.majority} Boss`;
+  return (
+    <HudPill
+      data-tour="hud.territory"
+      icon="flag"
+      color="place"
+      label="Reviere"
+      value={`${progress.controlled}/${progress.total}`}
+      title={`${progress.controlled} von ${progress.total} Veedeln`}
+      onClick={() => ui.selectTab('territory')}
+      detailsAction="Reviere öffnen"
+      details={
+        <div class="rep-flyout">
+          <div class="rep-flyout__now">
+            <span class="hud-label is-place">Reviere</span>
+            <strong>
+              {progress.controlled} von {progress.total}
+            </strong>
+          </div>
+          {goal && <p class="rep-flyout__text">{goal}</p>}
+          <p class="rep-flyout__text">
+            {mine.length === 0 ? 'Noch kein Veedel unter deiner Kontrolle.' : mine.join(', ')}
+          </p>
+        </div>
+      }
+    />
   );
 }
 
@@ -204,4 +222,5 @@ function ReputationSection() {
 }
 
 registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
+registerHudItem({ id: 'reputation.territory', order: 41, placement: 'more', icon: 'flag', component: TerritoryHud });
 registerSlot('tab:territory', { id: 'reputation.summary', title: 'Ruf', order: 20, component: ReputationSection });

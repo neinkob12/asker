@@ -285,6 +285,11 @@ Die eigentliche Ursache des Verrutschens: `.spot-marker { position: relative }` 
 als im Dev-Server) MapLibres `position: absolute`, die Marker lagen im Seitenfluss untereinander. `src/map/map.css`
 erzwingt deshalb `.maplibregl-map .maplibregl-marker { position: absolute }`; Marker-Klassen setzen nie selbst `position`.
 Ein Klick auf einen Marker schaltet den Doppelklick-Zoom kurz ab (`holdDoubleClickZoom` in `src/map/markers.ts`).
+Aufräumen vom 12.10.2026 (doppelte Infos): HUD hat getrennte Kacheln Rang, Ruf (`people`) und Reviere (`place`, Anker
+`hud.territory`); jede Handy-App steht nur einmal da (Kasse und Personal nur im Dock, Dock mit Namen); sauberes Geld in
+Kasse und Geldwäsche nur am Handy-Bildschirm (`SummaryTiles compactOnly`); Filter nach Rolle im Personal erst ab fünf
+Leuten; Lager-Marker zeigen nur den Bestand; Konfrontations-Karte ohne doppelte Chips (was als Einsatz dasteht, fehlt
+oben) und ohne Blatt-Titel (`MapDialog sheetTitle={false}`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -411,7 +416,7 @@ Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); h
 `Disclosure` oder `Group more`; Namen und Werte brechen nie im Wort um.
 HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 sechs Apps**
 (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), dazu seit dem Hamburger Lager-Kauf die App „Lager“ (`goods.app`: eigene Lager, Standorte kaufen) und vier im Dock (Nachrichten, Lieferanten, Personal,
-Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
+Kasse; jede App steht nur einmal da, im Dock mit Namen wie im Raster): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
 `hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Keine Banner (Auftrag 46d):**
 `ui.toast(text, kind, { urgent })` schreibt nur in den Verlauf (Einstellungen › Verlauf, Seite `core.history`); `urgent`
 (Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen. Die einzige Einblendung ist die

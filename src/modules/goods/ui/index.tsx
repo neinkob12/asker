@@ -110,8 +110,8 @@ const stockView = memoState((state) => {
 });
 
 /**
- * Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), bei mehr "2,1 kg Gras +4" (am Handy
- * ist die Kachel schmal), dazu die Aufstellung zum Aufklappen.
+ * Kurzanzeige im HUD: der größte Posten, bei mehr "2,1 kg Gras +2 Sorten" (am Handy ist die Kachel schmal), dazu die
+ * Aufstellung zum Aufklappen.
  */
 const StockHud = memo(function StockHud() {
   const ui = useUi();
@@ -121,12 +121,14 @@ const StockHud = memo(function StockHud() {
   // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
   const view = useGameSelector((state) => {
     const { cityId, rows, warehouses } = stockView(state);
+    const more = rows.length - 1;
+    // Immer gleich aufgebaut: der größte Posten, dazu die Zahl der übrigen Sorten (vorher mal „+ 400 g Gras“, mal „+2“).
     const short =
       rows.length === 0
         ? 'leer'
-        : rows.length <= 2
-          ? rows.map(stockText).join(' + ')
-          : `${stockText(rows[0])} +${rows.length - 1}`;
+        : more === 0
+          ? stockText(rows[0])
+          : `${stockText(rows[0])} +${more} ${more === 1 ? 'Sorte' : 'Sorten'}`;
     return {
       value: warehouses.length === 0 ? 'kein Lager' : short,
       title: rows.map(stockText).join(', ') || 'Lager leer',
@@ -616,7 +618,7 @@ registerMapLayer({
   id: 'goods.warehouses',
   order: 30,
   mount(ctx) {
-    // Eigene Lager: runde Kachel (Ort, blau) und Glas-Pille mit Name und Bestand, z.B. "Lager Ehrenfeld · 640 g".
+    // Eigene Lager: runde Kachel (Ort, blau) und Glas-Pille mit dem Bestand, z.B. "640 g"; der Name steht im Tooltip.
     const shown = new Map<string, { name: HTMLElement; text: string }>();
     const draw = () => {
       const state = ctx.getState();
@@ -646,7 +648,9 @@ registerMapLayer({
         const grams = rows.filter((r) => getProduct(r.productId)?.unit === 'g').reduce((sum, r) => sum + r.amount, 0);
         // Ware ohne Gramm (Stück, ml, Pens) als Zahl der Sorten, nicht als Summe ohne Einheit („+1416“, N10).
         const other = rows.filter((r) => r.amount > 0 && getProduct(r.productId)?.unit !== 'g').length;
-        const text = `${w.name} · ${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` + ${other} weitere` : ''}`;
+        // Nur der Bestand: Das Symbol sagt schon „Lager“, der Name steht im Tooltip. Mit Namen verdeckte die Pille die
+        // Spots daneben (Ehrenfeld, Feedback 12.10.2026).
+        const text = `${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other} Sorten` : ''}`;
         if (text !== entry.text) {
           entry.text = text;
           entry.name.textContent = text;

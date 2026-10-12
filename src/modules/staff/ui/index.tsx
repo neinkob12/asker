@@ -82,6 +82,9 @@ const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
   { value: 'specialist', label: 'Spezialisten' },
 ];
 
+/** Ab so vielen Leuten im Team gibt es den Filter nach Rolle. */
+const FILTER_MIN = 4;
+
 /** Gruppen je Rolle (oder alle Spezialisten), gleiche Symbole wie im Porträt. */
 const ROLE_GROUPS: { id: RoleFilter; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
   { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' || m.role === 'courier' },
@@ -164,10 +167,10 @@ function StaffRowItem(props: { member: StaffMember }) {
 }
 
 /**
- * Übersicht: Kennzahlen, darunter ein Filter als Segment (Alle, Läufer, Fahrer, Sicherheit, Spezialisten). "Alle"
- * zeigt das Personal als Aufbau (Boss, Rechte Hand, Leutnants mit Spots, Spots ohne Leutnant: Slot 'staff.tree' der
- * Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten, Weitere, Anheuern und Ehemalige. Eine Rolle zeigt
- * nur ihre Leute. Darunter hängt "Leute finden" (recruiting, Slot 'tab:staff').
+ * Übersicht: Kennzahlen, darunter ab fünf Leuten ein Filter als Segment (Alle, Läufer, Fahrer, Sicherheit,
+ * Spezialisten). "Alle" zeigt das Personal als Aufbau (Boss, Rechte Hand, Leutnants mit Spots, Spots ohne
+ * Leutnant: Slot 'staff.tree' der Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten, Weitere, Anheuern
+ * und Ehemalige. Eine Rolle zeigt nur ihre Leute. Darunter hängt "Leute finden" (recruiting, Slot 'tab:staff').
  */
 function StaffOverview() {
   const { state } = useGame();
@@ -182,7 +185,9 @@ function StaffOverview() {
   const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })].filter(
     (m) => !isFarmRole(m.role) && m.cityId === city,
   );
-  const group = ROLE_GROUPS.find((g) => g.id === filter);
+  // Der Filter nach Rolle lohnt erst bei einem größeren Team; ohne Filter zählt „Alle“.
+  const filterable = current.length > FILTER_MIN;
+  const group = filterable ? ROLE_GROUPS.find((g) => g.id === filter) : undefined;
   // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
   const free = current.filter((m) => m.status === 'active' && !m.assignment && !isSpecialist(m.role));
   const specialists = current.filter((m) => isSpecialist(m.role) && !isAbsent(m));
@@ -208,10 +213,12 @@ function StaffOverview() {
           },
         ]}
       />
-      <Group title="Dein Team" icon="users" color="people" count={current.length}>
-        <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
-      </Group>
-      {current.length === 0 && filter === 'all' ? (
+      {filterable && (
+        <Group title="Dein Team" icon="users" color="people">
+          <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+        </Group>
+      )}
+      {current.length === 0 ? (
         <Empty icon="users">Noch niemand im Team. Läufer heuerst du am Spot an oder stellst unten jemanden ein.</Empty>
       ) : group ? (
         <>

@@ -530,7 +530,7 @@ async function run() {
           )?.name ?? null,
       );
       assert.ok(candidate, 'ein Bewerber wartet');
-      // Offene HUD-Karten (z.B. „Ruf · Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
+      // Offene HUD-Karten (z.B. „Ruf, Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
       // erst schließen (Esc), dann das Ziel in die Mitte scrollen (oben HUD, unten Handy-Leiste) und antippen.
       // Nur ein Esc, dann warten, bis die Karte weg ist: Ein zweites Esc ginge ans Handy und legte es weg.
       const closeFlyouts = async () => {

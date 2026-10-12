@@ -592,7 +592,8 @@ export function unlockRequirements(
   if (requires.veedel !== undefined) {
     const veedel = controlledBy(state, PLAYER_FACTION).length;
     rows.push({
-      label: `${requires.veedel === 1 ? 'Ein Veedel' : `${requires.veedel} Veedel`} unter deiner Kontrolle (jetzt ${veedel})`,
+      // Kurz, damit die Zeile in der Liste in eine Zeile passt (vorher „Ein Veedel unter deiner Kontrolle (jetzt 0)“).
+      label: `${requires.veedel === 1 ? 'Ein eigenes Veedel' : `${requires.veedel} eigene Veedel`} (jetzt ${veedel})`,
       done: veedel >= requires.veedel,
       progress: Math.min(1, veedel / requires.veedel),
     });
@@ -607,7 +608,7 @@ export function unlockRequirements(
   }
   if (requires.berth) {
     const berth = hasBerth(state, 'koeln');
-    rows.push({ label: 'Eigener Liegeplatz im Niehler Hafen', done: berth, progress: berth ? 1 : 0 });
+    rows.push({ label: 'Liegeplatz im Hafen', done: berth, progress: berth ? 1 : 0 });
   }
   if (requires.city) {
     const there = citiesUnlocked(state).includes(requires.city);

@@ -23,6 +23,8 @@ export interface SheetProps {
   open: boolean;
   onClose: () => void;
   title?: ComponentChildren;
+  /** Name für Screenreader, wenn das Blatt keinen sichtbaren Titel hat. */
+  label?: string;
   /** Rasterhöhen, Standard: mittel und groß. */
   detents?: readonly SheetDetent[];
   /** Höhe beim Öffnen, Standard: die erste. */
@@ -234,7 +236,7 @@ export function Sheet(props: SheetProps) {
           role="dialog"
           aria-modal="true"
           aria-labelledby={props.title ? titleId : undefined}
-          aria-label={props.title ? undefined : 'Blatt'}
+          aria-label={props.title ? undefined : (props.label ?? 'Blatt')}
           tabIndex={-1}
           style={{ height: geo.current ? `${geo.current.height}px` : undefined }}
         >

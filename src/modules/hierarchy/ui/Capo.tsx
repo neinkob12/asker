@@ -10,7 +10,6 @@ import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   CAPO_MAX_LIEUTENANTS,
-  CAPO_MIN_LEVEL,
   type CapoPost,
   canBeCapo,
   capoCandidates,
@@ -18,7 +17,6 @@ import {
   capoOf,
   getCapo,
   lieutenantSpots,
-  MAX_SPOTS_PER_LIEUTENANT,
   postSummary,
 } from '../index';
 
@@ -115,11 +113,8 @@ export function CapoGroup(props: { staffId: string }) {
         title="Capo"
         icon="crown"
         color="brand"
-        note={
-          check.ok
-            ? 'Führt bis zu drei Leutnants in den Veedeln drumherum, verlangt doppelten Lohn.'
-            : `Capo kann werden, wer Level ${CAPO_MIN_LEVEL} hat und ${MAX_SPOTS_PER_LIEUTENANT} Spots führt.`
-        }
+        // Was fehlt, steht schon in der Zeile darunter; hier nur, was ein Capo tut.
+        note="Führt bis zu drei Leutnants in den Veedeln drumherum, verlangt doppelten Lohn."
       >
         <List>
           <ListItem action disabled={!check.ok} onClick={() => setEditing(true)}>

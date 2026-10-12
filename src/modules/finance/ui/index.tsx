@@ -537,11 +537,10 @@ function FinanceApp() {
   const sold = isBusinessSold(state);
   return (
     <div class="fin-app">
+      {/* Sauberes Geld nur am Handy-Bildschirm: Dort zeigt das HUD nur das Schwarzgeld, am Desktop steht beides oben. */}
       <SummaryTiles
-        items={[
-          { icon: 'moneyBag', color: 'dirty', value: formatEuro(state.wallet.dirty), label: 'Schwarz' },
-          { icon: 'coinEuro', color: 'money', value: formatEuro(state.wallet.clean), label: 'Sauber' },
-        ]}
+        compactOnly
+        items={[{ icon: 'coinEuro', color: 'money', value: formatEuro(state.wallet.clean), label: 'Sauber' }]}
       />
       <div class="fin-controls">
         <SegmentedControl wide aria-label="Zeitraum" options={[...PERIODS]} value={period} onChange={setPeriod} />

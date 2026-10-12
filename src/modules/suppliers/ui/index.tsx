@@ -92,7 +92,8 @@ import './suppliers.css';
 
 const APP_ID = 'suppliers.app';
 
-const KIND_NAME: Record<Supplier['kind'], string> = { port: 'Hafen', city: 'Großstadt' };
+/** Wie die Ware kommt (das Wort „Großstadt“ stand bei fast allen gleich und sagte nichts). */
+const KIND_NAME: Record<Supplier['kind'], string> = { port: 'per Schiff', city: 'per Transporter' };
 
 function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier?: boolean }) {
   const { state, shipment: s } = props;
@@ -239,7 +240,8 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
     { label: s.name, icon: 'pin', color: 'place' as const },
     ...(unlocked
       ? [
-          { label: KIND_NAME[s.kind], icon: s.kind === 'port' ? 'ship' : 'truck', color: 'goods' as const },
+          // Nur der Sonderfall Schiff; per Transporter kommen fast alle.
+          ...(s.kind === 'port' ? [{ label: KIND_NAME.port, icon: 'ship', color: 'goods' as const }] : []),
           { label: clock.formatDuration(s.deliveryTime), icon: 'clock' },
           { label: trustLabel(rel.trust), icon: 'handshake', color: 'money' as const },
         ]
@@ -317,8 +319,8 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
           color="system"
           title="Noch kein Geschäft"
           count={locked.length}
-          note="Mit mehr Umsatz, eigenen Veedeln und einem Liegeplatz melden sie sich per Handy."
-          more="Großstädte liefern schnell kleine Mengen, der Hafen günstig große. Jeder Lieferant hat eigene Bedingungen; was fehlt, steht in der Zeile."
+          note="Was noch fehlt, steht in der Zeile."
+          more="Per Transporter kommen schnell kleine Mengen, per Schiff günstig große. Ist alles erfüllt, steigst du beim Lieferanten ein."
         >
           <List>
             {locked.map((s) => (
@@ -355,7 +357,7 @@ function LockedSupplier(props: { supplierId: string }) {
       icon={ready ? 'unlock' : 'lock'}
       color={ready ? 'money' : 'system'}
       title="Noch kein Geschäft"
-      note={`${supplier.contactName} macht erst Geschäfte mit dir, wenn alles erfüllt ist. Dann meldet er sich per Handy.`}
+      note={ready ? undefined : `${supplier.contactName} macht erst Geschäfte mit dir, wenn alles erfüllt ist.`}
     >
       <List>
         {rows.map((r) => (
@@ -699,7 +701,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
     return (
       <div class="sup-app">
         <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
-        <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
+        <KeyValue label="Lieferung" value={KIND_NAME[supplier.kind]} />
         <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
         <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
         <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />
@@ -719,7 +721,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
   return (
     <div class="sup-app">
       <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
-      <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
+      <KeyValue label="Lieferung" value={KIND_NAME[supplier.kind]} />
       <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
       <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
       <KeyValue label="Zuverlässigkeit" value={formatPercent(supplier.reliability)} />
