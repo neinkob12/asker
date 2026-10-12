@@ -19,9 +19,11 @@
   --state-on: var(--spot-idle-on);
   --state-glow: var(--spot-idle-glow);
   --state-edge: var(--spot-idle-edge);
-  --bubble: 26px;
+  /* Weit draußen kleiner (Feedback 12.10.2026: über ganz Köln überlappten die Spots): 60 % bis 100 % mit --spot-lift */
+  --scale: calc(0.6 + 0.4 * var(--spot-lift, 1));
+  --bubble: calc(26px * var(--scale));
   --stem: 13px;
-  --ring-width: 3px;
+  --ring-width: calc(2px + 1px * var(--spot-lift, 1));
   --ring-gap: 2px;
   --lift: var(--spot-lift, 1);
   /* Unterkante der Blase über dem Spot: am Stiel (lift 1) bis mittig auf dem Spot (lift 0) */
@@ -141,7 +143,7 @@
 .spot-badge {
   position: relative;
   font-family: var(--font-hud-display);
-  font-size: 16px;
+  font-size: max(11px, calc(16px * var(--scale)));
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -149,24 +151,6 @@
 }
 .spot-lock {
   display: none;
-}
-/* Kneipe: kleines Bierglas oben rechts an der Blase (Look Glas) */
-.spot-kind {
-  position: absolute;
-  right: -6px;
-  top: -6px;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass);
-  border: 1px solid var(--hud-glass-edge);
-  color: var(--hud-gold);
-}
-.spot-kind svg {
-  width: 11px;
-  height: 11px;
 }
 .spot-marker:hover .spot-sign,
 .spot-marker:focus-visible .spot-sign,
@@ -276,7 +260,7 @@
 
 /* Gesperrt: kleine dunkle Blase mit Schloss, ohne Ring und ohne Plakette */
 .spot-marker.is-locked {
-  --bubble: 20px;
+  --bubble: calc(20px * var(--scale));
   --stem: 9px;
 }
 .spot-marker.is-locked .spot-bubble {
@@ -317,66 +301,25 @@
   z-index: 3;
 }
 .spot-hover__card {
-  /* Kompakt (Feedback 12.10.2026: das Fenster war deutlich zu groß): so breit wie der Inhalt, kleine Schrift. */
-  width: max-content;
-  max-width: 200px;
-  margin-bottom: 48px;
-  padding: 8px 10px;
-  border-radius: var(--hud-radius-tile);
+  /* Nur der Name des Spots (Feedback 12.10.2026), als kleine Glas-Pille über der Blase. */
+  margin-bottom: 44px;
+  padding: 3px 9px;
+  border-radius: var(--radius-round);
   background: var(--hud-glass-strong);
   -webkit-backdrop-filter: var(--hud-blur);
   backdrop-filter: var(--hud-blur);
   border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--hud-shadow);
+  box-shadow: var(--shadow-marker-soft);
   color: var(--hud-ink);
   font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
   animation: spot-hover-in var(--duration) var(--ease-out);
 }
 .spot-hover.is-locked .spot-hover__card {
   margin-bottom: 32px;
-}
-.spot-hover__title {
-  font-family: var(--font-hud-display);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.1;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-.spot-hover__sub {
-  margin-top: 1px;
-  font-size: 11px;
-  color: var(--hud-ink-2);
-  white-space: nowrap;
-}
-.spot-hover__rows {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 10px;
-  margin: 6px 0 0;
-  padding: 6px 0 0;
-  border-top: 1px solid var(--hud-glass-line);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.spot-hover__rows[hidden] {
-  display: none;
-}
-.spot-hover__label {
-  color: var(--hud-ink-2);
-}
-.spot-hover__value {
-  margin: 0;
-  font-weight: 700;
-  text-align: right;
-}
-.spot-hover__foot {
-  margin-top: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--hud-gold);
-  white-space: nowrap;
 }
 /* Solange ein Spot-Fenster offen ist, stört das Schild des Veedels darunter nicht (zwei Fenster auf einmal). */
 .maplibregl-map:has(.spot-hover:not([hidden])) .veedel-label {
@@ -392,15 +335,15 @@
 /* Handy-Bildschirm: Blase und Ring etwas kleiner, die Plakette sitzt über der Blase statt daneben */
 @media (max-width: 760px) {
   .spot-marker {
-    --bubble: 24px;
+    --bubble: calc(24px * var(--scale));
     --stem: 12px;
   }
   .spot-marker.is-locked {
-    --bubble: 18px;
+    --bubble: calc(18px * var(--scale));
     --stem: 8px;
   }
   .spot-badge {
-    font-size: 15px;
+    font-size: max(11px, calc(15px * var(--scale)));
   }
   .spot-marker.is-right .spot-plate,
   .spot-marker.is-left .spot-plate {
@@ -425,6 +368,16 @@
   .spot-hover__card {
     animation: none;
   }
+}
+
+/* Weit draußen (spots-far, unter NAMES_ZOOM in map.ts): keine Art-Symbole und Plaketten, gesperrte Spots nur als
+   kleiner Punkt ohne Schloss. Sonst drängelten sich über ganz Köln Schlösser, Symbole und Blasen. */
+.spots-far .spot-marker .spot-plate,
+.spots-far .spot-marker.is-locked .spot-lock {
+  display: none;
+}
+.spots-far .spot-marker.is-locked {
+  --bubble: 10px;
 }
 
 .spot-panel {

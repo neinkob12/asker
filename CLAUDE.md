@@ -5,6 +5,7 @@ Ausführliche Architektur mit allen Modulen, APIs, Befehlen und Ereignissen: `do
 Recherche zur echten Gang-Szene (je Stadt 12 Veedel, Vorschläge mit Stufen ECHT/NAH/HEIKEL, Kölner Randbezirke):
 `docs/recherche/README.md`. Wer an Gangs (`gangs/data.ts`, `gangs/texts*.ts`) oder neuen Veedeln arbeitet, liest das zuerst;
 HEIKEL (echte Personen, Familien, Clubs, Labels) kommt nie ins Spiel.
+**Liste für morgen:** offene Punkte aus dem Probespielen in `docs/todo.md`.
 **Parallele Sessions:** Regeln, Phasen und wer welche Ordner besitzt stehen in `docs/auftraege/README.md`. Lies das zuerst.
 Phase 0 (Fundament), Phase 1 (Aufträge 10–14) und Phase 2 (Integration, Auftrag 20) sind erledigt; alle Systeme
 sind verbunden. Dazu Auftrag 21: echtes Straßennetz (`roads`), Logistik mit Hafen, Fahrern und mehreren Lagern
@@ -293,6 +294,9 @@ Aufräumen vom 12.10.2026 (doppelte Infos): HUD hat getrennte Kacheln Rang, Ruf 
 Kasse und Geldwäsche nur am Handy-Bildschirm (`SummaryTiles compactOnly`); Filter nach Rolle im Personal erst ab fünf
 Leuten; Lager-Marker zeigen nur den Bestand; Konfrontations-Karte ohne doppelte Chips (was als Einsatz dasteht, fehlt
 oben) und ohne Blatt-Titel (`MapDialog sheetTitle={false}`).
+Danach: Spot-Hover zeigt nur den Namen; Spots werden beim Herauszoomen kleiner (`--scale` aus `--spot-lift`), unter
+`NAMES_ZOOM` ohne Plaketten, gesperrte nur als Punkt; die Art eines Spots (Club, Park, Kneipe …) hat kein Symbol und
+keinen Chip mehr (`SPOT_TYPES` bleibt als Daten, wirkt nur noch über `spotModifiers`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
