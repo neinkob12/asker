@@ -296,30 +296,49 @@
 }
 
 /* Hover-Karte (nur Maus): Glas über der Blase */
+/* Name beim Drüberfahren (nur Maus): reiner Text direkt über der Blase (Feedback 12.10.2026). Der Abstand rechnet die
+   Lage der Blase wie .spot-marker nach (Größe mit --scale, Stiel mit --spot-lift, in 2D ohne Stiel), damit der Name
+   nah und weit draußen gleich knapp über dem Ring sitzt. */
 .spot-hover {
+  --lift: var(--spot-lift, 1);
+  --scale: calc(0.6 + 0.4 * var(--spot-lift, 1));
+  --bubble: calc(26px * var(--scale));
+  --stem: 13px;
   pointer-events: none;
   z-index: 3;
 }
+.spot-hover.is-locked {
+  --bubble: calc(20px * var(--scale));
+  --stem: 9px;
+}
+.shell-map.is-2d .spot-hover {
+  --lift: 0;
+}
 .spot-hover__card {
-  /* Nur der Name des Spots (Feedback 12.10.2026), als kleine Glas-Pille über der Blase. */
-  margin-bottom: 44px;
-  padding: 3px 9px;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass-strong);
-  -webkit-backdrop-filter: var(--hud-blur);
-  backdrop-filter: var(--hud-blur);
-  border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--shadow-marker-soft);
+  /* Oberkante der Blase über dem Spot (beim Drüberfahren 12 % größer), dazu Ring und etwas Luft */
+  margin-bottom: calc(
+    (var(--stem) + 4px) *
+    var(--lift) -
+    var(--bubble) /
+    2 *
+    (1 - var(--lift)) +
+    var(--bubble) *
+    1.12 +
+    6px
+  );
   color: var(--hud-ink);
   font-family: var(--font-hud);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  /* Ohne Pille: ein dunkler Saum hält den Text auf jeder Karte lesbar */
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.75),
+    0 1px 2px rgba(0, 0, 0, 0.9);
   animation: spot-hover-in var(--duration) var(--ease-out);
-}
-.spot-hover.is-locked .spot-hover__card {
-  margin-bottom: 32px;
 }
 /* Solange ein Spot-Fenster offen ist, stört das Schild des Veedels darunter nicht (zwei Fenster auf einmal). */
 .maplibregl-map:has(.spot-hover:not([hidden])) .veedel-label {
@@ -328,7 +347,7 @@
 @keyframes spot-hover-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(3px);
   }
 }
 
@@ -339,6 +358,14 @@
     --stem: 12px;
   }
   .spot-marker.is-locked {
+    --bubble: calc(18px * var(--scale));
+    --stem: 8px;
+  }
+  .spot-hover {
+    --bubble: calc(24px * var(--scale));
+    --stem: 12px;
+  }
+  .spot-hover.is-locked {
     --bubble: calc(18px * var(--scale));
     --stem: 8px;
   }
@@ -376,7 +403,8 @@
 .spots-far .spot-marker.is-locked .spot-lock {
   display: none;
 }
-.spots-far .spot-marker.is-locked {
+.spots-far .spot-marker.is-locked,
+.spots-far .spot-hover.is-locked {
   --bubble: 10px;
 }
 
