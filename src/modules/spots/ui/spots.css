@@ -4,6 +4,8 @@
  * Aufbau (Anker unten = Spot): Der Ring liegt flach auf der Straße (ein Kreis, in der Höhe gestaucht wie in der
  * Kartenneigung), sein Bogen zeigt die Geduld des ungeduldigsten Kunden (--fill, 100 = frisch, 0 = geht gleich), darunter
  * ein weicher Schein. Vom Fußpunkt führt ein kurzer Stiel zur Blase (26 px).
+ * Weit draußen (--spot-lift vom Kartencontainer, 1 = nah, 0 = weit, map.ts spotLift) sinkt die Blase stufenlos auf den
+ * Spot und der Ring schrumpft: Sonst schwebte sie in festen Pixeln über dem Spot und wanderte beim Zoomen über die Karte.
  * Zustände über data-urgency: idle, waiting, urgent, raid (Tokens --spot-*). Nur Tokens verwenden.
  */
 @property --fill {
@@ -21,6 +23,10 @@
   --ring: 72px;
   --ring-width: 6px;
   --ring-squash: 0.56;
+  --lift: var(--spot-lift, 1);
+  /* Unterkante der Blase über dem Spot: am Stiel (lift 1) bis mittig auf dem Spot (lift 0) */
+  --sign-bottom: calc((var(--stem) + 4px) * var(--lift) - var(--bubble) / 2 * (1 - var(--lift)));
+  --ring-size: calc(var(--ring) * (0.6 + 0.4 * var(--lift)));
   position: relative;
   display: block;
   width: 36px;
@@ -62,15 +68,15 @@
   pointer-events: none;
 }
 .spot-glow {
-  width: calc(var(--ring) * 1.1);
-  height: calc(var(--ring) * 1.1);
+  width: calc(var(--ring-size) * 1.1);
+  height: calc(var(--ring-size) * 1.1);
   background: radial-gradient(closest-side, var(--state-glow), transparent 96%);
   opacity: 0.85;
 }
 /* Ring: Bogen in der Zustandsfarbe bis --fill Prozent, der Rest als blasse Spur */
 .spot-ring {
-  width: var(--ring);
-  height: var(--ring);
+  width: var(--ring-size);
+  height: var(--ring-size);
   background: conic-gradient(from 0deg, var(--state-edge) 0 calc(var(--fill) * 1%), var(--spot-locked-edge) 0);
   -webkit-mask: radial-gradient(
     farthest-side,
@@ -100,16 +106,17 @@
   left: 50%;
   bottom: 4px;
   width: 2px;
-  height: var(--stem);
+  height: calc(var(--stem) * var(--lift));
   background: linear-gradient(to top, transparent, var(--state-edge));
   transform: translateX(-50%);
+  opacity: var(--lift);
 }
 
 /* Blase: weißer Rand (außen), Füllung in der Zustandsfarbe (innen), Zahl der Wartenden */
 .spot-sign {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--stem) + 4px);
+  bottom: var(--sign-bottom);
   width: var(--bubble);
   height: var(--bubble);
   margin-left: calc(var(--bubble) / -2);
@@ -184,8 +191,8 @@
 
 /* Pulsierender Ring am Boden bei dringend und Razzia */
 .spot-pulse {
-  width: var(--ring);
-  height: var(--ring);
+  width: var(--ring-size);
+  height: var(--ring-size);
   border: 2px solid var(--state-edge);
   opacity: 0;
 }
@@ -216,7 +223,8 @@
 /* Plakette: nur Symbole auf kleinem Glas, Kante in der Zustandsfarbe. Läufer (grün) / du (gold), Leutnant (blau). */
 .spot-plate {
   position: absolute;
-  top: calc(var(--bubble) / 2 + 1px + var(--label-offset, 0px));
+  /* Höhe der Blasenmitte (folgt --sign-bottom), dazu der Versatz aus SPOT_LABELS */
+  top: calc(var(--bubble) / 2 + var(--stem) + 5px - var(--sign-bottom) + var(--label-offset, 0px));
   display: flex;
   align-items: center;
   gap: 3px;
@@ -394,7 +402,8 @@
   }
   .spot-marker.is-right .spot-plate,
   .spot-marker.is-left .spot-plate {
-    top: -3px;
+    /* 4 px über der Blase (folgt --sign-bottom) */
+    top: calc(var(--stem) + 1px - var(--sign-bottom));
     left: 50%;
     right: auto;
     transform: translate(-50%, -100%);

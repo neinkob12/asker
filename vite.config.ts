@@ -26,5 +26,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs', 'api/**/*.test.ts'],
+    // Minispiele sind im Spiel aus (MINIGAMES_ENABLED), die Tests prüfen sie trotzdem.
+    setupFiles: ['src/modules/minigames/test-setup.ts'],
   },
 });

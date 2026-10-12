@@ -146,6 +146,9 @@ async function clickSafe(page, locator) {
   }
 }
 
+/** Gleich wie MINIGAMES_ENABLED in src/modules/minigames/config.ts. */
+const MINIGAMES_ON = false;
+
 async function check(name, fn) {
   process.stdout.write(`- ${name} … `);
   // Ein Pop-up vom vorigen Schritt (Lieferant, Stadt-Event) darf den nächsten nicht blockieren.
@@ -497,85 +500,105 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Minispiel: Bewerbungsgespräch selbst führen (Auftrag 44)', async () => {
-    // Echter Weg über die Oberfläche: Personal › Bewerber › „Gespräch führen“ startet das Minispiel über der Karte.
-    const candidate = await game(
+  // Minispiele sind im Spiel gerade aus (MINIGAMES_ENABLED, Feedback vom 12.10.2026): Dann gibt es kein Gespräch.
+  await check('Minispiele aus: kein Bewerbungsgespräch', async () => {
+    const candidateId = await game(
       page,
       (s) =>
         s.modules.recruiting.candidates.find(
           (c) => c.source === 'pool' && c.cityId === s.modules.city.active && !c.interviewed && c.expiresAt > s.time,
-        )?.name ?? null,
+        )?.id ?? null,
     );
-    assert.ok(candidate, 'ein Bewerber wartet');
-    // Offene HUD-Karten (z.B. „Ruf · Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
-    // erst schließen (Esc), dann das Ziel in die Mitte scrollen (oben HUD, unten Handy-Leiste) und antippen.
-    // Nur ein Esc, dann warten, bis die Karte weg ist: Ein zweites Esc ginge ans Handy und legte es weg.
-    const closeFlyouts = async () => {
-      if ((await page.locator('.hud-flyout').count()) === 0) return;
-      await page.keyboard.press('Escape');
-      await page.locator('.hud-flyout').first().waitFor({ state: 'detached', timeout: 5000 });
-    };
-    const centered = async (locator) => {
+    assert.ok(candidateId, 'ein Bewerber wartet');
+    const result = await page.evaluate(
+      (id) => window.koeln.runtime.api.dispatch({ type: 'recruiting.interview', payload: { candidateId: id } }),
+      candidateId,
+    );
+    assert.equal(result.ok, false, 'Gespräch geht nicht');
+    assert.equal(await game(page, (s) => s.modules.minigames.active.length), 0, 'kein Minispiel offen');
+  });
+
+  // Beim Wiedereinschalten der Minispiele: MINIGAMES_ON auf true, dann läuft der echte Weg wieder.
+  if (MINIGAMES_ON)
+    await check('Minispiel: Bewerbungsgespräch selbst führen (Auftrag 44)', async () => {
+      // Echter Weg über die Oberfläche: Personal › Bewerber › „Gespräch führen“ startet das Minispiel über der Karte.
+      const candidate = await game(
+        page,
+        (s) =>
+          s.modules.recruiting.candidates.find(
+            (c) => c.source === 'pool' && c.cityId === s.modules.city.active && !c.interviewed && c.expiresAt > s.time,
+          )?.name ?? null,
+      );
+      assert.ok(candidate, 'ein Bewerber wartet');
+      // Offene HUD-Karten (z.B. „Ruf · Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
+      // erst schließen (Esc), dann das Ziel in die Mitte scrollen (oben HUD, unten Handy-Leiste) und antippen.
+      // Nur ein Esc, dann warten, bis die Karte weg ist: Ein zweites Esc ginge ans Handy und legte es weg.
+      const closeFlyouts = async () => {
+        if ((await page.locator('.hud-flyout').count()) === 0) return;
+        await page.keyboard.press('Escape');
+        await page.locator('.hud-flyout').first().waitFor({ state: 'detached', timeout: 5000 });
+      };
+      const centered = async (locator) => {
+        for (let attempt = 1; ; attempt++) {
+          await closeFlyouts();
+          await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          try {
+            await locator.click({ timeout: 5000 });
+            return;
+          } catch (error) {
+            if (attempt >= 3) throw error;
+          }
+        }
+      };
+      await closeFlyouts();
+      await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
+      // Der Tipp auf den Bewerber öffnet sein Blatt. Landet er, während die Seite noch hereinfährt (CI am
+      // Handy-Bildschirm), geht das Blatt nicht auf: dann noch einmal tippen, statt 30 s auf „Gespräch führen“ zu warten.
+      const interview = page.getByText('Gespräch führen', { exact: true });
       for (let attempt = 1; ; attempt++) {
-        await closeFlyouts();
-        await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
         try {
-          await locator.click({ timeout: 5000 });
-          return;
+          await interview.waitFor({ timeout: 5000 });
+          break;
         } catch (error) {
           if (attempt >= 3) throw error;
+          await page.waitForTimeout(500);
         }
       }
-    };
-    await closeFlyouts();
-    await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
-    // Der Tipp auf den Bewerber öffnet sein Blatt. Landet er, während die Seite noch hereinfährt (CI am
-    // Handy-Bildschirm), geht das Blatt nicht auf: dann noch einmal tippen, statt 30 s auf „Gespräch führen“ zu warten.
-    const interview = page.getByText('Gespräch führen', { exact: true });
-    for (let attempt = 1; ; attempt++) {
-      await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
-      try {
-        await interview.waitFor({ timeout: 5000 });
-        break;
-      } catch (error) {
-        if (attempt >= 3) throw error;
-        await page.waitForTimeout(500);
+      await centered(interview);
+      await page.waitForSelector('.mg-intro');
+      assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
+      // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
+      await page.evaluate(() => window.koeln.dev.minigameRealtime(true));
+      await page.click('.mg-intro .mg-button.is-gold');
+      await page.waitForSelector('.mg-run.is-play', { timeout: 10000 });
+      await shot(page, 'minispiel-gespraech');
+      // Drei Runden laufen von selbst (Lügendetektor): ab und zu „Zeichen!“ tippen, bis das Ergebnis steht.
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline && (await page.locator('.mg-result').count()) === 0) {
+        const mark = page.locator('.iv-mark:enabled').first();
+        if (await mark.count()) await mark.click({ timeout: 2000 }).catch(() => {});
+        await page.waitForTimeout(700);
       }
-    }
-    await centered(interview);
-    await page.waitForSelector('.mg-intro');
-    assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
-    // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
-    await page.evaluate(() => window.koeln.dev.minigameRealtime(true));
-    await page.click('.mg-intro .mg-button.is-gold');
-    await page.waitForSelector('.mg-run.is-play', { timeout: 10000 });
-    await shot(page, 'minispiel-gespraech');
-    // Drei Runden laufen von selbst (Lügendetektor): ab und zu „Zeichen!“ tippen, bis das Ergebnis steht.
-    const deadline = Date.now() + 120000;
-    while (Date.now() < deadline && (await page.locator('.mg-result').count()) === 0) {
-      const mark = page.locator('.iv-mark:enabled').first();
-      if (await mark.count()) await mark.click({ timeout: 2000 }).catch(() => {});
-      await page.waitForTimeout(700);
-    }
-    await page.waitForSelector('.mg-result', { timeout: 5000 });
-    await shot(page, 'minispiel-ergebnis');
-    await page
-      .locator('.mg-result')
-      .getByRole('button', { name: /Weiter/ })
-      .click();
-    const last = await game(page, (s) => s.modules.minigames.history[0] ?? null);
-    assert.equal(last?.kind, 'interview');
-    assert.equal(last?.by, 'player');
-    assert.ok(Number.isFinite(last?.score), 'Score gezählt');
-    assert.equal(await game(page, (s) => s.modules.minigames.active.length), 0, 'kein Minispiel mehr offen');
-    // Danach geht das Handy wieder beim Blatt der Person auf.
-    await page.getByText('Gespräch geführt', { exact: false }).first().waitFor({ timeout: 5000 });
-    await shot(page, 'minispiel-zurueck');
-    await page.evaluate(() => {
-      window.koeln.dev.minigameRealtime(false);
-      window.koeln.runtime.api.closePhone();
+      await page.waitForSelector('.mg-result', { timeout: 5000 });
+      await shot(page, 'minispiel-ergebnis');
+      await page
+        .locator('.mg-result')
+        .getByRole('button', { name: /Weiter/ })
+        .click();
+      const last = await game(page, (s) => s.modules.minigames.history[0] ?? null);
+      assert.equal(last?.kind, 'interview');
+      assert.equal(last?.by, 'player');
+      assert.ok(Number.isFinite(last?.score), 'Score gezählt');
+      assert.equal(await game(page, (s) => s.modules.minigames.active.length), 0, 'kein Minispiel mehr offen');
+      // Danach geht das Handy wieder beim Blatt der Person auf.
+      await page.getByText('Gespräch geführt', { exact: false }).first().waitFor({ timeout: 5000 });
+      await shot(page, 'minispiel-zurueck');
+      await page.evaluate(() => {
+        window.koeln.dev.minigameRealtime(false);
+        window.koeln.runtime.api.closePhone();
+      });
     });
-  });
 
   let saved;
   await check('Speichern und Laden', async () => {
