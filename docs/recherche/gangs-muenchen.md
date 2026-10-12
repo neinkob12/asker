@@ -52,7 +52,7 @@ Fazit: Rocker sind in München real, aber eher still. Für das Spiel passt "Rock
 |---|---|---|
 | TSV 1860: Stadion Grünwalder Straße (1911 gebaut, "Sechzger", "Giesings Höhen"), Rückkehr 2017, Fankneipen in Giesing | [munich.travel](https://www.munich.travel/en/topics/sports-leisure/kick-it-in-giesing), [AZ](https://www.abendzeitung-muenchen.de/sport/tsv1860/tsv-1860-haching-plant-mini-fanmarsch-zum-gruenwalder-stadion-art-465589) | Presse |
 | Schickeria München (FC Bayern Ultras), 2002 aus mehreren Gruppen entstanden, politisch links, Banner-Proteste | [Sport1](https://www.sport1.de/fussball/bundesliga/2020/03/fc-bayern-und-seine-ultras-die-zwei-gesichter-der-schickeria) | Presse |
-| Kriminelle Strukturen bei 1860-Ultras oder Wettbüros in Giesing: nichts gefunden | | keine Angabe |
+| Kriminelle Strukturen bei 1860-Ultras oder Wettbüros in Giesing: auch in Runde 2 nichts gefunden. Belegt nur allgemein: Großrazzia der Münchner Polizei (über 100 Beamte, Kriminalfachdezernat 3, Juli 2025) gegen illegales Online-Glücksspiel "im Umfeld legal betriebener Wettbüros", Staatsanwaltschaft München I; Raubüberfälle auf Wettbüros in Südbayern mit drei 20-jährigen Festgenommenen, zwei aus München. Kein Giesing- oder 1860-Bezug. | [Schwäbische](https://www.schwaebische.de/panorama/illegale-online-sportwetten-razzia-gegen-mutmassliche-bande-3744932), [casino.org](https://www.casino.org/de/nachrichten/polizei-grossrazzia-gegen-illegales-gluecksspiel/), [Regensburger Nachrichten](https://www.regensburger-nachrichten.de/panorama/97198-schwandorf-ueberfall-auf-wettbuero-tatverdaechtige-festgenommen) | Presseberichte (allgemein), Giesing: keine Angabe |
 
 ---
 
@@ -99,7 +99,7 @@ Ehrlicher Gesamtbefund: Für die zwölf Bezirke gibt es kaum bezirksgenaue, öff
 | Muffathalle | "zweites Wohnzimmer" der Münchner Rap-Szene | Porsche Newsroom | Presse |
 | 58Beats / David P. / Glam (Färberei) | Label und Studio | Porsche Newsroom | Presse |
 | Dicht & Ergreifend, Sugar MMFK, LIZ | nichts Belegtes zum Bezirk gefunden | | keine Angabe |
-| Hasenbergl- oder Neuperlach-Rapper | nichts gefunden | | keine Angabe |
+| Hasenbergl- oder Neuperlach-Rapper | auch in Runde 2 nichts Belastbares gefunden (Treffer nur Verzeichnisse und eine schwache Blogseite) | | keine Angabe |
 
 Hinweis: Das ist **Wortspiel- und Spaß-Rap, kein Gangsta-Rap**. München hat im Gegensatz zu Berlin oder Frankfurt kaum eine belegte "Straßenrap"-Tradition in dieser Recherche. Für das Spiel eher als Kneipen-Soundtrack (Muffathalle, Glockenbach) nutzen als als Gang-Quelle.
 

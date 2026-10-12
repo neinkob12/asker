@@ -6,7 +6,7 @@ Stand der Recherche: 12.10.2026. Zweck: die Gangs in „Köln Tycoon“ (Stadt B
 
 - Sicherheit: **belegt** (Gericht, Behörde, Lagebild, Wikipedia mit Quelle), **Presse** (seriöse Presseberichte, nicht gerichtlich geklärt), **Gerücht** (nur Hörensagen oder schwache Quelle), **Allgemeinwissen** (nicht frisch belegt, nur zum Gegenprüfen).
 - Wikipedia ließ sich mit dem Abruf-Werkzeug nicht öffnen, daher stammen Wikipedia-Angaben aus Suchtreffern (Auszüge). Wo etwas nur dort stand, ist das vermerkt.
-- Nicht gefunden: Zum Sparkassen-Einbruch in Mariendorf gab es keine Treffer. Er ist hier **nicht belegt** und sollte nicht als Fakt ins Spiel.
+- Nicht gefunden: Zum Sparkassen-Einbruch in Mariendorf gab es auch in Runde 2 (Okt. 2026) keine Treffer. Er ist hier **nicht belegt** und sollte nicht als Fakt ins Spiel. Gefunden wurden stattdessen andere Berliner Fälle (Presseberichte): Schließfach-Einbruch in einer Tresoranlage in Charlottenburg mit 295 aufgebrochenen Fächern und Millionenbeute, zweiter Prozess endete laut Bericht vom 05.10.2026 mit fünf Jahren für einen fünften Täter am Landgericht Berlin ([Volksstimme](https://www.volksstimme.de/panorama/einbruch-in-tresorraum-haftstrafe-fur-weiteren-tater-4333504)); Tunnel aus einer Tiefgarage in den Tresorraum einer Bank in Steglitz (2023), Täter laut Bericht nicht gefasst ([Berliner Kurier](https://www.berliner-kurier.de/panorama/filmreifer-bankeinbruch-taeter-kamen-durch-dieses-riesige-loch-li.10011865)). Sicherheit: Presseberichte; Verwechslung mit Mariendorf möglich, nicht gleichsetzen.
 - Die Presse benutzt für Familien oft nur Familiennamen. Das Landeslagebild Clankriminalität nennt keine Wohnbezirke pro Familie.
 - Keine Gedankenstriche im Text, Quellen am Ende (Nummern in eckigen Klammern).
 
@@ -102,7 +102,7 @@ Stand der Recherche: 12.10.2026. Zweck: die Gangs in „Köln Tycoon“ (Stadt B
 |---|---|---|---|
 | Warschauer Brücke | kbO, Drogen und Taschendiebstahl. | belegt | [20] |
 | Rigaer Straße | kbO. Rigaer 94: Durchsuchungen (Großeinsatz mit 200 Kräften, anderer Bericht 700), keine organisierte Kriminalität im Gangsinn, linksautonome Szene. | belegt / Presse | [20], [24] |
-| RAW-Gelände, Clubs | Keine belastbaren Treffer zu Kriminalität. Club- und Türsteherkultur bekannt, aber Schutzgeld-Strukturen im Clubmilieu in den Quellen **nicht belegt**. Berghain: Sven Marquardt als Türsteher-Kultfigur. | Presse / nicht belegt | [21] |
+| RAW-Gelände, Clubs | Keine belastbaren Treffer zu Kriminalität. Club- und Türsteherkultur bekannt, aber Schutzgeld-Strukturen im Clubmilieu in den Quellen **nicht belegt** (Runde 2 ebenfalls ohne Beleg; belegt ist nur ein Streit um Brandschutz, bei dem die Eigentümerin Kurth-Gruppe vier Clubs, darunter Cassiopeia und Lokschuppen, den Betrieb untersagte, [Berliner Zeitung](https://www.berliner-zeitung.de/news/feuer-und-hakenkreuze-am-raw-gelaende-staatsschutz-ermittelt-li.10023069); getrennt davon eine Razzia gegen vier Mitglieder einer libanesischen Großfamilie wegen Schutzgelderpressung gegen einen 41-Jährigen in Berlin, ohne Clubbezug, Presseberichte). Berghain: Sven Marquardt als Türsteher-Kultfigur. | Presse / nicht belegt | [21] |
 | Gemeinsam mit Türsteher-Gang im Spiel | Spiel-Gang „Die Türsteher“ passt zu Mythos, aber nicht zu belegten Strukturen: als Spielidee gut, als Behauptung nicht. | Hinweis | |
 
 ### Neukölln (Sonnenallee, Hermannplatz, Gropiusstadt)
@@ -172,7 +172,7 @@ Stand der Recherche: 12.10.2026. Zweck: die Gangs in „Köln Tycoon“ (Stadt B
 
 ### Tempelhof (Mariendorf, Tempelhofer Feld)
 
-- Sparkassen-Einbruch Mariendorf: **nicht belegt** (keine Treffer). Nicht als Fakt verwenden.
+- Sparkassen-Einbruch Mariendorf: **nicht belegt** (keine Treffer, auch nicht in Runde 2). Nicht als Fakt verwenden; belegt sind der Charlottenburger Schließfach-Einbruch und der Steglitzer Tunnel (siehe oben).
 - Abou-Chaker: In Presse und Kulturberichten oft Tempelhof/Neukölln genannt, **die gefundenen Prozessberichte nennen Treptow**, Wohnort daher offen. Nicht verwenden.
 - Sonst nichts Belegtes. Tempelhofer Feld als Ort für Szenen (Allgemeinwissen).
 
