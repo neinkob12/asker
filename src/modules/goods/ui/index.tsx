@@ -650,7 +650,7 @@ registerMapLayer({
         const other = rows.filter((r) => r.amount > 0 && getProduct(r.productId)?.unit !== 'g').length;
         // Nur der Bestand: Das Symbol sagt schon „Lager“, der Name steht im Tooltip. Mit Namen verdeckte die Pille die
         // Spots daneben (Ehrenfeld, Feedback 12.10.2026).
-        const text = `${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other} Sorten` : ''}`;
+        const text = `${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other} ${other === 1 ? 'Sorte' : 'Sorten'}` : ''}`;
         if (text !== entry.text) {
           entry.text = text;
           entry.name.textContent = text;

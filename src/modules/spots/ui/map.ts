@@ -12,7 +12,7 @@
 // zeigt nur noch Nachfrage und Verkäufe, die man am Marker nicht sieht.
 
 import type { Marker } from 'maplibre-gl';
-import { formatEuro, type GameState } from '../../../core';
+import type { GameState } from '../../../core';
 import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
 import { iconElement } from '../../../ui';
 import { activeCity } from '../../city';
@@ -26,11 +26,8 @@ import {
   waitingAt,
 } from '../../customers';
 import { activeEncounters } from '../../encounters';
-import { DEFAULT_PRODUCT } from '../../goods';
 import { lieutenantOfSpot } from '../../hierarchy';
-import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
-import { veedelName } from '../../veedel';
 import {
   getAllSpots,
   isKneipe,
@@ -128,13 +125,6 @@ export function spotLook(
   const minLeft = waiting.reduce((m, c) => Math.min(m, c.expiresAt - state.time), Infinity);
   return minLeft < CUSTOMER_PATIENCE / 3 ? 'urgent' : 'waiting';
 }
-
-const LOOK_TEXT: Record<SpotLook, string> = {
-  idle: 'ruhig',
-  waiting: 'Kunden warten',
-  urgent: 'Kunden werden ungeduldig',
-  raid: 'Razzia oder Überfall',
-};
 
 /**
  * Läufer je Spot in einem Durchlauf (wie runnerAt aus staff: zuerst wer dort aktiv eingesetzt ist, sonst wer dorthin
@@ -384,46 +374,18 @@ export const spotsLayer: MapLayer = {
   },
 };
 
+/**
+ * Beim Drüberfahren nur der Name des Spots (Feedback 12.10.2026: die Karte mit Veedel, Wartenden, Verkäufer und Preis
+ * war zu groß; das alles steht im Spot-Fenster im Handy).
+ */
 interface HoverCard {
   root: HTMLElement;
-  title: HTMLElement;
-  sub: HTMLElement;
-  rows: HTMLElement;
-  waiting: HTMLElement;
-  seller: HTMLElement;
-  price: HTMLElement;
-  foot: HTMLElement;
 }
 
 function buildHoverCard(): HoverCard {
-  const root = el('div', 'spot-hover__card');
-  const title = el('div', 'spot-hover__title');
-  const sub = el('div', 'spot-hover__sub');
-  const rows = el('dl', 'spot-hover__rows');
-  const row = (label: string) => {
-    const value = el('dd', 'spot-hover__value');
-    rows.append(el('dt', 'spot-hover__label', label), value);
-    return value;
-  };
-  const waiting = row('Wartend');
-  const seller = row('Verkauft');
-  const price = row('Preis');
-  const foot = el('div', 'spot-hover__foot', 'Klick: öffnen ›');
-  root.append(title, sub, rows, foot);
-  return { root, title, sub, rows, waiting, seller, price, foot };
+  return { root: el('div', 'spot-hover__card') };
 }
 
-function fillHoverCard(card: HoverCard, state: GameState, spot: Spot): void {
-  const active = isSpotActive(state, spot.id);
-  setText(card.title, spot.name);
-  setText(card.sub, `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`);
-  setText(card.foot, clickSaleCustomer(state, spot.id) ? 'Klick: verkaufen ›' : 'Klick: öffnen ›');
-  // Gesperrt: Name, Veedel und „gesperrt“ reichen, drei Zeilen mit „–“ sagten nichts.
-  card.rows.hidden = !active;
-  if (!active) return;
-  const waiting = waitingAt(state, spot.id).length;
-  const who = seller(state, spot.id);
-  setText(card.waiting, waiting === 1 ? '1 Kunde' : `${waiting} Kunden`);
-  setText(card.seller, who.kind === 'runner' ? who.name : who.kind === 'self' ? 'du selbst' : 'niemand');
-  setText(card.price, `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))}/g`);
+function fillHoverCard(card: HoverCard, _state: GameState, spot: Spot): void {
+  setText(card.root, spot.name);
 }
