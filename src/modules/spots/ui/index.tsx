@@ -41,7 +41,6 @@ import {
   spotCity,
   spotHoursLabel,
   spotOpensAt,
-  spotType,
   unlockCostOf,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
@@ -110,7 +109,6 @@ function SpotPanel(props: { spotId: string }) {
             meta="Veedel"
             tags={[
               spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' },
-              !isKneipe(spot) && { label: spotType(spot).name, icon: spotType(spot).icon, color: 'place' },
               // Öffnungszeiten auch für feste Spots mit Wochenzeiten (Berliner Clubs, Auftrag 43, L1).
               !isKneipe(spot) &&
                 (!!spot.custom || !!spot.weekHours) &&

@@ -16,8 +16,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { veedelName } from '../../veedel';
-import { getSpot, isSpotActive, MOVE_COST, spotAwareness, spotType } from '../index';
+import { getSpot, isSpotActive, MOVE_COST, spotAwareness } from '../index';
 
 /** Abschnitte der Spot-Seite: Bekanntheit und Verwalten (nur eigene Spots). */
 export function SpotManage(props: { spotId: string }) {
@@ -102,7 +101,7 @@ export function SpotManage(props: { spotId: string }) {
         open={closing}
         onClose={() => setClosing(false)}
         title={`${spot.name} aufgeben?`}
-        message={`${spotType(spot).name} in ${veedelName(spot.veedelId)}. Deine Leute dort werden frei, Stammkunden gehen zum nächsten Spot oder sind weg. Das Geld für die Gründung ist verloren.`}
+        message="Deine Leute dort werden frei, Stammkunden gehen zum nächsten Spot oder sind weg. Das Geld für die Gründung ist verloren."
         actions={[
           {
             label: 'Aufgeben',

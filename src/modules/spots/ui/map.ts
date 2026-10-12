@@ -28,17 +28,7 @@ import {
 import { activeEncounters } from '../../encounters';
 import { lieutenantOfSpot } from '../../hierarchy';
 import { getStaff, type StaffMember } from '../../staff';
-import {
-  getAllSpots,
-  isKneipe,
-  isSpotActive,
-  type Spot,
-  spotAwareness,
-  spotCity,
-  spotKind,
-  spotLabelPlacement,
-  spotType,
-} from '../index';
+import { getAllSpots, isSpotActive, type Spot, spotAwareness, spotCity, spotLabelPlacement } from '../index';
 import { raidShown, saleGlow, syncSpotGlow } from './glow';
 import { patienceFill } from './ringModel';
 
@@ -263,13 +253,7 @@ export const spotsLayer: MapLayer = {
       bubble.dataset.tourKey = spot.id;
       const sign = el('span', 'spot-sign');
       sign.append(bubble);
-      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase, seit Auftrag 23 jede Art außer der Straßenecke
-      // ihr Icon (Club, Park, Bahnhof …).
-      if (isKneipe(spot) || spotKind(spot) !== 'corner') {
-        const kind = el('span', 'spot-kind');
-        kind.appendChild(iconElement(spotType(spot).icon, { strokeWidth: 2.4 }));
-        sign.append(kind);
-      }
+      // Kein Symbol für die Art des Spots mehr (Feedback 12.10.2026: Club, Park, Kneipe … sagten auf der Karte nichts).
 
       // Plakette nur als Symbole: Läufer (oder du selbst) und Leutnant, der den Spot versorgt.
       const crew = el('span', 'spot-crew');

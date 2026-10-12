@@ -152,24 +152,6 @@
 .spot-lock {
   display: none;
 }
-/* Kneipe: kleines Bierglas oben rechts an der Blase (Look Glas) */
-.spot-kind {
-  position: absolute;
-  right: -6px;
-  top: -6px;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass);
-  border: 1px solid var(--hud-glass-edge);
-  color: var(--hud-gold);
-}
-.spot-kind svg {
-  width: 11px;
-  height: 11px;
-}
 .spot-marker:hover .spot-sign,
 .spot-marker:focus-visible .spot-sign,
 .spot-marker.selected .spot-sign {
@@ -390,7 +372,6 @@
 
 /* Weit draußen (spots-far, unter NAMES_ZOOM in map.ts): keine Art-Symbole und Plaketten, gesperrte Spots nur als
    kleiner Punkt ohne Schloss. Sonst drängelten sich über ganz Köln Schlösser, Symbole und Blasen. */
-.spots-far .spot-marker .spot-kind,
 .spots-far .spot-marker .spot-plate,
 .spots-far .spot-marker.is-locked .spot-lock {
   display: none;
