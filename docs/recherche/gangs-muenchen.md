@@ -204,3 +204,13 @@ Die vier bestehenden Gangs sind bereits stimmig. Hier der Abgleich mit der Reche
 - [Sport1, Schickeria](https://www.sport1.de/fussball/bundesliga/2020/03/fc-bayern-und-seine-ultras-die-zwei-gesichter-der-schickeria)
 - [munich.travel, Giesing und 1860](https://www.munich.travel/en/topics/sports-leisure/kick-it-in-giesing)
 - [mrlodge, Giesing](https://www.mrlodge.com/about-munich/munich-districts/giesing)
+
+## Nachträge Runde 2 (Okt. 2026)
+
+| Thema | Fund | Quelle | Sicherheit |
+|---|---|---|---|
+| Rote Sonne | Juli 2025 Drogenrazzia im Techno-Club mit rund 100 Beamten, 20 vorübergehende Festnahmen (Kokain, Amphetamin); Ermittlungsverfahren gegen den Clubbetreiber, die Staatsanwaltschaft München I legt nahe, er habe den Handel durch Untätigkeit ermöglicht. | [groove.de](https://groove.de/2025/07/08/rote-sonne-drogenrazzia-und-ermittlungen-gegen-clubbetreiber/) | Presseberichte |
+| Optimolwerke | Ältere Razzien im Club "Katz & Maus" (30 Gäste vorläufig festgenommen) und 2011 im Club "Grinsekatze" (19 Personen); Einsatzleiter sagte, das Personal habe den Konsum offenbar übersehen. | [Abendzeitung](https://www.abendzeitung-muenchen.de/muenchen/stadtviertel/optimolwerke-drogen-razzia-in-club-art-519465) | Presseberichte (älter) |
+| Türsteher | Drogenfahnder Hubert Halemba (älteres Interview): Türsteher lassen Drogen verschwinden oder zeigen Personen an, einige Clubs würden vom Personal mit Drogen beliefert, Razzien würden wochenlang vorbereitet. | [Abendzeitung](https://www.abendzeitung-muenchen.de/muenchen/drogenfahnder-erzaehlt-clubgaenger-in-muenchen-nehmen-gerne-speed-und-koks-art-451535) | Presseberichte |
+| Westend, Schwabing, Hauptbahnhof, Schutzgeld, Landgericht München I | Weiter nichts gefunden. | (keine) | nicht belegt |
+

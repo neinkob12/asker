@@ -339,3 +339,16 @@ Stufen: **ECHT** (kann so rein), **NAH** (Anspielung, abgewandelt), **HEIKEL** (
 [25] Wikipedia, Sido: https://en.wikipedia.org/wiki/Sido_(rapper)
 [26] Leopoldplatz: https://www.berlin.de/aktuelles/9257514-958090-leopoldplatz-drug-scene-new-contact-poin.html, https://www.berliner-zeitung.de/article/leopoldplatz-in-wedding-drogenhandel-verlagert-sich-2206600, https://www.berliner-zeitung.de/article/anwohner-schlagen-alarm-drogenszene-verlagert-sich-vom-leopoldplatz-10000897
 [27] Kurfürstenstraße: https://www.berliner-zeitung.de/article/drogen-strich-einbrueche-an-der-kurfuerstenstrasse-eskaliert-der-streit-um-den-kiez-10138175, https://pardok.parlament-berlin.de/starweb/adis/citat/VT/19/SchrAnfr/S19-24334.pdf
+
+## Nachträge Runde 2 (Okt. 2026)
+
+Alle Angaben nur als Recherche-Info; echte Personen und Familien nicht im Spiel verwenden (Stufe HEIKEL).
+
+| Thema | Fund | Quelle | Sicherheit |
+|---|---|---|---|
+| Schutzgeld-Prozess "Daltons" | Landgericht Berlin: Prozess gegen vier Angeklagte wegen Schutzgelderpressung, Schüssen auf ein Restaurant und Todesdrohungen; viele türkische Gewerbetreibende hatten Ende 2024 Anzeige erstattet und berichten von Druck mit Schutzgeld bzw. "Strafzöllen". | [Berliner Zeitung](https://www.berliner-zeitung.de/article/schutzgeld-schuesse-todesdrohungen-prozess-gegen-mutmassliche-daltons-von-berlin-beginnt-10055907) | Presseberichte (Anklage, keine Urteile) |
+| Clan-Immobilien | Landgericht Berlin: Einziehungsverfahren um 58 Immobilien; Kammergericht hob die frühere Einziehungsanordnung auf Beschwerde auf. | [Tagesspiegel](https://www.tagesspiegel.de/berlin/mit-geld-aus-straftaten-finanziert-prozess-um-dutzende-clan-immobilien-beginnt-vor-berliner-landgericht-15742258.html) | Presseberichte |
+| Prügelei in Neukölln | Prozess zu einem Massenkampf Clan gegen Clan, Hintergrund laut Bericht Streit um Drogen und Schutzgeld; Vorwurf schwerer Landfriedensbruch. | [Berliner Kurier](https://www.berliner-kurier.de/kriminalitaet/clan-krieg-im-gerichtssaal-fuenf-jahre-nach-der-pruegel-orgie-in-neukoelln-li.10001017) | Presseberichte |
+| Lagebild | Lagebild Clankriminalität Berlin 2022 nennt Erpressung und Schutzgelderpressung unter den Delikten. | [berlin.de](https://www.berlin.de/sen/inneres/presse/weitere-informationen/lagebild-clankriminalitaet-berlin-2022.pdf?ts=1705017668) | belegt (amtlich) |
+| Türsteher Berlin / Hells Angels Berlin | In Runde 2 nichts gefunden. Nur ein Messerangriff auf einen Türsteher vor dem Tresor (Mitte), Motiv offen. | (keine belastbare) | nicht belegt |
+

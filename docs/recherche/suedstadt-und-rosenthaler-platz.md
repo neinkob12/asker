@@ -84,7 +84,7 @@ Fazit: Die Südstadt hat **keinen belegten Ruf als Drogen- oder Gangviertel**. S
 
 ### B1. Harmlose Fakten über den Imbiss (ECHT)
 
-Wichtig vorab: In denselben Suchergebnissen taucht ein Bericht über Ermittlungen gegen den Betreiber auf (Raptastisch, 3.10.2026, Einzelquelle, https://raptastisch.net/2026/10/03/ermittlungen-gegen-betreiber-von-nhas-city-chicken-geiselnahme-menschenraub-koerperverletzung/). **Das ist HEIKEL und wird hier weder wiedergegeben noch im Spiel verwendet.** Es zeigt aber: Der echte Imbiss darf im Spiel nicht in die Nähe von Kriminalität. Siehe B4.
+Wichtig vorab: Über den echten Betreiber kursieren unbestätigte Berichte aus Einzelquellen. **Die werden hier bewusst weder wiedergegeben noch verlinkt und nie im Spiel verwendet.** Der echte Imbiss und seine Leute dürfen im Spiel nicht in die Nähe von Kriminalität. Siehe B4.
 
 | Angabe | Quelle | Sicherheit |
 |---|---|---|
