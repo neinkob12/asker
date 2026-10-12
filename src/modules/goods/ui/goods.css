@@ -1,5 +1,7 @@
 .map-place--warehouse {
   --map-place-color: var(--color-info-strong);
+  /* Über den Spot-Markern daneben, sonst lag ein Schloss mitten auf dem Bestand. */
+  z-index: 2;
   pointer-events: auto;
   background: none;
   border: 0;

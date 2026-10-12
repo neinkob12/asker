@@ -12,6 +12,8 @@ import { Sheet, type SheetDetent } from './Sheet';
 export interface MapDialogProps {
   /** Name für Screenreader und Titel des Blatts am Handy-Bildschirm. */
   label: string;
+  /** false: Das Blatt am Handy-Bildschirm zeigt label nicht als Titel (die Karte hat schon eine eigene Kopfzeile). */
+  sheetTitle?: boolean;
   onClose: () => void;
   children?: ComponentChildren;
   class?: string;
@@ -36,7 +38,8 @@ export function MapDialog(props: MapDialogProps) {
         onClose={props.onClose}
         detents={[detent]}
         initial={detent}
-        title={props.label}
+        title={props.sheetTitle === false ? undefined : props.label}
+        label={props.label}
         class={`ui-map-sheet ${props.class ?? ''}`}
       >
         {props.children}

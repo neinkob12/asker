@@ -67,15 +67,8 @@ import { tileColor } from './tile';
 /** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
 const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`, 'finance.app'];
 
-/** Reihenfolge der Apps im Raster: Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = [
-  'finance.app',
-  `${TAB_APP_PREFIX}territory`,
-  `${TAB_APP_PREFIX}gangs`,
-  `${TAB_APP_PREFIX}staff`,
-  'laundering.app',
-  'core.settings',
-];
+/** Reihenfolge der Apps im Raster: Reviere, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = [`${TAB_APP_PREFIX}territory`, `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
 
 /** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
 export const URGENT_ADVICE = 80;
@@ -226,10 +219,7 @@ function tileActions(app: HomeApp, api: UiApi, state: GameState): MenuAction[] {
   return actions;
 }
 
-/**
- * Kasse und Personal stehen im Raster und im Dock: Die App wächst aus der Kachel, die angetippt wurde (stackAnimator
- * sucht erst data-tapped, dann irgendeine passende).
- */
+/** Die App wächst aus der Kachel, die angetippt wurde (stackAnimator sucht erst data-tapped, dann irgendeine passende). */
 function markTapped(button: HTMLElement): void {
   for (const other of button.closest('.phone__home')?.querySelectorAll('[data-tapped]') ?? []) {
     other.removeAttribute('data-tapped');
@@ -279,7 +269,7 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
           size="xl"
           class="phone__tile"
         />
-        {!props.dock && <span class="phone__app-name">{app.name}</span>}
+        <span class="phone__app-name">{app.name}</span>
         <Badge count={app.badge} />
       </button>
     </ContextMenu>
@@ -371,10 +361,8 @@ const HomeScreen = memo(function HomeScreen() {
     const i = HOME_ORDER.indexOf(a.id);
     return i < 0 ? HOME_ORDER.length : i;
   };
-  // Im Raster stehen die sechs Apps der Tabelle (Kasse und Personal auch im Dock); Nachrichten und Lieferanten nur im Dock.
-  const grid = all
-    .filter((a) => HOME_ORDER.includes(a.id) || !dockIds.includes(a.id))
-    .sort((a, b) => rank(a) - rank(b));
+  // Jede App steht genau einmal da: was im Dock liegt (Nachrichten, Lieferanten, Personal, Kasse), nicht im Raster.
+  const grid = all.filter((a) => !dockIds.includes(a.id)).sort((a, b) => rank(a) - rank(b));
   const urgent = urgentAdvice(state);
   return (
     <div class="phone__home" data-tour="phone.home">

@@ -131,10 +131,11 @@ function LieutenantPage(props: { staffId?: string; veedelId?: string }) {
       <Group title="Akte" icon="idCard" color="people">
         <List>
           <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
+            {/* Der Name steht schon im Seitentitel. */}
             <ItemContent
               icon="crew"
               color="people"
-              title={m.name}
+              title="Profil und Werte"
               meta={postSummary(state, post)}
               tags={[
                 { label: `Level ${m.level}` },
@@ -200,7 +201,7 @@ function SpotsGroup(props: { post: LieutenantPost; onEdit: () => void }) {
               ? { label: runner.name, icon: 'runner', color: 'people' as const }
               : away
                 ? { label: `${away.name} ${STATUS_NAMES[away.status]}`, icon: 'clock', color: 'warn' as const }
-                : { label: 'kein Läufer', icon: 'alert', color: 'warn' as const },
+                : null, // „leer“ steht schon rechts
             guard ? { label: guard.name, icon: 'shield', color: 'danger' as const } : null,
           ];
           return (

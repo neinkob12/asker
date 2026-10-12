@@ -351,6 +351,9 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
   );
 }
 
+/** Ab so vielen Leuten in der Liste gibt es den Filter nach Rolle. */
+const FILTER_MIN = 4;
+
 /** Gruppe "Könntest du einstellen": Kontakte zuerst (sie sind besser und laufen schneller ab), dann die Bewerber. */
 function Candidates() {
   const { state } = useGame();
@@ -362,7 +365,10 @@ function Candidates() {
     return back;
   });
   const all = [...getContacts(state), ...getPool(state)];
-  const list = all.filter((c) => matchesFilter(c, filter));
+  // Der Filter lohnt erst bei einer längeren Liste (sonst stand er nur im Weg); ohne Filter zählt „Alle“.
+  const filterable = all.length > FILTER_MIN;
+  const shown = filterable ? filter : 'all';
+  const list = all.filter((c) => matchesFilter(c, shown));
   const open = all.find((c) => c.id === openId) ?? null;
   return (
     <Group
@@ -373,7 +379,9 @@ function Candidates() {
       note={all.length > 0 ? 'Ein Tipp zeigt Werte und Hintergrund.' : undefined}
       more="Bewerber melden sich auf deinen Aushang, Kontakte kommen über loyale Leute, Stammkunden und das Milieu und sind oft besser. Mit eigenen Veedeln und gutem Ruf warten mehr Leute. Wer zu lange wartet, sieht sich anderswo um."
     >
-      <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      {filterable && (
+        <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      )}
       {list.length === 0 ? (
         <Empty icon="userPlus">
           {all.length === 0
@@ -404,10 +412,9 @@ function Search() {
       title="Leute finden"
       icon="search"
       color="brand"
+      // Preis und Zahl stehen schon in der Zeile „Rumfragen“; der Hinweis kommt nur, wenn du warten musst.
       note={
-        preview.waiting
-          ? `Du hast gerade erst rumgefragt, wieder ab ${clock.formatTime(preview.readyAt)}.`
-          : `Kostet ${formatEuro(preview.cost)} und bringt etwa ${preview.count} Leute (${preview.roleLabel}).`
+        preview.waiting ? `Du hast gerade erst rumgefragt, wieder ab ${clock.formatTime(preview.readyAt)}.` : undefined
       }
     >
       <SegmentedControl
@@ -435,7 +442,7 @@ function Search() {
             icon="megaphone"
             color="brand"
             title={wanted ? SEARCH_ROLES.find((r) => r.value === wanted)?.label : 'Rumfragen'}
-            meta={short ? 'Nicht genug Schwarzgeld' : `etwa ${preview.count} neue Bewerber, sofort`}
+            meta={short ? 'Nicht genug Schwarzgeld' : `etwa ${preview.count} Leute, ${preview.roleLabel}`}
           />
         </ListItem>
       </List>

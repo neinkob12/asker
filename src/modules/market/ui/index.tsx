@@ -82,7 +82,11 @@ function SpotPrices(props: { spotId: string }) {
       title="Preise"
       icon="tag"
       color="money"
-      note="Zu teuer vertreibt Kunden (Studenten zuerst, Banker zuletzt), billig lockt mehr an."
+      note={
+        products.length > 0
+          ? 'Zu teuer vertreibt Kunden (Studenten zuerst, Banker zuletzt), billig lockt mehr an.'
+          : undefined
+      }
     >
       <List>
         {products.length === 0 && (

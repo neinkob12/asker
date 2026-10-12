@@ -317,9 +317,11 @@
   z-index: 3;
 }
 .spot-hover__card {
-  width: 230px;
-  margin-bottom: 60px;
-  padding: 14px 16px 12px;
+  /* Kompakt (Feedback 12.10.2026: das Fenster war deutlich zu groß): so breit wie der Inhalt, kleine Schrift. */
+  width: max-content;
+  max-width: 200px;
+  margin-bottom: 48px;
+  padding: 8px 10px;
   border-radius: var(--hud-radius-tile);
   background: var(--hud-glass-strong);
   -webkit-backdrop-filter: var(--hud-blur);
@@ -331,29 +333,35 @@
   animation: spot-hover-in var(--duration) var(--ease-out);
 }
 .spot-hover.is-locked .spot-hover__card {
-  margin-bottom: 40px;
+  margin-bottom: 32px;
 }
 .spot-hover__title {
   font-family: var(--font-hud-display);
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .spot-hover__sub {
-  margin-top: 2px;
-  font-size: 13px;
+  margin-top: 1px;
+  font-size: 11px;
   color: var(--hud-ink-2);
+  white-space: nowrap;
 }
 .spot-hover__rows {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 10px 0 0;
-  padding: 10px 0 0;
+  gap: 2px 10px;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
   border-top: 1px solid var(--hud-glass-line);
-  font-size: 13px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.spot-hover__rows[hidden] {
+  display: none;
 }
 .spot-hover__label {
   color: var(--hud-ink-2);
@@ -364,12 +372,15 @@
   text-align: right;
 }
 .spot-hover__foot {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hud-glass-line);
-  font-size: 12px;
+  margin-top: 6px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--hud-gold);
+  white-space: nowrap;
+}
+/* Solange ein Spot-Fenster offen ist, stört das Schild des Veedels darunter nicht (zwei Fenster auf einmal). */
+.maplibregl-map:has(.spot-hover:not([hidden])) .veedel-label {
+  visibility: hidden;
 }
 @keyframes spot-hover-in {
   from {

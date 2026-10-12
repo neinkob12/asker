@@ -100,10 +100,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
       <Chips
         class="laundering-facts"
         items={[
-          {
-            label: `Dauer ${clock.formatDuration(channelDuration(c.id, Math.max(value, c.minAmount)))}`,
-            icon: 'clock',
-          },
+          // Die Dauer steht beim Betrag (sauber in ca. …), hier nur Platz und Risiko.
           {
             label: running > 0 ? `${formatEuro(free)} von ${formatEuro(capacity)} frei` : `bis ${formatEuro(capacity)}`,
             icon: 'gauge',
@@ -141,7 +138,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
             }
           />
         </ListItem>
-        <ListItem action disabled={!ok} onClick={wash} value={ok ? formatEuro(value) : undefined}>
+        <ListItem action disabled={!ok} onClick={wash}>
           <ItemContent
             icon="washing"
             color="money"
@@ -180,7 +177,7 @@ function LockedChannel(props: { channel: LaunderingChannel }) {
       color="system"
       value={`Gebühr ${formatPercent(channelFee(state, c.id))}`}
       note={check.ok ? c.how : check.reason}
-      more={`${c.who} ${c.how}`}
+      more={check.ok ? c.who : `${c.who} ${c.how}`}
     >
       <Chips
         class="laundering-facts"
@@ -229,7 +226,6 @@ function LockedChannel(props: { channel: LaunderingChannel }) {
 
 function LaunderingApp() {
   const { state } = useGame();
-  const dirty = Math.floor(wallet.balance(state, 'dirty'));
   const batches = getBatches(state);
   const inProgress = amountInProgress(state);
   const sold = isBusinessSold(state);
@@ -238,9 +234,10 @@ function LaunderingApp() {
   const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id) && !c.harborOnly && !sold);
   return (
     <div class="laundering-app">
+      {/* Sauberes Geld nur am Handy-Bildschirm: Dort zeigt das HUD nur das Schwarzgeld, am Desktop steht beides oben. */}
       <SummaryTiles
+        compactOnly
         items={[
-          { icon: 'moneyBag', color: 'dirty', value: formatEuro(dirty), label: 'Schwarz' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(Math.floor(state.wallet.clean)), label: 'Sauber' },
         ]}
       />

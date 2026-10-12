@@ -58,8 +58,8 @@ export function campaignHint(progress: CampaignProgress, city = 'Köln', boss = 
       ? `Boss von ${city}: ${controlled} von ${total} Veedeln. Für ${city} komplett brauchst du alle ${total}.`
       : `Mehrheit in ${city}: ${controlled} von ${total} Veedeln. Boss von ${city} bist du mit allen ${total}.`;
   return boss
-    ? `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von ${city}, mit allen ${total} gehört dir die Stadt.`
-    : `Du kontrollierst ${controlled} von ${total} Veedeln. Mit allen ${total} gehört dir die Stadt, und du bist Boss von ${city}.`;
+    ? `${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von ${city}, mit allen ${total} gehört dir die Stadt.`
+    : `${controlled} von ${total} Veedeln. Mit allen ${total} gehört dir die Stadt und du bist Boss von ${city}.`;
 }
 
 function FactionName(props: { state: GameState; faction: FactionId | null }) {

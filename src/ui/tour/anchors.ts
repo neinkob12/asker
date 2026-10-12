@@ -24,11 +24,11 @@ export const TOUR_ANCHORS = [
   'hud.speed',
   /** Kachel Lager oben rechts (goods/ui, StockHud). */
   'hud.stock',
-  /** Kachel Ruf · Reviere (reputation/ui, ReputationHud). */
+  /** Kachel Ruf (reputation/ui, ReputationHud). */
   'hud.reputation',
   /** Kachel Rang (city/ui, RankHud). */
   'hud.rank',
-  /** Die Revierzahl „4/7“ in der Kachel Ruf · Reviere (reputation/ui). */
+  /** Kachel Reviere mit der Revierzahl „4/7“ (reputation/ui, TerritoryHud). */
   'hud.territory',
   /** Die Karte unter Geld und Heat: die Missions-Karte des Tutorials (46b). */
   'hud.mission',

@@ -90,13 +90,14 @@ function SpotPanel(props: { spotId: string }) {
       <SummaryTiles
         items={[
           { icon: 'smile', color: waiting > 0 ? 'warn' : 'money', value: waiting, label: 'warten' },
-          { icon: 'tag', color: 'money', value: formatPercent(spot.priceMultiplier), label: 'Preise' },
+          // „Kaufkraft“ statt „Preise“: Weiter unten steht die Gruppe „Preise“ mit deinen eigenen Preisen.
+          { icon: 'tag', color: 'money', value: formatPercent(spot.priceMultiplier), label: 'Kaufkraft' },
           { icon: 'users', color: 'people', value: formatPercent(spot.demand), label: 'Andrang' },
         ]}
       />
       {/* J15: „Preise 90 %“ stand ohne Erklärung da. */}
-      <Disclosure label="Was heißen Preise und Andrang?">
-        Preise {formatPercent(spot.priceMultiplier)}: was die Kunden hier zahlen, gemessen am Richtpreis des Veedels
+      <Disclosure label="Was heißen Kaufkraft und Andrang?">
+        Kaufkraft {formatPercent(spot.priceMultiplier)}: was die Kunden hier zahlen, gemessen am Richtpreis des Veedels
         (100 %){spot.priceMultiplier > 1 ? ', hier also mehr' : spot.priceMultiplier < 1 ? ', hier also weniger' : ''}.
         Andrang {formatPercent(spot.demand)}: wie viele Kunden kommen, gemessen an einem gewöhnlichen Spot (100 %).
       </Disclosure>

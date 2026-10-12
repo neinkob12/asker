@@ -59,7 +59,7 @@ function SpotRow(props: { spot: Spot }) {
             ? { label: runner.name, icon: 'runner', color: 'people' }
             : away
               ? { label: `${away.name} ${STATUS_NAMES[away.status]}`, icon: 'clock', color: 'warn' }
-              : { label: 'kein Läufer', icon: 'alert', color: 'warn' },
+              : null, // „leer“ steht schon rechts
           guard && { label: guard.name, icon: 'shield', color: 'danger' },
         ]}
       />

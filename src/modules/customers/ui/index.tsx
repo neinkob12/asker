@@ -64,6 +64,8 @@ function StandHere(props: { spotId: string }) {
   const elsewhere = playerSpot(state);
   const runner = activeRunnerAt(state, props.spotId);
   const away = isPlayerAway(state);
+  // Steht jemand an, den du nicht bedienen kannst, läuft auch der Verkauf von allein nicht (Ware fehlt).
+  const stuck = here && waitingAt(state, props.spotId).length > servableAt(state, props.spotId).length;
   const stand = (spotId: string | null) => dispatch({ type: 'customers.standAt', payload: { spotId } });
   return (
     <Group title="Selbst verkaufen" icon="runner" color="brand">
@@ -80,7 +82,13 @@ function StandHere(props: { spotId: string }) {
               icon="runner"
               color="brand"
               title="Du stehst hier"
-              meta={away ? 'Gerade unterwegs, danach verkaufst du weiter.' : 'Du bedienst die Kunden automatisch.'}
+              meta={
+                away
+                  ? 'Gerade unterwegs, danach verkaufst du weiter.'
+                  : stuck
+                    ? 'Dir fehlt die Ware, die Kunden warten.'
+                    : 'Der Verkauf läuft von allein.'
+              }
             />
           </ListItem>
         ) : (
@@ -94,12 +102,9 @@ function StandHere(props: { spotId: string }) {
             <ItemContent
               icon="runner"
               color={runner ? 'people' : 'brand'}
-              title={runner ? 'Mithelfen' : 'Selbst verkaufen'}
-              meta={
-                runner
-                  ? `${runner.name} verkauft hier, du kannst mithelfen.`
-                  : 'Stell dich hin, dann läuft der Verkauf von allein.'
-              }
+              // Nicht noch einmal „Selbst verkaufen“, so heißt schon die Gruppe.
+              title={runner ? 'Mithelfen' : 'Stell dich hin'}
+              meta={runner ? `${runner.name} verkauft hier.` : 'Dann läuft der Verkauf von allein.'}
             />
           </ListItem>
         )}
@@ -183,7 +188,8 @@ function SpotCustomers(props: { spotId: string }) {
                   meta={regular ? regular.name : customerTypeName(c.typeId)}
                   tags={[
                     { label: formatEuro(customerRevenue(c)), icon: 'cash', color: 'money' },
-                    {
+                    // Bei einer Einheit ist der Preis pro Einheit derselbe wie der ganze Betrag.
+                    c.amount > 1 && {
                       label: `${formatNumber(c.pricePerUnit, 1)} €/${getProduct(c.productId)?.unit ?? 'g'}`,
                       icon: 'tag',
                     },

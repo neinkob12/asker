@@ -388,6 +388,7 @@ interface HoverCard {
   root: HTMLElement;
   title: HTMLElement;
   sub: HTMLElement;
+  rows: HTMLElement;
   waiting: HTMLElement;
   seller: HTMLElement;
   price: HTMLElement;
@@ -405,27 +406,24 @@ function buildHoverCard(): HoverCard {
     return value;
   };
   const waiting = row('Wartend');
-  const seller = row('Verkauft von');
+  const seller = row('Verkauft');
   const price = row('Preis');
-  const foot = el('div', 'spot-hover__foot', 'Klick: im Handy öffnen ›');
+  const foot = el('div', 'spot-hover__foot', 'Klick: öffnen ›');
   root.append(title, sub, rows, foot);
-  return { root, title, sub, waiting, seller, price, foot };
+  return { root, title, sub, rows, waiting, seller, price, foot };
 }
 
 function fillHoverCard(card: HoverCard, state: GameState, spot: Spot): void {
   const active = isSpotActive(state, spot.id);
   setText(card.title, spot.name);
   setText(card.sub, `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`);
-  setText(card.foot, clickSaleCustomer(state, spot.id) ? 'Klick: verkaufen ›' : 'Klick: im Handy öffnen ›');
-  if (!active) {
-    setText(card.waiting, '–');
-    setText(card.seller, '–');
-    setText(card.price, '–');
-    return;
-  }
+  setText(card.foot, clickSaleCustomer(state, spot.id) ? 'Klick: verkaufen ›' : 'Klick: öffnen ›');
+  // Gesperrt: Name, Veedel und „gesperrt“ reichen, drei Zeilen mit „–“ sagten nichts.
+  card.rows.hidden = !active;
+  if (!active) return;
   const waiting = waitingAt(state, spot.id).length;
   const who = seller(state, spot.id);
   setText(card.waiting, waiting === 1 ? '1 Kunde' : `${waiting} Kunden`);
-  setText(card.seller, who.kind === 'runner' ? who.name : who.kind === 'self' ? 'dir selbst' : 'niemandem');
-  setText(card.price, `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))} / g`);
+  setText(card.seller, who.kind === 'runner' ? who.name : who.kind === 'self' ? 'du selbst' : 'niemand');
+  setText(card.price, `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))}/g`);
 }

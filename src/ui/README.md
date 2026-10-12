@@ -32,7 +32,7 @@ und Symbol, kein Aufklappen, kein Puls.
 
 - **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`;
   Schwarzgeld und sauberes Geld öffnen per Klick die Geldwäsche), Uhr-Kapsel mit Tempo und Menü (`'time'` ist seit
-  Auftrag 26 leer), die Kennzahlen (`'more'`) als Kacheln (Lager, Ruf · Reviere; beide klappen beim Drüberfahren oder
+  Auftrag 26 leer), die Kennzahlen (`'more'`) als Kacheln (Lager, Ruf, Reviere; alle klappen beim Drüberfahren oder
   Antippen eine Karte auf, `HudPill` mit `details`) und Warnungen (`'alert'`). Dazu die Kartensteuerung und die
   Überlagerungen der Module (Slot `map.overlay`).
 - **Alles andere läuft über das Spiel-Handy** (`phone/PhoneFrame.tsx`):
@@ -118,8 +118,9 @@ Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dial
 die Heat-Pille der Polizei mit fünf Flammen), oben in der Mitte die Uhr-Kapsel (Wochentag · Tag, Uhrzeit, Tempo als
 Segmente 40 × 36, Menü mit Verlauf, Suche, Spielständen, Einstellungen, Ton), oben rechts die Kennzahl-Kacheln:
 **Lager** („40 g Gras + 2 weitere“, Karte mit Aufstellung nach Produkt, Qualität und Lager, Knopf „Bestellen“) und
-**Ruf · Reviere** (Leiste 0–100 über `HudBar` mit Marken an den Stufen, Revierzahl „4/7“; Karte mit der Stufe, der
-darunter und darüber mit je einem Satz, und den eigenen Veedeln). Die Karte klappt beim Drüberfahren oder Antippen auf
+**Ruf** (Leiste 0–100 über `HudBar` mit Marken an den Stufen; Karte mit der Stufe, der darunter und darüber mit je
+einem Satz) und **Reviere** (Revierzahl „4/7“; Karte mit den eigenen Veedeln). Ruf und Reviere sind getrennt und
+anders gefärbt als „Rang“, damit man die drei nicht verwechselt. Die Karte klappt beim Drüberfahren oder Antippen auf
 (`HudPill` mit `details`, `detailsAction`). Ist die Kartenfläche schmal (Container-Query `hud`, unter 1000 px), rücken
 die Kacheln unter die Uhr. Am Handy-Bildschirm stehen Geld (Heat als eine Flamme mit Stufenwort) und Uhr kompakt
 nebeneinander, die Kacheln flach darunter; das Menü steht dort in der Kartensteuerung.
