@@ -9,7 +9,7 @@ import { enlist, generateProfile, getStaff, type StaffMember } from '../staff';
 import { getRelation, getSuppliers } from '../suppliers';
 import { addInfluence, controlledBy, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { FEATURE_STAGE, type TutorialFeature } from './config';
+import { FEATURE_STAGE, TUTORIAL_START_STOCK, type TutorialFeature } from './config';
 import {
   currentMission,
   LAST_STAGE,
@@ -117,6 +117,14 @@ describe('tutorial: Start und Stufen', () => {
     expect(sim.dispatch({ type: 'tutorial.start', payload: {} }).ok).toBe(false);
     sim.advance(60);
     expect(messages.thread(sim.state, PETER.id).some((m) => m.text.includes('Dafür gibt'))).toBe(false);
+  });
+
+  it('legt Startware ins Lager (Feedback vom 12.10.2026: 40 g waren zu schnell weg)', () => {
+    const before = getStock(createTestGame({ seed: 1 }).state, { productId: 'weed', warehouseId: DEFAULT_WAREHOUSE });
+    const sim = start();
+    expect(getStock(sim.state, { productId: 'weed', warehouseId: DEFAULT_WAREHOUSE })).toBe(
+      before + TUTORIAL_START_STOCK,
+    );
   });
 
   it('die Stufe steigt mit advance; eine Stufe mit Mission braucht erst die Mission', () => {

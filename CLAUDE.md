@@ -278,7 +278,9 @@ das Minispiel bleibt über Vorschau und Test-Spielstand spielbar.
 Feedback vom 12.10.2026: Alle Minispiele sind aus (Hauptschalter `MINIGAMES_ENABLED` in `minigames/config.ts`,
 `isMinigameReady` liefert dann false und jedes Modul bleibt beim Ablauf ohne Minispiel; in den Tests an über
 `minigames/test-setup.ts`). Spot-Marker sinken beim Herauszoomen stufenlos auf ihren Spot (`spotLift`, CSS-Variable
-`--spot-lift` am Kartencontainer), sonst wanderte die Blase am Stiel über die Karte.
+`--spot-lift` am Kartencontainer), sonst wanderte die Blase am Stiel über die Karte. Danach: Spot-Marker ohne flachen
+Bodenring und Schein, die Geduld zeigt ein schmaler Ring um die Blase, in 2D (`is-2d`) sitzt die Blase ohne Stiel auf
+dem Spot; das Tutorial legt `TUTORIAL_START_STOCK` (160 g) Startware drauf.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

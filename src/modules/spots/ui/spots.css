@@ -1,11 +1,12 @@
 /*
- * Spot-Marker im Look "Glas": Bodenring mit Geduld-Countdown, darüber eine runde Blase mit der Zahl der Wartenden,
- * daneben eine Glas-Plakette.
- * Aufbau (Anker unten = Spot): Der Ring liegt flach auf der Straße (ein Kreis, in der Höhe gestaucht wie in der
- * Kartenneigung), sein Bogen zeigt die Geduld des ungeduldigsten Kunden (--fill, 100 = frisch, 0 = geht gleich), darunter
- * ein weicher Schein. Vom Fußpunkt führt ein kurzer Stiel zur Blase (26 px).
+ * Spot-Marker im Look "Glas": runde Blase mit der Zahl der Wartenden, außen ein schmaler Ring für die Geduld, daneben
+ * eine Glas-Plakette.
+ * Aufbau (Anker unten = Spot): Vom Fußpunkt führt ein kurzer Stiel zur Blase (26 px). Der Ring liegt eng um die Blase,
+ * sein Bogen zeigt die Geduld des ungeduldigsten Kunden (--fill, 100 = frisch, 0 = geht gleich). Feedback vom
+ * 12.10.2026: kein flach gelegter Bodenring und kein Schein mehr, das war vor allem in 2D unübersichtlich.
  * Weit draußen (--spot-lift vom Kartencontainer, 1 = nah, 0 = weit, map.ts spotLift) sinkt die Blase stufenlos auf den
- * Spot und der Ring schrumpft: Sonst schwebte sie in festen Pixeln über dem Spot und wanderte beim Zoomen über die Karte.
+ * Spot: Sonst schwebte sie in festen Pixeln über dem Spot und wanderte beim Zoomen über die Karte. In der 2D-Ansicht
+ * (is-2d am Kartencontainer) sitzt sie immer ohne Stiel auf dem Spot.
  * Zustände über data-urgency: idle, waiting, urgent, raid (Tokens --spot-*). Nur Tokens verwenden.
  */
 @property --fill {
@@ -20,13 +21,12 @@
   --state-edge: var(--spot-idle-edge);
   --bubble: 26px;
   --stem: 13px;
-  --ring: 72px;
-  --ring-width: 6px;
-  --ring-squash: 0.56;
+  --ring-width: 3px;
+  --ring-gap: 2px;
   --lift: var(--spot-lift, 1);
   /* Unterkante der Blase über dem Spot: am Stiel (lift 1) bis mittig auf dem Spot (lift 0) */
   --sign-bottom: calc((var(--stem) + 4px) * var(--lift) - var(--bubble) / 2 * (1 - var(--lift)));
-  --ring-size: calc(var(--ring) * (0.6 + 0.4 * var(--lift)));
+  --ring-size: calc(var(--bubble) + 2 * (var(--ring-gap) + var(--ring-width)));
   position: relative;
   display: block;
   width: 36px;
@@ -56,22 +56,20 @@
   --state-edge: var(--spot-raid-edge);
 }
 
-/* Schein, Ring und Fußpunkt am Spot: Ring und Schein liegen mit der Mitte auf dem Spot */
-.spot-glow,
+/* 2D-Ansicht: Blase immer ohne Stiel mitten auf dem Spot */
+.shell-map.is-2d .spot-marker {
+  --lift: 0;
+}
+
+/* Ring und Puls liegen mit der Mitte auf der Blase (folgen --sign-bottom) */
 .spot-ring,
 .spot-pulse {
   position: absolute;
   left: 50%;
-  bottom: 0;
+  bottom: calc(var(--sign-bottom) + var(--bubble) / 2);
   border-radius: 50%;
-  transform: translate(-50%, 50%) scaleY(var(--ring-squash));
+  transform: translate(-50%, 50%);
   pointer-events: none;
-}
-.spot-glow {
-  width: calc(var(--ring-size) * 1.1);
-  height: calc(var(--ring-size) * 1.1);
-  background: radial-gradient(closest-side, var(--state-glow), transparent 96%);
-  opacity: 0.85;
 }
 /* Ring: Bogen in der Zustandsfarbe bis --fill Prozent, der Rest als blasse Spur */
 .spot-ring {
@@ -100,6 +98,7 @@
   background: var(--state-edge);
   box-shadow: 0 0 0 2px var(--spot-locked);
   transform: translateX(-50%);
+  opacity: var(--lift);
 }
 .spot-stem {
   position: absolute;
@@ -203,11 +202,11 @@
 @keyframes spot-pulse {
   0% {
     opacity: 0.8;
-    transform: translate(-50%, 50%) scaleY(var(--ring-squash)) scale(0.9);
+    transform: translate(-50%, 50%) scale(0.95);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, 50%) scaleY(var(--ring-squash)) scale(1.45);
+    transform: translate(-50%, 50%) scale(1.6);
   }
 }
 
@@ -244,10 +243,10 @@
   display: none;
 }
 .spot-marker.is-right .spot-plate {
-  left: calc(50% + var(--bubble) / 2 + 6px);
+  left: calc(50% + var(--ring-size) / 2 + 4px);
 }
 .spot-marker.is-left .spot-plate {
-  right: calc(50% + var(--bubble) / 2 + 6px);
+  right: calc(50% + var(--ring-size) / 2 + 4px);
 }
 .spot-crew,
 .spot-boss {
@@ -275,12 +274,10 @@
   background: var(--cat-people-soft);
 }
 
-/* Gesperrt: kleine dunkle Blase mit Schloss auf blassem Ring, ohne Plakette und ohne Schein */
+/* Gesperrt: kleine dunkle Blase mit Schloss, ohne Ring und ohne Plakette */
 .spot-marker.is-locked {
   --bubble: 20px;
   --stem: 9px;
-  --ring: 44px;
-  --ring-width: 3px;
 }
 .spot-marker.is-locked .spot-bubble {
   background: var(--spot-locked-edge);
@@ -291,11 +288,9 @@
 }
 .spot-marker.is-locked .spot-badge,
 .spot-marker.is-locked .spot-plate,
-.spot-marker.is-locked .spot-glow {
+.spot-marker.is-locked .spot-ring,
+.spot-marker.is-locked .spot-pulse {
   display: none;
-}
-.spot-marker.is-locked .spot-ring {
-  background: var(--spot-locked-edge);
 }
 .spot-marker.is-locked .spot-lock {
   display: block;
@@ -388,14 +383,10 @@
   .spot-marker {
     --bubble: 24px;
     --stem: 12px;
-    --ring: 64px;
-    --ring-width: 5px;
   }
   .spot-marker.is-locked {
     --bubble: 18px;
     --stem: 8px;
-    --ring: 40px;
-    --ring-width: 3px;
   }
   .spot-badge {
     font-size: 15px;

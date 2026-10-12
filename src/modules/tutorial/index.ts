@@ -38,7 +38,15 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { getWarehouses, productName, storeFitting } from '../goods';
+import {
+  DEFAULT_PRODUCT,
+  DEFAULT_WAREHOUSE,
+  getWarehouses,
+  productName,
+  START_QUALITY,
+  START_UNIT_COST,
+  storeFitting,
+} from '../goods';
 import { getSpot, getSpots, isSpotActive, spotCity } from '../spots';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { neighborsOf } from '../veedel';
@@ -60,6 +68,7 @@ import {
   TUTORIAL_STAGE2_SPOTS,
   TUTORIAL_START_MONEY,
   TUTORIAL_START_SPOT,
+  TUTORIAL_START_STOCK,
   type TutorialFeature,
 } from './config';
 import { MISSIONS, type MissionDef, type MissionState, missionById, missionForStage } from './missions';
@@ -79,6 +88,7 @@ export {
   TUTORIAL_SPOT_COST,
   TUTORIAL_START_MONEY,
   TUTORIAL_START_SPOT,
+  TUTORIAL_START_STOCK,
   type TutorialFeature,
 } from './config';
 export {
@@ -373,6 +383,14 @@ function start(ctx: Ctx): CommandResult {
   t.mission = null;
   t.skipped = false;
   wallet.earn(ctx, TUTORIAL_START_MONEY, 'dirty', 'Startgeld', 'income.other');
+  // Mehr Startware (gleiche Qualität und Einkaufspreis wie der Startbestand, landet also in derselben Partie).
+  storeFitting(ctx, {
+    warehouseId: DEFAULT_WAREHOUSE,
+    productId: DEFAULT_PRODUCT,
+    amount: TUTORIAL_START_STOCK,
+    quality: START_QUALITY,
+    unitCost: START_UNIT_COST,
+  });
   // Nur der Neumarkt bleibt offen; die anderen kommen ab Stufe 2 für 350 € wieder (Zülpicher Platz und Rudolfplatz
   // gleich, der Rest mit der Nachbarschaft in Stufe 6).
   t.lockedAtStart = [];
