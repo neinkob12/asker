@@ -281,6 +281,10 @@ Feedback vom 12.10.2026: Alle Minispiele sind aus (Hauptschalter `MINIGAMES_ENAB
 `--spot-lift` am Kartencontainer), sonst wanderte die Blase am Stiel über die Karte. Danach: Spot-Marker ohne flachen
 Bodenring und Schein, die Geduld zeigt ein schmaler Ring um die Blase, in 2D (`is-2d`) sitzt die Blase ohne Stiel auf
 dem Spot; das Tutorial legt `TUTORIAL_START_STOCK` (160 g) Startware drauf.
+Die eigentliche Ursache des Verrutschens: `.spot-marker { position: relative }` schlug im Build (andere CSS-Reihenfolge
+als im Dev-Server) MapLibres `position: absolute`, die Marker lagen im Seitenfluss untereinander. `src/map/map.css`
+erzwingt deshalb `.maplibregl-map .maplibregl-marker { position: absolute }`; Marker-Klassen setzen nie selbst `position`.
+Ein Klick auf einen Marker schaltet den Doppelklick-Zoom kurz ab (`holdDoubleClickZoom` in `src/map/markers.ts`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

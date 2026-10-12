@@ -27,7 +27,7 @@
   /* Unterkante der Blase über dem Spot: am Stiel (lift 1) bis mittig auf dem Spot (lift 0) */
   --sign-bottom: calc((var(--stem) + 4px) * var(--lift) - var(--bubble) / 2 * (1 - var(--lift)));
   --ring-size: calc(var(--bubble) + 2 * (var(--ring-gap) + var(--ring-width)));
-  position: relative;
+  /* Keine eigene position: MapLibre legt Marker absolut (map.css), relative stapelte sie im Seitenfluss. */
   display: block;
   width: 36px;
   height: calc(var(--bubble) + var(--stem) + 5px);
