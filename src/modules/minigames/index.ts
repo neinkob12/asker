@@ -38,6 +38,7 @@ import type { MinigameBy, MinigameKind, MinigameOrigin, MinigameStats, Minigames
 export {
   DEFAULT_WIN_AT,
   MINIGAME_TIMEOUT,
+  MINIGAMES_ENABLED,
   PICK_MAX_LENGTH,
   PICKS_MAX,
   RIGHT_HAND_LOSE_SCORE,

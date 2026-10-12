@@ -46,6 +46,19 @@ import { patienceFill } from './ringModel';
 
 /** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
 const NAMES_ZOOM = 13;
+/**
+ * Blase am Stiel nur nah dran (Feedback vom 12.10.2026: beim Herauszoomen wanderten die Spots). Der Stiel hebt die Blase
+ * um feste Pixel über den Spot; weit draußen sind das Hunderte Meter, die Blase saß über dem Nachbar-Veedel und rutschte
+ * beim Zoomen über die Karte. Darum sinkt sie zwischen diesen Zoomstufen stufenlos auf den Spot (Lift 1 bis 0), der
+ * Ring wird kleiner. Die CSS-Variable --spot-lift am Kartencontainer steuert das (spots.css).
+ */
+const LIFT_ZOOM = { low: 10.5, high: 12.5 } as const;
+
+/** Wie hoch die Blase am Stiel steht (1 = ganz, 0 = mitten auf dem Spot). */
+export function spotLift(zoom: number): number {
+  return Math.min(1, Math.max(0, (zoom - LIFT_ZOOM.low) / (LIFT_ZOOM.high - LIFT_ZOOM.low)));
+}
+
 /** Hotspots leiser als früher: Den Zustand zeigt jetzt der Ring. */
 const HOTSPOT_SCALE = 0.45;
 
@@ -174,7 +187,16 @@ export const spotsLayer: MapLayer = {
     let lastHotspots = '';
     let hovered: string | null = null;
     const container = ctx.map.getContainer();
-    const onZoom = () => container.classList.toggle('spots-far', ctx.map.getZoom() < NAMES_ZOOM);
+    let lastLift = '';
+    const onZoom = () => {
+      const zoom = ctx.map.getZoom();
+      container.classList.toggle('spots-far', zoom < NAMES_ZOOM);
+      // Nur bei Änderung setzen: Jede neue Variable lässt alle Marker neu rechnen.
+      const lift = spotLift(zoom).toFixed(2);
+      if (lift === lastLift) return;
+      lastLift = lift;
+      container.style.setProperty('--spot-lift', lift);
+    };
     ctx.map.on('zoom', onZoom);
     onZoom();
 
@@ -352,6 +374,7 @@ export const spotsLayer: MapLayer = {
       },
       destroy() {
         ctx.map.off('zoom', onZoom);
+        container.style.removeProperty('--spot-lift');
         hotspots.remove();
         hoverCard.marker.remove();
         for (const entry of markers.values()) entry.marker.remove();

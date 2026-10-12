@@ -1,6 +1,13 @@
 // Einstellbare Werte der Minispiele (Auftrag 44).
 
 /**
+ * Hauptschalter (Feedback vom 12.10.2026: erst einmal alle aus). Aus: startMinigame liefert null, und jedes Modul
+ * bleibt beim alten Ablauf ohne Minispiel (wie bei einer Art mit ready: false). Die Vorschau ?minispiel=<art> geht
+ * weiter. In den Tests ist er an (test-setup.ts), damit die Minispiele beim Wiedereinschalten noch stimmen.
+ */
+export const MINIGAMES_ENABLED = false;
+
+/**
  * Frist in Spielminuten: Ohne Oberfläche (Tests, Bot, Autopilot) läuft ein Minispiel danach als timeout ab, und es gilt
  * das alte Verhalten. Kürzer als die Frist der Konfrontationen (DECISION_TIMEOUT 120), damit die Konfrontation danach
  * noch wie gewohnt auswürfeln kann. Mit Oberfläche steht die Spielzeit still, solange das Minispiel offen ist.

@@ -12,6 +12,7 @@ import {
   DIFFICULTY,
   HISTORY_LIMIT,
   MINIGAME_TIMEOUT,
+  MINIGAMES_ENABLED,
   PICK_MAX_LENGTH,
   PICKS_MAX,
   RIGHT_HAND_CHANCE,
@@ -35,9 +36,9 @@ export function initialState(): MinigamesState {
   return { active: [], history: [], stats: emptyStats(), nextId: 1 };
 }
 
-/** Ist die Art scharf (ready: true)? Unbekannte Arten nie. */
+/** Ist die Art scharf (Hauptschalter an und ready: true)? Unbekannte Arten nie. */
 export function isMinigameReady(kind: string): boolean {
-  return MINIGAME_KINDS[kind as MinigameKind]?.ready === true;
+  return MINIGAMES_ENABLED && MINIGAME_KINDS[kind as MinigameKind]?.ready === true;
 }
 
 export function getChallenge(state: GameState, id: number): Challenge | undefined {

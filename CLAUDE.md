@@ -275,6 +275,10 @@ Feedback vom 08.10.2026: Ein Klick auf einen Spot mit wartenden Kunden verkauft 
 Ware bedienen kann (`clickSaleCustomer` in `spots/ui/map.ts`, fehlt die Ware, meldet `customers.serve` das); ohne
 Kunden öffnet er das Spot-Fenster. Zivis kommen nicht mehr von selbst (`UNDERCOVER_SHIFTS` in `police/config.ts`),
 das Minispiel bleibt über Vorschau und Test-Spielstand spielbar.
+Feedback vom 12.10.2026: Alle Minispiele sind aus (Hauptschalter `MINIGAMES_ENABLED` in `minigames/config.ts`,
+`isMinigameReady` liefert dann false und jedes Modul bleibt beim Ablauf ohne Minispiel; in den Tests an über
+`minigames/test-setup.ts`). Spot-Marker sinken beim Herauszoomen stufenlos auf ihren Spot (`spotLift`, CSS-Variable
+`--spot-lift` am Kartencontainer), sonst wanderte die Blase am Stiel über die Karte.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
