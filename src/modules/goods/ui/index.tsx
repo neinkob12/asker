@@ -15,6 +15,8 @@ import {
   Empty,
   Group,
   HudPill,
+  Icon,
+  type IconName,
   ItemContent,
   iconElement,
   List,
@@ -63,6 +65,8 @@ import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
+import { getCargo, getTrips, placeCity } from '../../logistics';
+import { shipmentItems, shipmentsInTransit } from '../../suppliers';
 import { tutorialAllows } from '../../tutorial';
 
 declare module '../../../ui' {
@@ -154,43 +158,114 @@ const StockHud = memo(function StockHud() {
   );
 });
 
-/** Aufstellung des Lagers in der aufgeklappten Karte der HUD-Kachel (zeichnet sich selbst neu, solange sie offen ist). */
+/**
+ * Aussehen jeder Ware in der Lager-Karte im HUD: Icon aus dem Icon-Set und Kürzel für die Sorten (ohne Namen unter dem
+ * Icon sind Gras, OG Kush und Amnesia Haze sonst kaum auseinanderzuhalten). Die Farbe steht in goods.css
+ * (data-product).
+ */
+const PRODUCT_LOOK: Record<string, { icon: IconName; badge?: string }> = {
+  weed: { icon: 'cannabis' },
+  kush: { icon: 'cannabis', badge: 'OG' },
+  haze: { icon: 'cannabis', badge: 'AH' },
+  hash: { icon: 'hashish' },
+  vape: { icon: 'vape' },
+  edibles: { icon: 'cake' },
+  oil: { icon: 'oil' },
+};
+/** Raster 3×2 in fester Reihenfolge, auch leere Sorten (blass): So sieht man, was fehlt. */
+const GRID_PRODUCTS = ['weed', 'kush', 'haze', 'hash', 'vape', 'edibles'];
+/** Waren, die nur auftauchen, wenn welche da oder unterwegs ist. */
+const OPTIONAL_PRODUCTS = ['oil'];
+
+/** Menge kurz für die schmale Kachel: "40 St." statt "40 Stück". */
+const shortAmount = (productId: string, amount: number) =>
+  formatProductAmount(productId, amount).replace(/ Stück$/, ' St.');
+
+/**
+ * Ware, die für die aktive Stadt unterwegs ist: Lieferungen der Lieferanten, Ware am Kai und Abholungen vom Kai.
+ * Fahrten zwischen eigenen Lagern sind keine neue Ware und zählen nicht.
+ */
+const incomingView = memoState((state) => {
+  const cityId = activeCity(state);
+  const out: Record<string, number> = {};
+  const add = (productId: string, amount: number) => {
+    out[productId] = (out[productId] ?? 0) + amount;
+  };
+  for (const s of shipmentsInTransit(state, cityId))
+    for (const item of shipmentItems(s)) add(item.productId, item.amount);
+  for (const c of getCargo(state, cityId)) add(c.productId, c.amount);
+  for (const t of getTrips(state)) {
+    if (t.kind === 'pickup' && placeCity(state, t.toId) === cityId)
+      for (const item of t.items) add(item.productId, item.amount);
+  }
+  return out;
+});
+
+/**
+ * Aufstellung des Lagers in der aufgeklappten Karte der HUD-Kachel: ein Raster mit Icon und Menge je Ware, darunter
+ * klein, was unterwegs ist. Die Kacheln haben eine feste Höhe, Icon und Menge stehen in der Mitte, die Zeile „+ …“
+ * hängt darunter und verschiebt nichts.
+ */
 function StockFlyout() {
   const ui = useUi();
-  const lines = useGameSelector(
+  const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
-      return rows.map((r) => {
-        const inWarehouses = warehouses.filter(
-          (w) => getStock(state, { warehouseId: w.id, productId: r.productId }) > 0,
-        );
-        const where =
-          warehouses.length > 1 && inWarehouses.length > 0
-            ? ` (${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')})`
-            : '';
+      const incoming = incomingView(state);
+      const ids = [
+        ...GRID_PRODUCTS,
+        ...OPTIONAL_PRODUCTS.filter((id) => rows.some((r) => r.productId === id) || (incoming[id] ?? 0) > 0),
+      ];
+      return ids.map((productId) => {
+        const row = rows.find((r) => r.productId === productId);
+        const amount = row?.amount ?? 0;
+        const plus = incoming[productId] ?? 0;
+        const where = warehouses
+          .filter((w) => warehouses.length > 1 && getStock(state, { warehouseId: w.id, productId }) > 0)
+          .map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, ''));
+        const title = [
+          `${productName(productId)}: ${formatProductAmount(productId, amount)}`,
+          row ? `${qualityTier(row.quality).name} ${formatPercent(row.quality)}` : '',
+          where.length > 0 ? `in ${where.join(', ')}` : '',
+          plus > 0 ? `${formatProductAmount(productId, plus)} unterwegs` : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
         return {
-          productId: r.productId,
-          text: stockText(r),
-          meta: `${qualityTier(r.quality).name} ${formatPercent(r.quality)}${where}`,
+          productId,
+          amount: shortAmount(productId, amount),
+          plus: plus > 0 ? `+${shortAmount(productId, plus)}` : '',
+          empty: amount <= 0,
+          title,
         };
       });
     },
-    (a, b) => a.length === b.length && a.every((line, i) => shallowEqual(line, b[i])),
+    (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
   return (
     <div class="goods-flyout">
-      {lines.length === 0 ? (
-        <p class="goods-flyout__empty">Nichts auf Lager. Zeit für Nachschub.</p>
-      ) : (
-        <ul class="goods-flyout__rows">
-          {lines.map((line) => (
-            <li key={line.productId}>
-              <strong>{line.text}</strong>
-              <span>{line.meta}</span>
+      <ul class="goods-stock">
+        {cells.map((cell) => {
+          const look = PRODUCT_LOOK[cell.productId] ?? { icon: 'boxes' };
+          return (
+            <li
+              key={cell.productId}
+              class={`goods-stock__cell${cell.empty ? ' is-empty' : ''}`}
+              data-product={cell.productId}
+              title={cell.title}
+            >
+              <span class="goods-stock__main">
+                <span class={`goods-stock__icon${look.badge ? ' has-badge' : ''}`}>
+                  <Icon name={look.icon} size={24} />
+                  {look.badge && <span class="goods-stock__badge">{look.badge}</span>}
+                </span>
+                <strong>{cell.amount}</strong>
+              </span>
+              {cell.plus && <span class="goods-stock__plus">{cell.plus}</span>}
             </li>
-          ))}
-        </ul>
-      )}
+          );
+        })}
+      </ul>
       <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
         Bestellen
       </button>

@@ -1222,6 +1222,11 @@ kbd {
     left: 0;
     width: min(300px, calc(100vw - 2 * var(--gap)));
   }
+  /* Kacheln der rechten Spalte (zwei pro Reihe) klappen nach links auf, sonst ragt die Karte aus dem Bild. */
+  .hud-tiles > .hud-pill-wrap:nth-child(even) .hud-flyout {
+    right: 0;
+    left: auto;
+  }
   .hud-capsule--money {
     flex-direction: row;
     align-items: center;
