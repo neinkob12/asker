@@ -52,6 +52,29 @@ export function parkMarkers(map: MapLibreMap): (reattach?: boolean) => void {
   };
 }
 
+/** So lange nach einem Klick auf einen Marker zoomt ein zweiter Klick bzw. Tipp die Karte nicht. */
+const DOUBLE_CLICK_HOLD_MS = 500;
+const doubleClickHold = new WeakMap<MapLibreMap, ReturnType<typeof setTimeout>>();
+
+/**
+ * Zwei schnelle Klicks auf einen Marker (zwei Kunden bedienen) sind für MapLibre ein Doppelklick und zoomten die Karte
+ * hinein (Feedback vom 12.10.2026). Darum ist der Doppelklick-Zoom (auch Doppeltipp am Touch-Gerät) nach einem
+ * Marker-Klick kurz aus; war er schon aus, bleibt er es.
+ */
+function holdDoubleClickZoom(map: MapLibreMap): void {
+  const pending = doubleClickHold.get(map);
+  if (pending === undefined && !map.doubleClickZoom.isEnabled()) return;
+  if (pending !== undefined) clearTimeout(pending);
+  map.doubleClickZoom.disable();
+  doubleClickHold.set(
+    map,
+    setTimeout(() => {
+      doubleClickHold.delete(map);
+      map.doubleClickZoom.enable();
+    }, DOUBLE_CLICK_HOLD_MS),
+  );
+}
+
 /** Marker mit eigenem HTML-Element anlegen und zur Karte hinzufügen. */
 export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { marker: Marker; element: HTMLElement } {
   const element = document.createElement(options.tag ?? 'div');
@@ -71,6 +94,7 @@ export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { m
       // weiterreichen, damit GameMap den Ort nimmt, und der Marker öffnet nichts. Sonst blieb die Auswahl offen.
       if (map.getContainer().classList.contains('is-picking')) return;
       e.stopPropagation();
+      holdDoubleClickZoom(map);
       onClick();
     });
   }

@@ -64,6 +64,15 @@ button.map-place:focus-visible .map-place-icon {
 .shell-map.zoomed-out .map-place-name {
   display: none;
 }
+/* Marker liegen immer absolut oben links im Kartencontainer, MapLibre setzt nur noch translate. Die Regel steht mit
+   höherer Spezifität hier, weil eine Modul-Klasse mit position (z.B. .spot-marker { position: relative }) sonst je nach
+   Reihenfolge der CSS-Dateien gewinnt: Im Build lagen die Marker dann im Seitenfluss untereinander und standen um ein
+   paar hundert Pixel versetzt (Feedback vom 12.10.2026, „Spots verschieben sich beim Rauszoomen“). */
+.maplibregl-map .maplibregl-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
 /* Deutschland-Ansicht: Marker, die nur in der Stadt Sinn ergeben (addHtmlMarker near), liegen sonst auf den Stadt-Karten. */
 .shell-map.is-far .map-near {
   display: none;

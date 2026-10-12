@@ -40,14 +40,24 @@ function fakeElement() {
 }
 
 /** Karte, deren Container die Klasse is-picking trägt, solange picking.on wahr ist (wie GameMap.pickLocation). */
-function fakeMap(picking: { on: boolean }) {
+function fakeMap(picking: { on: boolean }, zoom = { enabled: true }) {
   return {
     getContainer: () => ({ classList: { contains: (name: string) => name === 'is-picking' && picking.on } }),
+    doubleClickZoom: {
+      isEnabled: () => zoom.enabled,
+      enable: () => {
+        zoom.enabled = true;
+      },
+      disable: () => {
+        zoom.enabled = false;
+      },
+    },
   } as unknown as MapLibreMap;
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('Klick auf einen Marker während der Kartenauswahl', () => {
@@ -72,5 +82,45 @@ describe('Klick auf einen Marker während der Kartenauswahl', () => {
     picking.on = true;
     expect(element.click()).not.toHaveBeenCalled();
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Zwei schnelle Klicks auf einen Marker', () => {
+  it('zoomen die Karte nicht: Doppelklick-Zoom ist kurz aus und kommt danach wieder', async () => {
+    vi.useFakeTimers();
+    const element = fakeElement();
+    vi.stubGlobal('document', { createElement: () => element });
+    const { addHtmlMarker } = await import('./markers');
+    const zoom = { enabled: true };
+    addHtmlMarker(fakeMap({ on: false }, zoom), {
+      position: { lng: 6.95, lat: 50.94 },
+      className: 'spot-marker',
+      tag: 'button',
+      onClick: () => {},
+    });
+    element.click();
+    expect(zoom.enabled).toBe(false);
+    element.click();
+    vi.advanceTimersByTime(400);
+    expect(zoom.enabled).toBe(false);
+    vi.advanceTimersByTime(200);
+    expect(zoom.enabled).toBe(true);
+  });
+
+  it('lässt einen schon abgeschalteten Doppelklick-Zoom aus', async () => {
+    vi.useFakeTimers();
+    const element = fakeElement();
+    vi.stubGlobal('document', { createElement: () => element });
+    const { addHtmlMarker } = await import('./markers');
+    const zoom = { enabled: false };
+    addHtmlMarker(fakeMap({ on: false }, zoom), {
+      position: { lng: 6.95, lat: 50.94 },
+      className: 'spot-marker',
+      tag: 'button',
+      onClick: () => {},
+    });
+    element.click();
+    vi.advanceTimersByTime(1000);
+    expect(zoom.enabled).toBe(false);
   });
 });
