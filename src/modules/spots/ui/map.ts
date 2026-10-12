@@ -1,6 +1,7 @@
-// Spot-Marker im Look "Glas": ein Ring flach auf der Straße, am Fuß ein Punkt, darüber an einem kurzen Stiel eine runde
-// Blase mit der Zahl der Wartenden. Die Farbe zeigt den Zustand (ruhig, Kunden warten, dringend, Razzia/Überfall), der
-// Bogen des Rings die Geduld des ungeduldigsten Kunden: voll = frisch, fast leer = geht gleich (ringModel.ts). Daneben
+// Spot-Marker im Look "Glas": am Fuß ein Punkt, darüber an einem kurzen Stiel eine runde Blase mit der Zahl der
+// Wartenden, eng darum ein schmaler Ring. Die Farbe zeigt den Zustand (ruhig, Kunden warten, dringend, Razzia/Überfall),
+// der Bogen des Rings die Geduld des ungeduldigsten Kunden: voll = frisch, fast leer = geht gleich (ringModel.ts).
+// In 2D und weit draußen sitzt die Blase ohne Stiel auf dem Spot (spots.css). Daneben
 // eine Plakette aus Glas mit Läufer (oder du) und Leutnant; Seite und Versatz kommen aus spots/config.ts
 // (SPOT_LABELS), damit sich in der Innenstadt nichts überdeckt. Gesperrte Spots sind kleine dunkle Blasen mit Schloss
 // und einem blassen Ring, ohne Plakette. Eigene Spots haben eine gestrichelte Kante und einen goldenen Fußpunkt.
@@ -52,7 +53,7 @@ const NAMES_ZOOM = 13;
  * beim Zoomen über die Karte. Darum sinkt sie zwischen diesen Zoomstufen stufenlos auf den Spot (Lift 1 bis 0), der
  * Ring wird kleiner. Die CSS-Variable --spot-lift am Kartencontainer steuert das (spots.css).
  */
-const LIFT_ZOOM = { low: 10.5, high: 12.5 } as const;
+const LIFT_ZOOM = { low: 12, high: 13.5 } as const;
 
 /** Wie hoch die Blase am Stiel steht (1 = ganz, 0 = mitten auf dem Spot). */
 export function spotLift(zoom: number): number {
@@ -296,7 +297,6 @@ export const spotsLayer: MapLayer = {
         anchor: 'bottom',
         title: spot.name,
         children: [
-          el('span', 'spot-glow'),
           el('span', 'spot-ring'),
           el('span', 'spot-pulse'),
           el('span', 'spot-foot'),

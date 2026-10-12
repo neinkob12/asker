@@ -62,6 +62,8 @@ export {
   QUALITY_TIERS,
   SHORTAGE_DAYS,
   STANDARD_QUALITY,
+  START_QUALITY,
+  START_UNIT_COST,
   UPGRADE_KINDS,
   type UpgradeDef,
   type UpgradeLevel,

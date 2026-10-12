@@ -43,6 +43,12 @@ export const LAST_STAGE = 12;
 /** Schwarzgeld, das es mit dem Tutorial zusätzlich gibt (mit den 1.500 € aus dem Kern 2.200 €). */
 export const TUTORIAL_START_MONEY = 700;
 
+/**
+ * Ware, die es mit dem Tutorial zusätzlich gibt (Gramm Gras im Startlager, mit den 40 g aus goods 200 g). Feedback vom
+ * 12.10.2026: Mit 40 g war das Lager oft leer, bevor die erste Bestellung möglich war.
+ */
+export const TUTORIAL_START_STOCK = 160;
+
 /** Der einzige Spot am Anfang; alle anderen offenen Kölner Spots sperrt das Tutorial beim Start (lockedAtStart). */
 export const TUTORIAL_START_SPOT = 'neumarkt';
 /** Stufe 2: Diese beiden stehen zum Verkauf, je TUTORIAL_SPOT_COST. */
