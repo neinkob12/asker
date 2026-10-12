@@ -40,7 +40,7 @@ import {
   slotContributions,
 } from '../registry';
 import { TAB_APP_PREFIX, type UiApi, type UiState } from '../runtime';
-import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout';
+import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice, useMapFirst } from '../shell/layout';
 import { collectAdvice } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
@@ -609,7 +609,7 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
 }
 
 /** Bildschirm des offenen Handys: Seitenstapel, Statusleiste, Rückmeldung, Home-Balken. */
-function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean }) {
+function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean; sheet?: boolean }) {
   const { ui, api } = useRuntime();
   const inCall = messages.ringingCalls(props.state).length > 0 || ui.call !== null;
   const screen = useRef<HTMLDivElement>(null);
@@ -633,10 +633,10 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
       <ErrorBoundary name="Anruf" silent>
         <CallScreen state={props.state} />
       </ErrorBoundary>
-      {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
+      {props.sheet ? null : props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
       {/* Während eines Anrufs nichts über dem Anrufer. */}
       {!inCall && <PhoneErrorNotice />}
-      {props.mobile ? (
+      {props.sheet ? null : props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
         <nav class="phone__nav">
@@ -662,10 +662,12 @@ export function PhoneFrame() {
   const state = runtime.state;
   const mobile = useIsMobile();
   const device = useIsPhoneDevice();
+  const mapFirst = useMapFirst();
   if (!state) return null;
   const unread = messages.unreadCount(state);
   // Eine Konfrontation über der Kartenfläche pausiert das Spiel: Das Handy ist dann abgedunkelt und gesperrt.
   const locked = dialogLocksPhone(ui.dialog?.id);
+  if (mapFirst) return <MapFirstPhone state={state} unread={unread} locked={locked} device={device} />;
   if (!ui.phone.open) {
     return (
       <>
@@ -697,5 +699,147 @@ export function PhoneFrame() {
         </button>
       )}
     </section>
+  );
+}
+
+/*
+ * Prototyp „Karte zuerst“ (Handy-Bildschirm, `?ui=karte`): Die Karte bleibt der Grund. Das Handy ist ein Blatt von
+ * unten mit zwei Höhen (halb: Karte bleibt oben sichtbar, ganz: bis unter das HUD), darunter eine feste Tab-Leiste.
+ * Ein Tab öffnet seine App im Blatt, „Karte“ schiebt das Blatt weg, „Mehr“ zeigt alle Apps. Ziehen am Griff wechselt
+ * die Höhe oder schließt. Die Seiten selbst sind dieselben wie im Spiel-Handy.
+ */
+type SheetDetent = 'half' | 'full';
+
+interface MapFirstTab {
+  label: string;
+  icon: string;
+  /** Wurzel im Seitenstapel, an der der Tab erkennt, dass er aktiv ist (null = Karte, 'home' = Mehr). */
+  match: { kind: NavEntry['kind']; id: string } | null;
+  open: (api: UiApi) => void;
+}
+
+const MAP_FIRST_TABS: MapFirstTab[] = [
+  { label: 'Karte', icon: 'map', match: null, open: (api) => api.closePhone() },
+  {
+    label: 'Chats',
+    icon: 'messages',
+    match: { kind: 'app', id: 'core.messages' },
+    open: (api) => api.openPhone('core.messages'),
+  },
+  {
+    label: 'Einkauf',
+    icon: 'truck',
+    match: { kind: 'app', id: 'suppliers.app' },
+    open: (api) => api.openPhone('suppliers.app'),
+  },
+  { label: 'Leute', icon: 'users', match: { kind: 'tab', id: 'staff' }, open: (api) => api.selectTab('staff') },
+  {
+    label: 'Kasse',
+    icon: 'wallet',
+    match: { kind: 'app', id: 'finance.app' },
+    open: (api) => api.openPhone('finance.app'),
+  },
+  { label: 'Mehr', icon: 'grid', match: { kind: 'home', id: 'home' }, open: (api) => api.openPhone(null) },
+];
+
+function activeTab(ui: UiState): MapFirstTab | null {
+  if (!ui.phone.open) return MAP_FIRST_TABS[0];
+  const root = ui.phone.stack[1] ?? ui.phone.stack[0];
+  return (
+    MAP_FIRST_TABS.find((t) => t.match && t.match.kind === root.kind && t.match.id === root.id) ??
+    (root.kind === 'home' ? MAP_FIRST_TABS[MAP_FIRST_TABS.length - 1] : null)
+  );
+}
+
+function MapFirstPhone(props: { state: GameState; unread: number; locked: boolean; device: boolean }) {
+  const runtime = useRuntime();
+  const { ui, api } = runtime;
+  const [detent, setDetent] = useState<SheetDetent>('half');
+  const sheet = useRef<HTMLElement>(null);
+  const open = ui.phone.open;
+  // Jedes Öffnen aus der Karte heraus beginnt halb hoch: Die Karte bleibt sichtbar.
+  useEffect(() => {
+    if (open) setDetent('half');
+  }, [open]);
+  const current = activeTab(ui);
+  const top = collectAdvice(props.state)[0];
+
+  const onGrab = (e: PointerEvent) => {
+    const el = sheet.current;
+    if (!el || !e.isPrimary || e.button !== 0) return;
+    startDrag(e, e.currentTarget as HTMLElement, {
+      axis: 'y',
+      accept: () => true,
+      onMove: ({ dy }) => {
+        el.style.transition = 'none';
+        el.style.transform = `translateY(${detent === 'full' ? Math.max(dy, -20) : Math.max(dy, -window.innerHeight * 0.4)}px)`;
+      },
+      onEnd: ({ dy, vy }, cancelled) => {
+        el.style.transition = '';
+        el.style.transform = '';
+        if (cancelled) return;
+        const fling = vy * 1000; // px/s
+        if (dy < -60 || fling < -600) setDetent('full');
+        else if (dy > 80 || fling > 600) {
+          if (detent === 'full' && dy < 260) setDetent('half');
+          else api.closePhone();
+        }
+      },
+    });
+  };
+
+  return (
+    <>
+      {!open && <StatusPill floating />}
+      {!open && top && (
+        <button type="button" class="mapfirst-hint" onClick={() => (top.action ? top.action(api) : api.openPhone())}>
+          <IconChip icon={top.icon} color="brand" solid size="sm" shape="tile" />
+          <span class="mapfirst-hint__title">{top.title}</span>
+          <Icon name="chevronRight" />
+        </button>
+      )}
+      {open && (
+        <section
+          ref={sheet}
+          class={`phone phone--sheet is-${detent} ${props.locked ? 'is-locked' : ''}`}
+          data-tour="phone"
+          aria-label="Handy"
+          inert={props.locked}
+        >
+          <button
+            type="button"
+            class="mapfirst-grabber"
+            onPointerDown={(e) => onGrab(e as unknown as PointerEvent)}
+            onClick={() => setDetent(detent === 'half' ? 'full' : 'half')}
+            aria-label={detent === 'half' ? 'Blatt ganz öffnen' : 'Blatt halb öffnen'}
+          >
+            <span />
+          </button>
+          <div class="phone__device">
+            <PhoneScreenArea state={props.state} mobile device={props.device} sheet />
+          </div>
+        </section>
+      )}
+      <nav class="mapfirst-tabs" aria-label="Bereiche">
+        {MAP_FIRST_TABS.map((tab) => {
+          const active = current === tab;
+          return (
+            <button
+              type="button"
+              key={tab.label}
+              class={`mapfirst-tab ${active ? 'is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => (active && tab.match ? setDetent(detent === 'half' ? 'full' : 'half') : tab.open(api))}
+            >
+              <span class="mapfirst-tab__icon">
+                <Icon name={tab.icon} />
+                {tab.label === 'Chats' && <Badge count={props.unread} />}
+              </span>
+              <span class="mapfirst-tab__label">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }

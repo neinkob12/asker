@@ -1,0 +1,220 @@
+/*
+ * Prototyp „Karte zuerst“ (Handy-Bildschirm, `?ui=karte`, PhoneFrame.tsx: MapFirstPhone). Die Karte bleibt der Grund,
+ * das Handy ist ein Blatt von unten (halb oder ganz), unten eine feste Tab-Leiste. Gilt nur mit .is-mapfirst, der
+ * bisherige Handy-Aufbau bleibt unverändert. Farbvariante „Neon“ mit `?akzent=neon` (data-accent).
+ */
+
+.shell.is-mapfirst {
+  --tabbar-height: 58px;
+  --tabbar-space: calc(var(--tabbar-height) + var(--safe-bottom));
+  /* Kartensteuerung und Anzeigen unten rücken über Tab-Leiste und Hinweis */
+  --mobile-dock-height: calc(var(--tabbar-height) + 44px);
+  --sheet-full-top: calc(var(--top) + 64px);
+  --sheet-half-top: 48dvh;
+}
+
+/* ---------------------------------------------------------------- HUD: nur eine Zeile */
+.shell.is-mapfirst .hud-tiles,
+.shell.is-mapfirst .hud__alerts {
+  display: none;
+}
+.shell.is-mapfirst .hud-capsule--money,
+.shell.is-mapfirst .hud-capsule--clock {
+  min-height: 52px;
+}
+.shell.is-mapfirst .hud-money__dirty {
+  font-size: 22px;
+}
+.shell.is-mapfirst .hud-money .hud-label {
+  display: none;
+}
+/* Blatt ganz offen: Uhr und Geld bleiben sichtbar, die Kartensteuerung verschwindet hinter dem Blatt */
+.shell.is-mapfirst.has-phone .shell-mapctl {
+  visibility: hidden;
+}
+.shell.is-mapfirst .status-pill-wrap.is-floating {
+  top: calc(var(--top) + 64px);
+}
+
+/* ---------------------------------------------------------------- Blatt */
+.shell.is-mapfirst .phone.phone--sheet {
+  top: var(--sheet-half-top);
+  bottom: var(--tabbar-space);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  transition: top 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+  animation: mapfirst-sheet-in 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.shell.is-mapfirst .phone.phone--sheet.is-full {
+  top: var(--sheet-full-top);
+}
+.shell.is-mapfirst .phone--sheet .phone__device {
+  --phone-status-height: 14px;
+  --phone-home-inset: 8px;
+  border-radius: 24px 24px 0 0;
+  box-shadow:
+    0 0 0 0.5px var(--hud-glass-edge),
+    0 -12px 40px rgba(0, 0, 0, 0.55);
+}
+.shell.is-mapfirst .phone--sheet .phone__screen {
+  border-radius: 24px 24px 0 0;
+}
+/* Im Blatt führt „‹ Start“ nirgends hin: Die Apps liegen in der Tab-Leiste, „Mehr“ zeigt alle */
+.shell.is-mapfirst .phone--sheet .phone-screen__back[data-root] {
+  visibility: hidden;
+}
+/* Großer Titel kleiner: Im halben Blatt zählt jede Zeile */
+.shell.is-mapfirst .phone--sheet.is-half .phone-screen__large {
+  font-size: var(--type-title2, 22px);
+  line-height: 1.2;
+}
+.mapfirst-grabber {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 50%;
+  display: flex;
+  justify-content: center;
+  width: 120px;
+  height: 22px;
+  padding-top: 7px;
+  border: 0;
+  background: transparent;
+  transform: translateX(-50%);
+  touch-action: none;
+  cursor: grab;
+}
+.mapfirst-grabber span {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.32);
+}
+@keyframes mapfirst-sheet-in {
+  from {
+    transform: translateY(40%);
+    opacity: 0.6;
+  }
+}
+
+/* ---------------------------------------------------------------- Tab-Leiste */
+.mapfirst-tabs {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  height: var(--tabbar-space);
+  padding: 0 max(4px, var(--safe-left)) var(--safe-bottom) max(4px, var(--safe-right));
+  background: var(--hud-glass-strong);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border-top: 0.5px solid var(--hud-glass-line);
+}
+.mapfirst-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: var(--font-hud, inherit);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.mapfirst-tab__icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 28px;
+  border-radius: 14px;
+  font-size: 22px;
+  transition: background 0.18s;
+}
+.mapfirst-tab__icon .ui-badge {
+  position: absolute;
+  top: -4px;
+  right: 2px;
+}
+.mapfirst-tab.is-active {
+  color: var(--cat-brand);
+}
+.mapfirst-tab.is-active .mapfirst-tab__icon {
+  background: var(--cat-brand-soft);
+}
+.mapfirst-tab__label {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Nächster Schritt über der Leiste */
+.mapfirst-hint {
+  position: fixed;
+  z-index: 35;
+  left: var(--gap);
+  right: calc(var(--gap) + 64px);
+  bottom: calc(var(--tabbar-space) + 10px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 6px 12px 6px 6px;
+  border: 0.5px solid var(--hud-glass-edge);
+  border-radius: 22px;
+  background: var(--hud-glass-strong);
+  backdrop-filter: blur(16px);
+  color: var(--color-text);
+  font-family: var(--font-hud, inherit);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.mapfirst-hint__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mapfirst-hint > .ui-icon {
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------- Farbvariante „Neon“ */
+.shell.is-mapfirst[data-accent="neon"] {
+  --cat-brand: #ff4fa3;
+  --cat-brand-soft: rgba(255, 79, 163, 0.18);
+  --cat-brand-a: #ff7ab9;
+  --cat-brand-b: #d81b78;
+  --cat-brand-on: #ffffff;
+  --color-primary: #ff4fa3;
+  --hud-gold: #5ff2e8;
+  --shadow-glow: 0 0 0 2px rgba(255, 79, 163, 0.55);
+  --hud-glass: rgba(14, 10, 26, 0.7);
+  --hud-glass-strong: rgba(16, 11, 30, 0.88);
+  --hud-glass-edge: rgba(180, 120, 255, 0.22);
+  --hud-glass-line: rgba(180, 120, 255, 0.2);
+}
+.shell.is-mapfirst[data-accent="neon"] .mapfirst-tab.is-active .mapfirst-tab__icon {
+  box-shadow: 0 0 16px rgba(255, 79, 163, 0.45);
+}
+.shell.is-mapfirst[data-accent="neon"] .phone--sheet .phone__device {
+  box-shadow:
+    0 0 0 0.5px rgba(180, 120, 255, 0.35),
+    0 -12px 40px rgba(60, 0, 90, 0.55);
+}
+
+/* „Mehr“: Das Dock des Startbildschirms doppelt die Tab-Leiste */
+.shell.is-mapfirst .phone--sheet .phone__dock {
+  display: none;
+}

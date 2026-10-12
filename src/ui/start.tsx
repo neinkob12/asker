@@ -25,6 +25,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './shell/shell.css';
 import './shell/phone.css';
+import './shell/mapfirst.css';
 import './shell/phone-apps.css';
 
 // Oberflächen der Module: jede src/modules/<id>/ui/index.ts(x) meldet sich beim Import selbst an.

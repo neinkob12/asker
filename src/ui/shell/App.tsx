@@ -7,7 +7,7 @@ import type { UiRuntime } from '../runtime';
 import { TourHost } from '../tour/TourHost';
 import { DialogHost, PickBanner } from './Hosts';
 import { Hud } from './Hud';
-import { useIsMobile } from './layout';
+import { protoAccent, useIsMobile, useMapFirst } from './layout';
 import { MapControls } from './MapControls';
 import { MapView } from './MapView';
 import { CoachHighlight } from './NextStep';
@@ -23,14 +23,17 @@ export function App(props: { runtime: UiRuntime }) {
   const [, setVersion] = useState(0);
   useEffect(() => props.runtime.subscribe(() => setVersion((v) => v + 1)), [props.runtime]);
   const mobile = useIsMobile();
+  const mapFirst = useMapFirst();
+  const accent = protoAccent();
   const runtime = props.runtime;
   const hasGame = runtime.state !== null;
   const ui = runtime.ui;
   const classes = ['shell', mobile ? 'is-mobile' : 'is-desktop'];
   if (ui.phone.open) classes.push('has-phone');
+  if (mapFirst) classes.push('is-mapfirst');
   return (
     <RuntimeContext.Provider value={runtime}>
-      <div class={classes.join(' ')}>
+      <div class={classes.join(' ')} data-accent={mapFirst && accent ? accent : undefined}>
         <MapView />
         <div class="shell-vignette" aria-hidden="true" />
         {hasGame && (
