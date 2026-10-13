@@ -34,9 +34,9 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'aachener-weiher',
     name: 'Aachener Weiher',
-    // Am Nordufer, damit der Spot höchstens 60 m von einer Straße liegt (Richard-Wagner-Straße, check-roads).
-    lng: 6.92821,
-    lat: 50.93605,
+    // An der Aachener Straße am Nordrand des Weihers (Feedback 13.10.2026: vorher lag der Spot im Wasser).
+    lng: 6.92775,
+    lat: 50.93648,
     demand: 1.1,
     priceMultiplier: 1.1,
     unlockCost: 450,

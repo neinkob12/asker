@@ -143,18 +143,14 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-/* Unterwegs: hängt unter der Mitte, damit Icon und Menge stehen bleiben, wenn die Zeile dazukommt. */
+/* Unterwegs: eigene Zeile unter der Menge, mit Luft (Feedback 13.10.2026: klebte vorher an der Menge). Die Gruppe aus
+   Icon, Menge und „+ unterwegs“ steht zusammen in der Mitte der Kachel. */
 .goods-stock__plus {
-  position: absolute;
-  top: calc(50% + 21px);
-  right: 0;
-  left: 0;
-  /* Grün wie Geld, passend zum Startbildschirm (dunkel oder White Mode). */
+  margin-top: 2px;
   color: var(--home-money);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  text-align: center;
   white-space: nowrap;
 }
 .goods-stock__cell.is-free {
@@ -212,9 +208,6 @@
   .goods-stock__cell {
     height: 54px;
   }
-  .goods-stock__plus {
-    top: calc(50% + 17px);
-  }
   .goods-widget__options {
     min-height: 32px;
   }
@@ -223,13 +216,11 @@
   .goods-stock__cell {
     height: 50px;
   }
-  /* Icon und Menge etwas nach oben, damit „+ unterwegs“ darunter Platz hat. */
   .goods-stock__main {
     gap: 2px;
-    transform: translateY(-5px);
   }
   .goods-stock__plus {
-    top: calc(50% + 12px);
+    margin-top: 1px;
   }
 }
 
@@ -254,4 +245,45 @@
 }
 .phone[data-appearance="light"] .goods-stock__cell[data-product="oil"] {
   --product: #9a6512;
+}
+
+/* Fehlende Ware (Klick auf einen Spot ohne passende Ware, ui.flash): rot umrandet, wackelt kurz, der Rand bleibt etwas
+   stehen und blendet dann aus. */
+.goods-stock__cell.is-missing {
+  animation:
+    goods-missing-shake 480ms var(--ease-out) 2,
+    goods-missing-ring 2.6s ease-out forwards;
+}
+@keyframes goods-missing-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px) rotate(-2deg);
+  }
+  40% {
+    transform: translateX(4px) rotate(2deg);
+  }
+  60% {
+    transform: translateX(-3px) rotate(-1deg);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes goods-missing-ring {
+  0%,
+  70% {
+    box-shadow: inset 0 0 0 2px var(--home-danger);
+    background: color-mix(in srgb, var(--home-danger) 16%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goods-stock__cell.is-missing {
+    animation: goods-missing-ring 2.6s ease-out forwards;
+  }
 }

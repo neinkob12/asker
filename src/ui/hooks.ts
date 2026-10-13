@@ -57,6 +57,11 @@ export function useRuntimeSelector<T>(select: (runtime: UiRuntime) => T, equals:
   return useSelection(() => select(runtime), equals);
 }
 
+/** Auszug aus dem Zustand der Oberfläche (z.B. ui.flash); zeichnet nur neu, wenn er sich ändert. */
+export function useUiSelector<T>(select: (ui: UiState) => T, equals: Equals<T> = Object.is): T {
+  return useRuntimeSelector((runtime) => select(runtime.ui), equals);
+}
+
 function useSelection<T>(read: () => T, equals: Equals<T>): T {
   const runtime = useRuntime();
   const [, rerender] = useState(0);
