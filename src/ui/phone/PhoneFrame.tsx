@@ -86,8 +86,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
-  /** Gesperrt (lockedWhen): ausgegraut mit Schloss, lässt sich nicht öffnen. */
-  locked?: boolean;
+  /** Gesperrt (lockedWhen): ausgegraut mit Schloss; ein Tipp zeigt diesen Hinweis statt die App zu öffnen. */
+  locked?: string;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -103,9 +103,10 @@ function badgeOf(read: () => number | undefined): number {
 }
 
 /** Sperre einer Kachel: Wirft das Modul, gilt die App als frei. */
-function lockOf(read: () => boolean | undefined): { locked?: boolean } {
+function lockOf(read: () => string | null | undefined): { locked?: string } {
   try {
-    return read() ? { locked: true } : {};
+    const text = read();
+    return text ? { locked: text } : {};
   } catch (error) {
     console.error('Sperre einer App', error);
     return {};
@@ -258,22 +259,24 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
   const icon = (
     <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" class="phone__tile" />
   );
-  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss, lässt sich aber nicht öffnen.
+  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss; ein Tipp sagt kurz, womit die App frei wird.
   if (app.locked) {
+    const hint = app.locked;
     return (
-      <div
+      <button
+        type="button"
         class={`phone__app is-locked ${props.dock ? 'is-dock' : ''}`}
         data-app-id={app.id}
         data-tour={`phone.app.${app.id}`}
-        role="img"
         aria-label={`${app.name}, gesperrt`}
+        onClick={() => runtime.api.notice(`${app.name}: ${hint}`)}
       >
         {icon}
         <span class="phone__app-lock" aria-hidden="true">
           <Icon name="lock" size={13} strokeWidth={2.2} />
         </span>
         <span class="phone__app-name">{app.name}</span>
-      </div>
+      </button>
     );
   }
   return (

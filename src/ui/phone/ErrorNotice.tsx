@@ -30,7 +30,7 @@ function Notice(props: { class: string }) {
   if (!error) return null;
   return (
     <button type="button" class={`ui-error-notice ${props.class}`} key={error.id} onClick={api.dismissError}>
-      <Icon name="alert" class="ui-error-notice__icon" />
+      <Icon name={error.hint ? 'lock' : 'alert'} class={`ui-error-notice__icon ${error.hint ? 'is-hint' : ''}`} />
       <span class="ui-error-notice__text">{error.text}</span>
     </button>
   );

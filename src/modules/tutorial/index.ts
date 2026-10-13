@@ -195,6 +195,16 @@ export function tutorialAllows(state: GameState, feature: TutorialFeature): bool
   return t.stage >= FEATURE_STAGE[feature];
 }
 
+/**
+ * Hinweis beim Tipp auf etwas Gesperrtes (App-Kachel oder Widget im Handy), z.B. „Schaltest du frei mit ‚Buchhalter und
+ * Kasse‘“. null = frei. Steht nicht dauerhaft da, nur als kurze Einblendung nach dem Tipp.
+ */
+export function tutorialLockText(state: GameState, feature: TutorialFeature): string | null {
+  if (tutorialAllows(state, feature)) return null;
+  const stage = STAGES[FEATURE_STAGE[feature]];
+  return stage ? `Schaltest du frei mit „${stage.title}“` : 'Schaltest du später frei';
+}
+
 /** Darf diese Rolle gerade angeboten werden (Anheuern, Bewerber, Rumfragen)? Läufer immer. */
 export function tutorialAllowsRole(state: GameState, role: string): boolean {
   const feature = ROLE_FEATURE[role];

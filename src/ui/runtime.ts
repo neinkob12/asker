@@ -67,6 +67,8 @@ export interface Alert {
 export interface UiError {
   id: number;
   text: string;
+  /** Hinweis statt Fehler (ui.notice): Schloss statt Warnzeichen. */
+  hint?: boolean;
 }
 
 export type { NavEntry, NavKind } from './phone/navModel';
@@ -170,6 +172,11 @@ export interface UiApi {
   toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
   /** Die Rückmeldung zu einem fehlgeschlagenen Befehl ausblenden. */
   dismissError(): void;
+  /**
+   * Kurze Einblendung wie bei einem fehlgeschlagenen Befehl, ohne Befehl: beim Tipp auf etwas Gesperrtes, womit es frei
+   * wird. Die nächste ersetzt die vorige.
+   */
+  notice(text: string): void;
   /** Verlauf: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
@@ -404,8 +411,8 @@ export class UiRuntime {
   }
 
   /** Rückmeldung zu einem fehlgeschlagenen Befehl: kurz im Handy, die nächste ersetzt die vorige. */
-  private showError(text: string): void {
-    this.ui.error = { id: ++this.errorId, text };
+  private showError(text: string, hint = false): void {
+    this.ui.error = hint ? { id: ++this.errorId, text, hint } : { id: ++this.errorId, text };
     if (this.errorTimer) clearTimeout(this.errorTimer);
     this.errorTimer = setTimeout(() => {
       this.errorTimer = null;
@@ -551,6 +558,7 @@ export class UiRuntime {
           if (options.target) alert.target = options.target;
           ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
         }),
+      notice: (text) => update(() => this.showError(text, true)),
       dismissError: () =>
         update(() => {
           if (this.errorTimer) clearTimeout(this.errorTimer);
