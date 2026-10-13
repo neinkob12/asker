@@ -2,7 +2,6 @@
 // Beiträge anderer Module über den Slot 'goods.warehouse': Hafen und Umlagern aus der Logistik, Markt) und
 // Lager-Marker auf der Karte. Seit Auftrag 26 ist die Lager-Seite der eine Ort für alles rund ums Lager.
 
-import { memo } from 'preact/compat';
 import { useState } from 'preact/hooks';
 import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
 import { addHtmlMarker, el, registerMapLayer } from '../../../map';
@@ -14,7 +13,6 @@ import {
   Chips,
   Empty,
   Group,
-  HudPill,
   Icon,
   type IconName,
   ItemContent,
@@ -24,10 +22,10 @@ import {
   memoState,
   ProgressBar,
   registerAdvisor,
-  registerHudItem,
   registerPanel,
   registerPhoneApp,
   registerSearch,
+  registerSlot,
   Slot,
   shallowEqual,
   useGame,
@@ -38,7 +36,6 @@ import {
   CUT_STEPS,
   cutPreview,
   DEFAULT_PRODUCT,
-  DEFAULT_WAREHOUSE,
   formatProductAmount,
   getLots,
   getProduct,
@@ -100,9 +97,6 @@ function QualityLabel(props: { quality: number }) {
   );
 }
 
-const stockText = (r: { productId: string; amount: number }) =>
-  `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
-
 /**
  * Lager der aktiven Stadt (Auftrag 30: In Hamburg zählt nur, was dort liegt), größte Posten zuerst. Einmal pro
  * Spielstand gerechnet: Pille und Aufstellung lesen dieselbe Liste, ohne Lager zweimal zu durchlaufen.
@@ -111,51 +105,6 @@ const stockView = memoState((state) => {
   const cityId = activeCity(state);
   const rows = [...stockSummary(state, undefined, cityId)].sort((a, b) => b.amount - a.amount);
   return { cityId, rows, warehouses: getWarehouses(state, cityId) };
-});
-
-/**
- * Kurzanzeige im HUD: der größte Posten, bei mehr "2,1 kg Gras +2 Sorten" (am Handy ist die Kachel schmal), dazu die
- * Aufstellung zum Aufklappen.
- */
-const StockHud = memo(function StockHud() {
-  const ui = useUi();
-  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen; im Tutorial (Auftrag 46b) kommt das Lager mit
-  // der ersten Lieferung.
-  const sold = useGameSelector((state) => isBusinessSold(state) || !tutorialAllows(state, 'hud.stock'));
-  // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
-  const view = useGameSelector((state) => {
-    const { cityId, rows, warehouses } = stockView(state);
-    const more = rows.length - 1;
-    // Immer gleich aufgebaut: der größte Posten, dazu die Zahl der übrigen Sorten (vorher mal „+ 400 g Gras“, mal „+2“).
-    const short =
-      rows.length === 0
-        ? 'leer'
-        : more === 0
-          ? stockText(rows[0])
-          : `${stockText(rows[0])} +${more} ${more === 1 ? 'Sorte' : 'Sorten'}`;
-    return {
-      value: warehouses.length === 0 ? 'kein Lager' : short,
-      title: rows.map(stockText).join(', ') || 'Lager leer',
-      empty: rows.length === 0,
-      warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
-    };
-  }, shallowEqual);
-  if (sold) return null;
-  return (
-    <HudPill
-      data-tour="hud.stock"
-      icon="warehouse"
-      color="goods"
-      label="Lager"
-      value={view.value}
-      title={view.title}
-      tone={view.empty ? 'bad' : undefined}
-      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: view.warehouseId })}
-      detailsAction="Lager öffnen"
-      // Eine Komponente statt fertigem Inhalt: Die Aufstellung rechnet erst, wenn die Karte aufgeklappt ist.
-      details={<StockFlyout />}
-    />
-  );
 });
 
 /**
@@ -172,10 +121,17 @@ const PRODUCT_LOOK: Record<string, { icon: IconName; badge?: string }> = {
   edibles: { icon: 'cake' },
   oil: { icon: 'oil' },
 };
-/** Raster 3×2 in fester Reihenfolge, auch leere Sorten (blass): So sieht man, was fehlt. */
+/** Feste Reihenfolge, auch leere Sorten (blass): So sieht man, was fehlt. */
 const GRID_PRODUCTS = ['weed', 'kush', 'haze', 'hash', 'vape', 'edibles'];
 /** Waren, die nur auftauchen, wenn welche da oder unterwegs ist. */
 const OPTIONAL_PRODUCTS = ['oil'];
+
+/**
+ * Fächer im Lager-Widget: mindestens 8 (zwei Reihen à 4, freie Fächer leer), bei mehr Waren 10 (zwei Reihen à 5).
+ * Neue Waren brauchen nur einen Eintrag in PRODUCT_LOOK und GRID_PRODUCTS.
+ */
+const STOCK_SLOTS = 8;
+const STOCK_SLOTS_MAX = 10;
 
 /** Menge kurz für die schmale Kachel: "40 St." statt "40 Stück". */
 const shortAmount = (productId: string, amount: number) =>
@@ -202,12 +158,16 @@ const incomingView = memoState((state) => {
 });
 
 /**
- * Aufstellung des Lagers in der aufgeklappten Karte der HUD-Kachel: ein Raster mit Icon und Menge je Ware, darunter
- * klein, was unterwegs ist. Die Kacheln haben eine feste Höhe, Icon und Menge stehen in der Mitte, die Zeile „+ …“
- * hängt darunter und verschiebt nichts.
+ * Lager-Widget auf dem Startbildschirm des Handys unter den Apps (vorher Kachel im HUD): Fächer mit Icon und Menge je Ware,
+ * darunter klein, was unterwegs ist. Ein Tipp auf das Raster öffnet die Lieferanten (nachbestellen), „Lager-Optionen“
+ * die Lager-App (eigene Lager, Ausbau, Standorte). Die Kacheln haben eine feste Höhe, Icon und Menge stehen in der
+ * Mitte, die Zeile „+ …“ hängt darunter und verschiebt nichts.
  */
-function StockFlyout() {
+function StockWidget() {
   const ui = useUi();
+  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen; im Tutorial (Auftrag 46b) kommt das Lager mit
+  // der ersten Lieferung.
+  const hidden = useGameSelector((state) => isBusinessSold(state) || !tutorialAllows(state, 'hud.stock'));
   const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
@@ -242,13 +202,22 @@ function StockFlyout() {
     },
     (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
+  if (hidden) return null;
+  const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
   return (
-    <div class="goods-flyout">
-      <ul class="goods-stock">
+    <section class="phone-widget goods-widget" data-tour="hud.stock" aria-label="Lager">
+      <button
+        type="button"
+        class="goods-stock"
+        style={{ '--stock-cols': String(slots / 2) }}
+        onClick={() => ui.openPhone('suppliers.app')}
+        title="Lieferanten öffnen"
+        aria-label={`Lager: ${cells.map((c) => c.title).join('; ')}. Lieferanten öffnen`}
+      >
         {cells.map((cell) => {
           const look = PRODUCT_LOOK[cell.productId] ?? { icon: 'boxes' };
           return (
-            <li
+            <span
               key={cell.productId}
               class={`goods-stock__cell${cell.empty ? ' is-empty' : ''}`}
               data-product={cell.productId}
@@ -256,20 +225,25 @@ function StockFlyout() {
             >
               <span class="goods-stock__main">
                 <span class={`goods-stock__icon${look.badge ? ' has-badge' : ''}`}>
-                  <Icon name={look.icon} size={24} />
+                  <Icon name={look.icon} size={22} />
                   {look.badge && <span class="goods-stock__badge">{look.badge}</span>}
                 </span>
                 <strong>{cell.amount}</strong>
               </span>
               {cell.plus && <span class="goods-stock__plus">{cell.plus}</span>}
-            </li>
+            </span>
           );
         })}
-      </ul>
-      <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
-        Bestellen
+        {Array.from({ length: slots - cells.length }, (_, i) => (
+          <span key={`free-${i}`} class="goods-stock__cell is-free" aria-hidden="true" />
+        ))}
       </button>
-    </div>
+      <button type="button" class="goods-widget__options" onClick={() => ui.openPhone('goods.app')}>
+        <Icon name="warehouse" size={15} />
+        <span>Lager-Optionen</span>
+        <Icon name="chevronRight" size={14} />
+      </button>
+    </section>
   );
 }
 
@@ -681,8 +655,12 @@ registerPhoneApp({
   // Nach dem Verkauf liegt die Ware in den Häfen (Handel › Hafen, Auftrag 43). Am Anfang kommt sie mit Peters Quest.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.goods'),
+  // Nur über „Lager-Optionen“ im Lager-Widget (und openPhone von anderen Stellen), nicht als Kachel im Raster.
+  hidden: true,
 });
-registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
+// Lager als Widget oben auf dem Startbildschirm (vorher Kachel im HUD); die Lager-App steht nicht mehr im Raster,
+// sie öffnet sich über „Lager-Optionen“ im Widget.
+registerSlot('phone.homeBottom', { id: 'goods.stock', order: 10, component: StockWidget });
 registerPanel({
   id: 'goods.warehouse',
   title: (props, state) => getWarehouse(state, props.warehouseId)?.name ?? 'Lager',

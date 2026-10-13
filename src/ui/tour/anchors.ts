@@ -22,9 +22,9 @@ export const TOUR_ANCHORS = [
   'hud.weather',
   /** Der Tempo-Regler (Pause, 1×, 2×, 4×) in der Uhr-Kapsel (shell/Hud.tsx, SpeedControl). */
   'hud.speed',
-  /** Kachel Lager oben rechts (goods/ui, StockHud). */
+  /** Lager-Widget oben auf dem Startbildschirm des Handys (goods/ui, StockWidget; vorher Kachel im HUD). */
   'hud.stock',
-  /** Kachel Ruf (reputation/ui, ReputationHud). */
+  /** Ruf-Widget oben rechts auf dem Startbildschirm des Handys (reputation/ui, ReputationWidget; vorher Kachel im HUD). */
   'hud.reputation',
   /** Kachel Rang (city/ui, RankHud). */
   'hud.rank',

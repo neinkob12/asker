@@ -304,7 +304,7 @@ async function tour(page, input) {
   await run(page, 'window.koeln.runtime.api.openPhone(null)');
   await settle(page);
   await pause();
-  await page.locator('.phone__app[data-app-id="tab:territory"]').click();
+  await page.locator('[data-tour="hud.territory"]').click();
   await settle(page);
   await pause();
   await page.locator('.phone-page.is-top .ui-list__button', { hasText: 'Altstadt-Nord' }).first().click();

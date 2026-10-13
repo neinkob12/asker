@@ -201,9 +201,9 @@ function stage3(ctx: TourContext): TourStep[] {
   return [
     step({
       id: 'app',
-      anchor: 'phone.app.tab:territory',
+      anchor: 'hud.territory',
       before: () => home(ui),
-      text: 'Neue App: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
+      text: 'Neu oben im Handy: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
     }),
     step({
       id: 'list',
@@ -496,7 +496,7 @@ export function stageTour(stage: number, ctx: TourContext): TourDef {
   };
 }
 
-/** Nach der ersten Lieferung (Moment 'delivery'): das Lager im HUD und die Lieferungen in der App. */
+/** Nach der ersten Lieferung (Moment 'delivery'): das Lager-Widget im Handy und die Lieferungen in der App. */
 export function deliveryTour(ctx: TourContext): TourDef {
   const { ui } = ctx;
   return {
@@ -506,8 +506,8 @@ export function deliveryTour(ctx: TourContext): TourDef {
         id: 'stock',
         anchor: 'hud.stock',
         tint: 'goods',
-        before: () => onMap(ui),
-        text: 'Deine erste Lieferung ist da. Neu im HUD: dat Lager. Tipp drauf, dann siehst du, wat drin ist.',
+        before: () => ui.openPhone(null),
+        text: 'Deine erste Lieferung ist da. Oben im Handy steht jetzt dat Lager. Tipp drauf, dann kannste nachbestellen.',
       }),
       step({
         id: 'shipments',

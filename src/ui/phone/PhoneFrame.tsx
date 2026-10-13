@@ -64,11 +64,17 @@ import { bindPressFeedback } from './press';
 import { StatusPill } from './StatusPill';
 import { tileColor } from './tile';
 
-/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
-const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`, 'finance.app'];
+/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal (sofern vorhanden). */
+const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`];
 
-/** Reihenfolge der Apps im Raster: Reviere, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = [`${TAB_APP_PREFIX}territory`, `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
+/** Reihenfolge der Apps im Raster: Kasse, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = ['finance.app', `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
+
+/**
+ * Nicht als Kachel auf dem Startbildschirm, aber weiter in Suche und Tastenkürzeln: Die Reviere öffnet das
+ * Reviere-Widget oben.
+ */
+const NOT_ON_HOME = [`${TAB_APP_PREFIX}territory`];
 
 /** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
 export const URGENT_ADVICE = 80;
@@ -120,7 +126,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
-  return [...tabs, ...apps];
+  return [...tabs, ...apps].filter((a) => !NOT_ON_HOME.includes(a.id));
 }
 
 /**
@@ -335,9 +341,9 @@ export function urgentAdvice(state: GameState): Advice | null {
 const sameApps = (a: HomeApp[], b: HomeApp[]) => a.length === b.length && a.every((app, i) => shallowEqual(app, b[i]));
 
 /** Beiträge zu 'phone.home' lesen beliebig im Zustand: Sie ziehen bei jedem neuen Stand nach, der Rest des Bildschirms nicht. */
-function HomeSlot() {
+function HomeSlot(props: { name: 'phone.home' | 'phone.homeBottom' }) {
   useRuntimeSelector(() => stateRevision());
-  return <Slot name="phone.home" />;
+  return <Slot name={props.name} />;
 }
 
 /**
@@ -368,13 +374,17 @@ const HomeScreen = memo(function HomeScreen() {
     <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
+        {/* Oben kleine Widgets nebeneinander (Rang, Ruf, Reviere), dann die Apps, darunter breite Widgets (Lager). */}
         <div class="phone__widgets">
-          <HomeSlot />
+          <HomeSlot name="phone.home" />
         </div>
         <div class="phone__apps">
           {grid.map((a) => (
             <AppTile key={a.id} app={a} onOpen={() => runtime.api.openPhone(a.id)} />
           ))}
+        </div>
+        <div class="phone__widgets">
+          <HomeSlot name="phone.homeBottom" />
         </div>
       </div>
       {dock.length > 0 && (
@@ -628,16 +638,30 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
         <nav class="phone__nav">
-          <button
-            type="button"
-            class="phone__nav-button"
-            onPointerDown={homeSwipe}
-            onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
-            aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
-            title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
-          >
-            <span class="phone__home-indicator" />
-          </button>
+          {atHome ? (
+            <button
+              type="button"
+              class="phone__nav-button"
+              onPointerDown={homeSwipe}
+              onClick={api.closePhone}
+              aria-label="Handy weglegen"
+              title="Handy weglegen (T)"
+            >
+              <span class="phone__home-indicator" />
+            </button>
+          ) : (
+            // In jeder App ein sichtbarer Home-Knopf (statt nur des Balkens): tippen = Startbildschirm, hochwischen ebenso.
+            <button
+              type="button"
+              class="phone__nav-button phone__home-button"
+              onPointerDown={homeSwipe}
+              onClick={() => api.openPhone(null)}
+              aria-label="Startbildschirm"
+              title="Startbildschirm"
+            >
+              <Icon name="home" size={18} />
+            </button>
+          )}
         </nav>
       )}
     </div>

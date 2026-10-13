@@ -6,17 +6,6 @@
   color: var(--cat-danger);
 }
 
-/* Kachel Ruf im HUD: Leiste 0–100 über die ganze Breite. */
-.hud-rep {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-.hud-rep .hud-bar {
-  flex: 1 1 auto;
-  min-width: 24px;
-}
 /* Aufgeklappte Karte: Stufe jetzt, darüber, darunter (beim Ruf) bzw. die eigenen Veedel (bei den Revieren) */
 .rep-flyout {
   display: flex;

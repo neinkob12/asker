@@ -23,6 +23,8 @@ export interface DialogRegistry {}
 export interface SlotRegistry {
   /** Widgets auf dem Startbildschirm des Spiel-Handys (z.B. Wetter), über den App-Icons. */
   'phone.home': Record<string, never>;
+  /** Unter den Apps auf dem Startbildschirm (Lager-Widget), über dem Dock. */
+  'phone.homeBottom': Record<string, never>;
   /** Zusätzliche Abschnitte in den Einstellungen (Dialog und Handy-App). */
   'core.settings': Record<string, never>;
   /**

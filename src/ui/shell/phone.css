@@ -190,6 +190,25 @@
 .phone__nav-button:hover .phone__home-indicator {
   opacity: 1;
 }
+/* Sichtbarer Home-Knopf in jeder App (Desktop): kleine Glas-Pille im Platz des Home-Balkens */
+.phone__nav > .phone__home-button {
+  place-items: center;
+  align-self: center;
+  width: 72px;
+  height: 32px;
+  margin-bottom: 4px;
+  padding: 0;
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--phone-label) 14%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--phone-label) 14%, transparent);
+  color: var(--phone-label);
+  transition: background var(--duration-fast);
+}
+.phone__nav > .phone__home-button:hover {
+  background: color-mix(in srgb, var(--phone-label) 24%, transparent);
+}
 /* Handy weglegen (Desktop): runde Taste links neben dem Gerät, so liegt sie nie über dem Inhalt */
 .phone__close {
   position: absolute;
@@ -436,10 +455,108 @@
 .phone__urgent-close:hover {
   color: var(--phone-label);
 }
+/* Widgets oben auf dem Startbildschirm: Raster aus drei Spalten, breite Widgets über zwei (Lager), kleine über eine
+   (Ruf oben rechts). Module setzen .phone-widget und eine Breite, das Raster gehört dem Handy. */
 .phone__widgets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.phone-widget {
+  grid-column: span 3;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: var(--radius-group);
+  /* Der Startbildschirm ist in beiden Schemata schwarz: Widgets als helles Glas darauf, Schrift wie die App-Namen. */
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: var(--home-label);
+}
+.phone-widget--wide {
+  grid-column: span 2;
+}
+.phone-widget--small {
+  grid-column: span 1;
+}
+.phone-widget__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 2px;
+  color: var(--stat-accent);
+}
+/* Kleines Kennzahl-Widget (Rang, Ruf, Reviere oben nebeneinander): Kopf in der Farbe des Widgets (--stat-accent,
+   hell für dunklen Grund), große Zahl oder Titel, Unterzeile, Leiste, Fußzeile. Als Knopf tippbar. */
+.phone-stat {
+  --stat-accent: var(--home-label);
+  grid-column: span 1;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 132px;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+button.phone-stat {
+  cursor: pointer;
+}
+button.phone-stat:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.phone-stat .phone-stat__value {
+  font-family: var(--font-hud-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Titel statt Zahl (Rang): zwei Zeilen, nie im Wort umbrochen. */
+.phone-stat__title {
+  font-family: var(--font-hud-display);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.05;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.phone-stat__sub {
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.phone-stat__bar {
+  width: 100%;
+  height: 5px;
+  margin: auto 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+.phone-stat__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--stat-accent);
+}
+.phone-stat__foot {
+  margin-top: auto;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--home-label-2);
+}
+.phone-stat__bar + .phone-stat__foot {
+  margin-top: 0;
+}
+.phone-widget__label {
+  margin: 0 0 6px 2px;
+  font-size: var(--type-caption-2);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
 }
 .phone__widgets:empty {
   display: none;

@@ -50,35 +50,38 @@
   gap: 28px;
 }
 
-/* Aufklappbare Aufstellung der Lager-Kachel im HUD */
-.goods-flyout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* Lager-Widget auf dem Startbildschirm des Handys: 8 Fächer (2 × 4, bei mehr Waren 10), freie leer, darunter
+   „Lager-Optionen“. Der Startbildschirm ist immer schwarz: Die Farben gehören zur Ware selbst und sind nur für
+   dunklen Grund gedacht, deshalb hier und nicht als Bedeutungsfarbe in den Tokens. */
+.goods-widget {
+  gap: 6px;
 }
-/* Die Karte ist für das Raster etwas breiter als die anderen HUD-Karten. */
-.hud-flyout:has(> .goods-flyout) {
-  width: min(316px, calc(100vw - 24px));
-}
-/* Raster 3×2 (Öl als siebte Kachel, wenn vorhanden). Die Farben gehören zur Ware selbst und sind nur für das dunkle
-   Glas gedacht (die Karte im HUD ist immer dunkel), deshalb hier und nicht als Bedeutungsfarbe in den Tokens. */
 .goods-stock {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(var(--stock-cols, 4), minmax(0, 1fr));
+  gap: 4px;
   margin: 0;
   padding: 0;
-  list-style: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
 }
 .goods-stock__cell {
-  --product: var(--hud-ink);
+  --product: var(--home-label);
   position: relative;
   display: grid;
   place-items: center;
-  height: 64px;
+  height: 66px;
   min-width: 0;
   border-radius: 10px;
-  background: var(--hud-glass-fill);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background var(--duration-fast);
+}
+.goods-stock:hover .goods-stock__cell {
+  background: rgba(255, 255, 255, 0.08);
 }
 .goods-stock__cell[data-product="weed"] {
   --product: #4ade80;
@@ -101,11 +104,12 @@
 .goods-stock__cell[data-product="oil"] {
   --product: #f5b84a;
 }
-/* Icon und Menge genau in der Mitte der Kachel. */
+/* Icon über der Menge, beides genau in der Mitte der Kachel (das Widget ist schmaler als die alte HUD-Karte). */
 .goods-stock__main {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
 }
 .goods-stock__icon {
   position: relative;
@@ -114,9 +118,6 @@
   place-items: center;
   color: var(--product);
 }
-.goods-stock__icon.has-badge {
-  margin-right: 5px;
-}
 /* Nur Umriss, scharf: ein enger, schwacher Schein in der Farbe der Ware. */
 .goods-stock__icon svg {
   overflow: visible;
@@ -124,11 +125,11 @@
 }
 .goods-stock__badge {
   position: absolute;
-  right: -6px;
+  right: -9px;
   bottom: -3px;
   padding: 1px 2px;
   border-radius: 3px;
-  background: var(--hud-glass-solid);
+  background: var(--hw-black, #000);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--product) 45%, transparent);
   color: var(--product);
   font: 700 8px / 1 var(--font-hud);
@@ -136,7 +137,7 @@
 }
 .goods-stock__main strong {
   font-family: var(--font-hud-display);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -145,15 +146,20 @@
 /* Unterwegs: hängt unter der Mitte, damit Icon und Menge stehen bleiben, wenn die Zeile dazukommt. */
 .goods-stock__plus {
   position: absolute;
-  top: calc(50% + 16px);
+  top: calc(50% + 21px);
   right: 0;
   left: 0;
-  color: var(--cat-money);
-  font-size: 11px;
+  /* Grün wie Geld im dunklen Schema (der Startbildschirm ist immer dunkel). */
+  color: #30d158;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
   text-align: center;
   white-space: nowrap;
+}
+.goods-stock__cell.is-free {
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .goods-stock__cell.is-empty .goods-stock__icon {
   opacity: 0.35;
@@ -162,7 +168,31 @@
   filter: none;
 }
 .goods-stock__cell.is-empty strong {
-  color: var(--hud-ink-2);
+  color: var(--home-label-2);
+}
+.goods-widget__options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--home-label);
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+.goods-widget__options:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.goods-widget__options span {
+  flex: 1;
+  text-align: left;
+}
+.goods-widget__options .ui-icon:first-child {
+  color: var(--cat-goods);
 }
 
 /* Füllstand des Lagers (Auftrag 33). */
