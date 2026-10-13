@@ -1,4 +1,4 @@
-/* Gangs: Übersicht (Liste), Seite einer Gang, Dialoge und Karten-Marker. Nur Design-Tokens; die Gang-Farbe kommt als --gang-color. */
+/* Gangs: Übersicht (Tabelle), Seite einer Gang, Dialoge und Karten-Marker. Nur Design-Tokens; die Gang-Farbe kommt als --gang-color. */
 
 .gangs-tab,
 .gang-page {
@@ -128,39 +128,50 @@
 .shell-map.zoomed-out .gang-hq__name {
   display: none;
 }
-/* Kopf des Gangs-Tabs (Auftrag 27): deine Stärke als Zahl, jede Gang als Balken auf derselben Skala */
+/* Kasten Stärke (Feedback 13.10.2026): klein, deine Stärke hervorgehoben, jede Gang als schmaler Balken */
 .gangs-power {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--phone-group, var(--color-panel-raised));
-  border: 1px solid var(--phone-separator, var(--color-line));
   border-radius: var(--radius-group);
 }
 .gangs-power__you {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  text-align: center;
-}
-.gangs-power__label,
-.gangs-power__hint {
-  font-size: var(--type-footnote, 13px);
-  color: var(--phone-label-2, var(--color-muted));
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "label number"
+    "bar bar";
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2)) 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-radius: calc(var(--radius-group) - 4px);
+  background: var(--cat-brand-soft, color-mix(in srgb, var(--cat-brand) 14%, transparent));
 }
 .gangs-power__label {
+  grid-area: label;
+  font-size: var(--type-footnote, 13px);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--cat-brand);
 }
 .gangs-power__number {
-  font-size: var(--type-large-title, 34px);
+  grid-area: number;
+  font-size: var(--type-title-2, 22px);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  color: var(--phone-label, var(--color-text));
+  line-height: 1;
+  color: var(--cat-brand);
+}
+.gangs-power__you .gangs-power__bar {
+  grid-area: bar;
+  height: 10px;
+}
+.gangs-power__bar.is-yours .gangs-power__fill {
+  background: var(--cat-brand);
 }
 .gangs-power__rows {
   list-style: none;
@@ -168,35 +179,25 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 6px;
 }
 .gangs-power__row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "emblem name value"
-    "emblem bar value";
+  grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 2.5ch;
   align-items: center;
   column-gap: var(--space-3);
-  row-gap: 4px;
-}
-.gangs-power__row .ui-avatar {
-  grid-area: emblem;
 }
 .gangs-power__name {
-  grid-area: name;
   overflow: hidden;
-  font-size: var(--type-subhead, 15px);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--type-footnote, 13px);
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--phone-label, var(--color-text));
+  color: var(--phone-label-2, var(--color-muted));
 }
 .gangs-power__bar {
-  grid-area: bar;
   position: relative;
   display: block;
-  height: 8px;
+  height: 6px;
   border-radius: var(--radius-round);
   background: var(--phone-fill, var(--color-surface-active));
 }
@@ -210,27 +211,166 @@
 /* Marke: deine Stärke auf derselben Skala */
 .gangs-power__mark {
   position: absolute;
-  top: -4px;
-  bottom: -4px;
+  top: -3px;
+  bottom: -3px;
   left: var(--yours, 0%);
   width: 2px;
   margin-left: -1px;
   background: var(--cat-brand);
   border-radius: 1px;
 }
-/* Die Zahl steht rechts neben Name und Balken (eigene Spalte; absolut positioniert lag sie neben der Karte). */
 .gangs-power__value {
-  grid-area: value;
-  align-self: center;
-  min-width: 2.5ch;
   text-align: right;
-  font-size: var(--type-subhead, 15px);
+  font-size: var(--type-footnote, 13px);
   font-variant-numeric: tabular-nums;
   color: var(--phone-label-2, var(--color-muted));
 }
 .gangs-power__row.is-stronger .gangs-power__value {
   color: var(--cat-danger);
   font-weight: var(--font-weight-bold);
+}
+
+/* Gangs als Tabelle (Feedback 13.10.2026): Gang, Stärke, Veedel, Status, Knöpfe */
+.gangs-table {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--radius-group);
+}
+.gangs-table__head,
+.gangs-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 34px 28px 96px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-1) 0 var(--space-3);
+}
+.gangs-table__head {
+  min-height: 32px;
+  font-size: var(--type-caption, 12px);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.gangs-table__head > :nth-child(2),
+.gangs-table__head > :nth-child(3) {
+  text-align: right;
+}
+.gangs-table__head > :nth-child(4) {
+  text-align: center;
+}
+.gangs-table__head > :nth-child(5) {
+  text-align: center;
+}
+.gangs-table__head .ui-icon {
+  font-size: 15px;
+}
+.gangs-table__row {
+  min-height: 52px;
+  border-top: 0.5px solid var(--color-line);
+}
+.gangs-table__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--type-footnote, 13px);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+.gangs-table__name > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  hyphens: none;
+  overflow-wrap: normal;
+}
+.gangs-table__name:hover > span:last-child,
+.gangs-table__name:focus-visible > span:last-child {
+  text-decoration: underline;
+}
+.gangs-table__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gang-color);
+}
+.gangs-table__num {
+  text-align: right;
+  font-size: var(--type-subhead, 15px);
+  font-variant-numeric: tabular-nums;
+}
+.gangs-table__turf {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.gangs-table__turf .ui-icon {
+  color: var(--cat-place);
+  font-size: 13px;
+}
+.gangs-table__num.is-stronger {
+  color: var(--cat-danger);
+  font-weight: var(--font-weight-bold);
+}
+.gangs-table__stage {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--stage) 18%, transparent);
+  color: var(--stage);
+  font-size: 16px;
+}
+.gangs-table__actions {
+  display: flex;
+}
+.gangs-table__action {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+.gangs-table__action:hover:not(:disabled),
+.gangs-table__action:focus-visible {
+  background: var(--phone-fill-hover);
+}
+.gangs-table__action:disabled {
+  color: var(--color-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+.gangs-table__action.is-attack:not(:disabled) {
+  color: var(--cat-danger);
+}
+.gangs-table__action.is-ally:not(:disabled) {
+  color: var(--cat-money);
+}
+.gangs-table__action.is-money:not(:disabled) {
+  color: var(--cat-dirty);
 }
 
 /* Auftrag 23: Antworten auf offene Vorfälle unter der Zeile. */

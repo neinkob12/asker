@@ -344,6 +344,9 @@ Gruppe (Panel `staff.role` mit `{ group }`, bei `'lead'` der Aufbau aus Slot `st
 Darunter bis zu acht Problemfälle als Kacheln (Haft zuerst mit Gitter und Freikaufen, dann niedrigste bekannte
 Loyalität, jede mit Feuern) und bis zu acht Bewerber als Kacheln (recruiting). Läufer und Sicherheit gibt es nur noch am
 Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfragen ist aus der Oberfläche raus.
+Gangs-App neu (13.10.2026): kleiner Kasten Stärke (deine in der Spielfarbe hervorgehoben, Gangs als schmale Balken,
+kein Satz), darunter die Gangs als Tabelle (Name öffnet `gangs.gang`, Stärke, Veedel mit Flagge, Status nur als Symbol,
+Knöpfe Angriff, Bündnis, Schutzgeld; Schutzgeld als Menü `ProtectionSheet`). Die Übersicht der Gang-Kriege ist weg.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
