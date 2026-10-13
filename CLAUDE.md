@@ -356,6 +356,16 @@ sobald alles erfüllt ist. Unten nur noch der Hafen (Logistik); Routen erst ab d
 Fahrer stehen in der Lager-App (Slot `'goods.app'`, `DriverSection` in `logistics/ui`): anheuern und der Hafen-Fahrer
 (`logistics.setHarborDriver`, `harborDriverOn`, Zustand `harborDriver` pro Stadt, Version 7): ein freier Fahrer holt
 Ware am Kai von selbst ins Lager und beantwortet die Frage des Hafens. „Lager-Optionen“ am Startbildschirm ist größer.
+Nachrichten, Reviere und Shop (Feedback 13.10.2026): Die Nachrichten-App zeigt höchstens fünf offene Chats (Frage oder
+ungelesen, `INBOX_MAX` in `MessagesApp.tsx`), darunter „Archiv“ (`openPhone('core.messages', { view: 'archive' })`) mit
+allen Chats und Suche; keine Gruppen nach Kontaktart. Per Chat kommt nur noch, was eine Antwort braucht: Tagesbericht
+und stille Notizen der Rechten Hand und der Leutnants, Gang-Nachrichten ohne Antwort (`say()`), Polizei-Stufe,
+Lieferanten-Infos (`tell()`) und Rabatt-Aktionen stehen im Journal; ist der Hafen-Fahrer frei, kommt keine Hafen-Frage.
+Wochenverträge sind aus (`CONTRACTS_ENABLED` in `quests/config.ts`, in den Tests an über `quests/test-setup.ts`). Kein
+Rang-Widget mehr (der Rang wird weiter berechnet); oben links am Startbildschirm der Shop (`spots.shop`: Spot gründen
+gegen Schwarzgeld je Art, Ort per `ui.pickLocation`, `spots.found`), daneben breiter Ruf und Reviere. Die Reviere sind eine
+Seite: Kacheln Ruf (Slot `'territory.tiles'`, Tipp zeigt die letzten Gründe) und Fortschritt, darunter die Veedel als
+Tabelle (Einfluss, Spots, Heat); Spots stehen in den Veedel-Seiten, Stadtleben und Polizei-Karte sind weg.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

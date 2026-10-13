@@ -1,9 +1,9 @@
-// Oberfläche des Rufs: Kacheln „Ruf“ und „Reviere“ im HUD (je mit aufklappbarer Karte) und ein Abschnitt mit den
-// letzten Gründen im Tab "Reviere".
+// Oberfläche des Rufs: Widgets „Ruf“ und „Reviere“ am Startbildschirm und die Ruf-Kachel oben in den Revieren (mit den
+// letzten Gründen im Blatt).
 
+import { useState } from 'preact/hooks';
 import { formatNumber } from '../../../core';
 import {
-  Card,
   Empty,
   Group,
   HudPill,
@@ -12,9 +12,9 @@ import {
   List,
   ListItem,
   LockedWidget,
-  ProgressBar,
   registerHudItem,
   registerSlot,
+  Sheet,
   useGame,
   useUi,
 } from '../../../ui';
@@ -23,7 +23,7 @@ import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory'
 import { supplierReputation } from '../../trade';
 import { tutorialAllows, tutorialLockText } from '../../tutorial';
 import { veedelCity, veedelName } from '../../veedel';
-import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
+import { getReputation, recentReputationChanges, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
 
 /**
@@ -147,57 +147,73 @@ function TerritoryWidget() {
   );
 }
 
-function ReputationSection() {
+/**
+ * Ruf als Kachel oben in den Revieren (Feedback 13.10.2026): Wert, Stufe, Leiste. Ein Tipp öffnet ein Blatt mit dem,
+ * was die Stufe bringt, und dem, was den Ruf zuletzt verändert hat.
+ */
+function ReputationTile() {
   const { state } = useGame();
+  const [open, setOpen] = useState(false);
   const value = getReputation(state);
-  // Stufe aus der gezeigten Zahl (wie im HUD).
+  // Stufe aus der gezeigten Zahl (wie im Widget).
   const shown = Math.round(value);
+  const tier = reputationTier(shown);
   const recent = recentReputationChanges(state);
   return (
-    <Card
-      title={`Ruf: ${reputationLabel(shown)}`}
-      icon="star"
-      color="brand"
-      status={value < 25 ? 'bad' : value < 45 ? 'warn' : 'good'}
-      summary={shown}
-    >
-      <List>
-        <ListItem value={`${shown} von 100`}>
-          <ItemContent icon="star" color="brand" title={reputationLabel(shown)}>
-            <ProgressBar value={value / 100} tone={value < 25 ? 'bad' : value < 45 ? 'warn' : 'accent'} label="Ruf" />
-          </ItemContent>
-        </ListItem>
-      </List>
-      <Group title="Zuletzt" icon="clock" color="system">
-        {recent.length === 0 ? (
-          <Empty>Noch redet keiner über dich.</Empty>
-        ) : (
-          <List>
-            {recent.map((c) => (
-              <ListItem
-                key={`${c.reason}:${c.time}`}
-                value={
-                  <span class={c.delta >= 0 ? 'rep-up' : 'rep-down'}>
-                    {c.delta >= 0 ? '+' : ''}
-                    {formatNumber(c.delta, 1)}
-                  </span>
-                }
-              >
-                <ItemContent
-                  icon={c.delta >= 0 ? 'trendUp' : 'trendDown'}
-                  color={c.delta >= 0 ? 'money' : 'danger'}
-                  title={c.reason}
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Group>
-    </Card>
+    <>
+      <button
+        type="button"
+        class="territory-tile territory-tile--button"
+        style={{
+          '--tile-accent': shown < 20 ? 'var(--cat-danger)' : shown < 40 ? 'var(--cat-warn)' : 'var(--cat-people)',
+        }}
+        onClick={() => setOpen(true)}
+      >
+        <span class="territory-tile__label">Ruf</span>
+        <strong class="territory-tile__value">{shown}</strong>
+        <span class="territory-tile__sub">{tier.name}</span>
+        <span class="territory-tile__bar" aria-hidden="true">
+          <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+        </span>
+      </button>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={`Ruf ${shown}: ${tier.name}`}
+        detents={['medium', 'large']}
+      >
+        <p class="rep-sheet__lead">{tier.effect}</p>
+        <Group title="Zuletzt" icon="clock" color="system">
+          {recent.length === 0 ? (
+            <Empty>Noch redet keiner über dich.</Empty>
+          ) : (
+            <List>
+              {recent.map((c) => (
+                <ListItem
+                  key={`${c.reason}:${c.time}`}
+                  value={
+                    <span class={c.delta >= 0 ? 'rep-up' : 'rep-down'}>
+                      {c.delta >= 0 ? '+' : ''}
+                      {formatNumber(c.delta, 1)}
+                    </span>
+                  }
+                >
+                  <ItemContent
+                    icon={c.delta >= 0 ? 'trendUp' : 'trendDown'}
+                    color={c.delta >= 0 ? 'money' : 'danger'}
+                    title={c.reason}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Group>
+      </Sheet>
+    </>
   );
 }
 
 registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
 registerSlot('phone.home', { id: 'reputation.widget', order: 20, component: ReputationWidget });
 registerSlot('phone.home', { id: 'reputation.territory', order: 30, component: TerritoryWidget });
-registerSlot('tab:territory', { id: 'reputation.summary', title: 'Ruf', order: 20, component: ReputationSection });
+registerSlot('territory.tiles', { id: 'reputation.tile', order: 10, component: ReputationTile });

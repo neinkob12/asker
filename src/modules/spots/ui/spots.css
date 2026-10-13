@@ -424,19 +424,60 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.spot-shop__slots {
+
+/* Shop (Feedback 13.10.2026): eine Kachel je Spot-Art, zwei pro Reihe */
+.spot-shop__tiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
 }
-.spot-shop__slot {
-  text-align: center;
-}
-.spot-shop__slot .ui-hint {
+.spot-shop__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
   margin: 0;
-  white-space: nowrap;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: 10px;
+  background: var(--phone-group-2, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.spot-shop__slot .ui-card__title {
-  white-space: nowrap;
+.spot-shop__tile:hover:not(:disabled) {
+  background: var(--phone-fill-hover);
+}
+.spot-shop__tile:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.spot-shop__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--space-1);
+  border-radius: 10px;
+  background: var(--cat-place-soft);
+  color: var(--cat-place);
+}
+.spot-shop__tile strong {
+  font-size: var(--type-subhead, 15px);
+  line-height: 1.2;
+}
+.spot-shop__text {
+  font-size: var(--type-caption, 12px);
+  line-height: 1.3;
+  color: var(--color-muted);
+}
+.spot-shop__price {
+  margin-top: auto;
+  padding-top: var(--space-1);
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }

@@ -517,14 +517,15 @@
     min-height: 76px;
   }
   .phone-stat__value {
-    font-size: 28px;
+    font-size: 24px;
   }
 }
 /* Widgets oben auf dem Startbildschirm: Raster aus drei Spalten, breite Widgets über zwei (Lager), kleine über eine
    (Ruf oben rechts). Module setzen .phone-widget und eine Breite, das Raster gehört dem Handy. */
 .phone__widgets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Schmal links der Shop, daneben breiter Ruf und Reviere (Feedback 13.10.2026). */
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.14fr) minmax(0, 1.14fr);
   gap: 10px;
 }
 .phone-widget {
@@ -570,6 +571,20 @@
 button.phone-stat {
   cursor: pointer;
 }
+/* Shop oben links: Symbol statt Zahl */
+.phone-shop {
+  align-items: center;
+  text-align: center;
+}
+.phone-shop .phone-widget__label {
+  align-self: flex-start;
+}
+.phone-shop__icon {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--stat-accent);
+}
 button.phone-stat:hover {
   background: var(--home-card-hover);
 }
@@ -579,7 +594,7 @@ button.phone-stat:hover {
 }
 .phone-stat__value {
   font-family: var(--font-hud-display);
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;

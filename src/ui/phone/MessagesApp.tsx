@@ -1,8 +1,7 @@
-// Nachrichten-App: oben die zuletzt aktiven Kontakte als Avatare, darunter die Chats pro Figur, nach Kontaktart
-// gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden), kompakt (eine Zeile plus Vorschau), mit Avatar in der
-// Farbe der Kontaktart, ungelesenen Nachrichten und Fristen. "Alle gelesen" in der Leiste, Löschen per Wischen oder
-// Kontextmenü, "Alle löschen" im Menü (Aktionsblatt); bei offener Frist erst eine Rückfrage. Im Chat stehen die
-// Antwort-Optionen als Knöpfe unten.
+// Nachrichten-App (Feedback 13.10.2026): Die Startseite zeigt höchstens fünf Chats, die etwas von dir wollen (offene
+// Frage, ungelesen), darunter „Archiv“ mit allen Chats, Suche und „Alle löschen“. Keine Gruppen nach Kontaktart mehr.
+// Löschen per Wischen oder Kontextmenü; bei offener Frist erst eine Rückfrage. Im Chat stehen die Antwort-Optionen als
+// Knöpfe unten.
 // Die Daten kommen aus dem Nachrichtendienst des Kerns; die Aufbereitung steht in messagesModel.ts.
 // Welcher Chat offen ist, steht in ui.phone.params.contactId (so öffnen Benachrichtigungen den Chat direkt).
 
@@ -16,12 +15,9 @@ import {
   Button,
   type CategoryColor,
   ContextMenu,
-  Disclosure,
   Empty,
   Icon,
   IconButton,
-  IconChip,
-  SegmentedControl,
   Stamp,
   SwipeRow,
   Tag,
@@ -37,11 +33,8 @@ import {
   chatList,
   contactAvatar,
   firstUnread,
-  groupChats,
   isOpenChat,
   lookOf,
-  recentContacts,
-  shortContactName,
 } from './messagesModel';
 import { PhoneScreen } from './PhoneScreen';
 
@@ -63,36 +56,6 @@ function matches(chat: ReturnType<typeof chatList>[number], query: string): bool
   const q = query.trim().toLocaleLowerCase('de');
   if (!q) return true;
   return [chat.name, chat.kindLabel, chat.preview].some((text) => text.toLocaleLowerCase('de').includes(q));
-}
-
-/** Die zuletzt aktiven Kontakte als Avatare in einer Reihe; ein Tipp öffnet den Chat. */
-function RecentRow(props: { chats: ChatListItem[] }) {
-  const ui = useUi();
-  if (props.chats.length < 2) return null;
-  return (
-    <ul class="msg-recent" aria-label="Zuletzt">
-      {props.chats.map((c) => (
-        <li key={c.contactId}>
-          <button
-            type="button"
-            class="msg-recent__item"
-            onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
-            aria-label={`${c.name}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}`}
-            title={c.name}
-          >
-            <Avatar
-              name={c.name}
-              image={avatarImage(c.avatar, c.kind)}
-              look={c.look}
-              tone={CONTACT_KIND_TONES[c.kind]}
-            />
-            <span class="msg-recent__name">{shortContactName(c)}</span>
-            <Badge count={c.unread} />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 interface RowActions {
@@ -182,30 +145,15 @@ const ChatRow = memo(
   (a, b) => a.tone === b.tone && a.actions === b.actions && ROW_FIELDS.every((k) => a.chat[k] === b.chat[k]),
 );
 
-function ChatList() {
+/** Höchstens so viele Chats auf der Startseite der App (Feedback 13.10.2026); der Rest steht im Archiv. */
+const INBOX_MAX = 5;
+
+/** Aktionen der Zeilen und die Rückfrage vor dem Löschen, für Startseite und Archiv. */
+function useChatActions(all: readonly ChatListItem[]) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const all = chatList(state);
-  // Wartet etwas auf Antwort, beginnt die Liste mit "Offen".
-  const [filter, setFilter] = useState<'all' | 'open'>(() => (all.some((c) => c.awaitingAnswer) ? 'open' : 'all'));
-  const [query, setQuery] = useState('');
-  const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState<'all' | string | null>(null);
-  // `all` ist pro Spielstand dieselbe Liste (chatList ist gemerkt): Filter und Gruppen nur bei Änderung neu bauen.
-  const { list, groups, archived, recent, openCount } = useMemo(() => {
-    const list = (filter === 'open' ? all.filter(isOpenChat) : all).filter((c) => matches(c, query));
-    return {
-      list,
-      groups: groupChats(list),
-      archived: list.filter((c) => c.archived),
-      recent: recentContacts(all),
-      // Zählt, was der Filter „Offen“ zeigt.
-      openCount: all.filter(isOpenChat).length,
-    };
-  }, [all, filter, query]);
-  const unread = messages.unreadCount(state);
   const markRead = (contactId: string) => dispatch({ type: 'messages.markRead', payload: { contactId } });
-  const markAllRead = () => dispatch({ type: 'messages.markAllRead', payload: {} });
   const remove = (contactId: string) => dispatch({ type: 'messages.delete', payload: { contactId } });
   const removeAll = () => dispatch({ type: 'messages.deleteAll', payload: {} });
   // Löschen: Chats mit offener Frist erst nachfragen, alle anderen sofort (es gibt sie nach dem nächsten Schreiben wieder).
@@ -215,101 +163,19 @@ function ChatList() {
   };
   // Für die Zeilen (memoisiert, siehe ChatRow): immer dieselbe Hülle, die Funktionen darin sind die aktuellen.
   const rowActions = useRef<RowActions>({ open: () => {}, markRead, askOrRemove });
-  rowActions.current = {
-    open: (contactId) => ui.openPhone(APP_ID, { contactId }),
-    markRead,
-    askOrRemove,
-  };
+  rowActions.current = { open: (contactId) => ui.openPhone(APP_ID, { contactId }), markRead, askOrRemove };
   const confirmChat = confirm && confirm !== 'all' ? all.find((c) => c.contactId === confirm) : undefined;
   // Beim Ausblenden des Blatts sind Chat und Anzahl schon weg: Der Titel darf nicht zu "Alle 0 Chats" umspringen.
   const confirmCopy = useRef({ count: all.length, name: '', withDeadline: [] as string[] });
   if (confirm === 'all') {
     confirmCopy.current.count = all.length;
-    // Nur fürs offene Blatt nötig (Namen der Chats mit Frist), sonst nicht bei jedem Neuzeichnen für alle Chats prüfen.
     confirmCopy.current.withDeadline = all
       .filter((c) => messages.hasOpenDeadline(state, c.contactId))
       .map((c) => c.name);
   } else if (confirmChat) confirmCopy.current.name = confirmChat.name;
   const withDeadline = confirmCopy.current.withDeadline;
-  return (
-    <PhoneScreen
-      title="Nachrichten"
-      subtitle={unread > 0 ? `${unread} ungelesen` : 'Alles gelesen'}
-      search={{ value: query, onInput: setQuery, placeholder: 'Chats durchsuchen' }}
-      actions={
-        all.length > 0 && (
-          <>
-            <Button small variant="subtle" icon="checkCircle" disabled={unread === 0} onClick={markAllRead}>
-              Alle gelesen
-            </Button>
-            <IconButton icon="more" label="Mehr" onClick={() => setMenu(true)} />
-          </>
-        )
-      }
-    >
-      <RecentRow chats={recent} />
-      <SegmentedControl
-        wide
-        aria-label="Filter"
-        options={[
-          { value: 'all' as const, label: 'Alle' },
-          { value: 'open' as const, label: 'Offen', badge: openCount },
-        ]}
-        value={filter}
-        onChange={setFilter}
-      />
-      {list.length === 0 && (
-        <Empty icon={query ? 'search' : 'message'}>
-          {query
-            ? `Kein Chat passt zu „${query.trim()}“.`
-            : filter === 'open'
-              ? 'Nichts Offenes. Alle Chats sind erledigt.'
-              : 'Noch keine Nachrichten.'}
-        </Empty>
-      )}
-      {groups.map((group) => {
-        const tone = CONTACT_KIND_TONES[group.kind];
-        return (
-          <section key={group.kind} class="msg-group">
-            <header class="msg-group__head">
-              <IconChip icon={CONTACT_KIND_ICONS[group.kind]} color={tone} solid size="xs" />
-              <h3 class="msg-group__title">{group.label}</h3>
-              <span class="msg-group__count">{group.items.length}</span>
-            </header>
-            <ul class="msg-list">
-              {group.items.map((c) => (
-                <li key={c.contactId}>
-                  <ChatRow chat={c} tone={tone} actions={rowActions} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-      {archived.length > 0 && (
-        <Disclosure
-          icon="clock"
-          label={`${state.messages.archive?.label ?? 'Früher'} (${archived.length})`}
-          open={query !== ''}
-        >
-          <ul class="msg-list">
-            {archived.map((c) => (
-              <li key={c.contactId}>
-                <ChatRow chat={c} tone={CONTACT_KIND_TONES[c.kind]} actions={rowActions} />
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
-      <ActionSheet
-        open={menu}
-        onClose={() => setMenu(false)}
-        title="Nachrichten"
-        actions={[
-          { label: 'Alle als gelesen markieren', icon: 'checkCircle', disabled: unread === 0, onSelect: markAllRead },
-          { label: 'Alle Chats löschen …', icon: 'trash', destructive: true, onSelect: () => setConfirm('all') },
-        ]}
-      />
+  const sheets = (
+    <>
       <ActionSheet
         open={confirm === 'all'}
         onClose={() => setConfirm(null)}
@@ -335,6 +201,118 @@ function ChatList() {
           },
         ]}
       />
+    </>
+  );
+  return { rowActions, sheets, askAll: () => setConfirm('all') };
+}
+
+/** Chats als eine Liste (Kasten wie die Gruppen der anderen Apps). */
+function ChatRows(props: { chats: readonly ChatListItem[]; actions: { current: RowActions } }) {
+  return (
+    <ul class="msg-list">
+      {props.chats.map((c) => (
+        <li key={c.contactId}>
+          <ChatRow chat={c} tone={CONTACT_KIND_TONES[c.kind]} actions={props.actions} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Startseite der Nachrichten (Feedback 13.10.2026, eine Seite ohne Scrollen): höchstens fünf Chats, die gerade etwas
+ * von dir wollen (offene Frage zuerst, dann ungelesen). Was beantwortet oder gelesen ist, rutscht von selbst ins
+ * Archiv; darunter der Knopf „Archiv“ mit allen Chats.
+ */
+function ChatInbox() {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const all = chatList(state);
+  const open = useMemo(
+    () =>
+      all
+        .filter(isOpenChat)
+        .sort(
+          (a, b) =>
+            Number(b.awaitingAnswer) - Number(a.awaitingAnswer) || (a.deadlineIn ?? 1e9) - (b.deadlineIn ?? 1e9),
+        ),
+    [all],
+  );
+  const shown = open.slice(0, INBOX_MAX);
+  const more = open.length - shown.length;
+  const { rowActions, sheets } = useChatActions(all);
+  const unread = messages.unreadCount(state);
+  return (
+    <PhoneScreen
+      title="Nachrichten"
+      subtitle={open.length > 0 ? `${open.length} offen` : 'Alles erledigt'}
+      actions={
+        unread > 0 && (
+          <Button
+            small
+            variant="subtle"
+            icon="checkCircle"
+            onClick={() => dispatch({ type: 'messages.markAllRead', payload: {} })}
+          >
+            Alle gelesen
+          </Button>
+        )
+      }
+    >
+      <section class="msg-section">
+        <h3 class="msg-section__title">Offen</h3>
+        {shown.length === 0 ? (
+          <Empty icon="message">Nichts Offenes. Neue Nachrichten stehen hier.</Empty>
+        ) : (
+          <ChatRows chats={shown} actions={rowActions} />
+        )}
+      </section>
+      <ul class="msg-list">
+        <li>
+          <button type="button" class="msg-archive" onClick={() => ui.openPhone(APP_ID, { view: 'archive' })}>
+            <Icon name="inbox" />
+            <span class="msg-archive__label">Archiv</span>
+            {more > 0 && <span class="msg-archive__more">{`${more} weitere offen`}</span>}
+            <span class="msg-archive__count">{all.length}</span>
+            <Icon name="chevronRight" />
+          </button>
+        </li>
+      </ul>
+      {sheets}
+    </PhoneScreen>
+  );
+}
+
+/** Archiv: alle Chats, neueste zuerst, mit Suche; Löschen per Wischen, alle löschen über „Mehr“. */
+function ChatArchive() {
+  const { state } = useGame();
+  const ui = useUi();
+  const all = chatList(state);
+  const [query, setQuery] = useState('');
+  const [menu, setMenu] = useState(false);
+  const list = useMemo(() => all.filter((c) => matches(c, query)), [all, query]);
+  const { rowActions, sheets, askAll } = useChatActions(all);
+  return (
+    <PhoneScreen
+      title="Archiv"
+      onBack={() => ui.openPhone(APP_ID)}
+      search={{ value: query, onInput: setQuery, placeholder: 'Chats durchsuchen' }}
+      actions={all.length > 0 && <IconButton icon="more" label="Mehr" onClick={() => setMenu(true)} />}
+    >
+      {list.length === 0 ? (
+        <Empty icon={query ? 'search' : 'inbox'}>
+          {query ? `Kein Chat passt zu „${query.trim()}“.` : 'Das Archiv ist leer.'}
+        </Empty>
+      ) : (
+        <ChatRows chats={list} actions={rowActions} />
+      )}
+      <ActionSheet
+        open={menu}
+        onClose={() => setMenu(false)}
+        title="Archiv"
+        actions={[{ label: 'Alle Chats löschen …', icon: 'trash', destructive: true, onSelect: askAll }]}
+      />
+      {sheets}
     </PhoneScreen>
   );
 }
@@ -523,5 +501,6 @@ export function MessagesApp() {
   const ui = useUi();
   const contactId =
     ui.state.phone.app === APP_ID ? (ui.state.phone.params?.contactId as string | undefined) : undefined;
-  return contactId ? <Chat key={contactId} contactId={contactId} /> : <ChatList />;
+  if (contactId) return <Chat key={contactId} contactId={contactId} />;
+  return ui.state.phone.app === APP_ID && ui.state.phone.params?.view === 'archive' ? <ChatArchive /> : <ChatInbox />;
 }

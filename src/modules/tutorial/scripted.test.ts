@@ -144,7 +144,8 @@ describe('tutorial: erster Gang-Angriff (firstAttack)', () => {
     const raided = eventsOfType(events, 'gang.raided');
     expect(raided).toHaveLength(1);
     expect(raided[0].payload).toMatchObject({ spotId: 'neumarkt', goodsLost: 45, cashLost: 2400 });
-    expect(messages.thread(sim.state, `gang:${raided[0].payload.gangId}`).length).toBeGreaterThan(0);
+    // Feedback 13.10.2026: Was die Gang dazu sagt, steht im Journal (ohne Antwort kein Chat).
+    expect(eventsOfType(events, 'journal.added').some((e) => e.payload.entry.text.includes(':'))).toBe(true);
     const moment = eventsOfType(events, 'tutorial.scriptedMoment');
     expect(moment.map((e) => [e.payload.key, e.payload.ref])).toEqual([['firstAttack', raided[0].payload.gangId]]);
     const lost = eventsOfType(events, 'wallet.changed').filter((e) => e.payload.category === 'loss.gang');

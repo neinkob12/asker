@@ -6,8 +6,6 @@ import { clock, formatPercent } from '../../../core';
 import { mapEffects } from '../../../map';
 import {
   ActionSheet,
-  Button,
-  Card,
   Group,
   Icon,
   ItemContent,
@@ -17,14 +15,11 @@ import {
   onGameEvent,
   ProgressBar,
   registerHudItem,
-  registerSearch,
   registerSlot,
   shallowEqual,
   soundOnEvent,
-  Tag,
   useGame,
   useGameSelector,
-  useUi,
 } from '../../../ui';
 import { activeCity, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
@@ -40,10 +35,7 @@ import {
   getHeat,
   heatLevel,
   MAX_HEAT,
-  nextTierHints,
   OPERATION_TIERS,
-  operationTier,
-  plannedMajorRaid,
   playerHeat,
   RAID_THRESHOLD,
 } from '../index';
@@ -136,7 +128,6 @@ function PoliceSection(props: { veedelId: string }) {
       more="Verkäufe und Gewalt treiben den Heat, mit der Zeit kühlt es ab. Ab einer Schwelle gibt es Kontrollen, darüber Razzien; ein Polizei-Kontakt warnt vorher."
     >
       <List>
-        <TierRow />
         <ListItem value={`${Math.round(heat)} von ${MAX_HEAT}`}>
           <ItemContent icon="flame" color={level.id === 'calm' ? 'money' : 'danger'} title={level.label} meta={risk}>
             <ProgressBar value={heat / MAX_HEAT} tone={TONE[level.id]} label="Heat" />
@@ -182,118 +173,8 @@ function PoliceSection(props: { veedelId: string }) {
   );
 }
 
-const TIER_COLORS = ['money', 'warn', 'danger'] as const;
-
-/** Stufe als Zeile: "So sieht dich die Polizei: Kleindealer". */
-function TierRow() {
-  const { state } = useGame();
-  const tier = operationTier(state);
-  return (
-    <ListItem
-      value={
-        <Tag category={TIER_COLORS[tier.index]} icon={tier.index === 0 ? 'user' : tier.index === 1 ? 'users' : 'crown'}>
-          {tier.name}
-        </Tag>
-      }
-    >
-      <ItemContent icon="badge" color="law" title="So sieht dich die Polizei" meta={tier.hint} />
-    </ListItem>
-  );
-}
-
-/** Abschnitt "Polizei" im Geschäft: Stufe, was zur nächsten führt, geplante Großrazzia, heißestes Veedel. */
-function PoliceCard() {
-  const { state } = useGame();
-  const ui = useUi();
-  const tier = operationTier(state);
-  const hints = nextTierHints(state, tier.index);
-  const hot = hottestPresent(state);
-  const major = plannedMajorRaid(state);
-  return (
-    <Card
-      title="Polizei"
-      icon="siren"
-      color="law"
-      status={tier.index >= 2 ? 'bad' : tier.index === 1 ? 'warn' : 'good'}
-      summary={tier.name}
-      actions={
-        hot ? (
-          <Button small onClick={() => ui.openPanel('veedel.veedel', { veedelId: hot.veedelId })}>
-            Heißestes Veedel
-          </Button>
-        ) : undefined
-      }
-    >
-      <Group title="Stufe" icon="badge" color="law">
-        <List>
-          <TierRow />
-          {major && (
-            <ListItem value={clock.format(major.at)}>
-              <ItemContent
-                icon="siren"
-                color="danger"
-                title="Großrazzia geplant"
-                meta={major.veedelIds.map(veedelName).join(', ')}
-              />
-            </ListItem>
-          )}
-          {hot && (
-            <ListItem value={`Heat ${Math.round(hot.heat)}`}>
-              <ItemContent icon="flame" color="danger" title={`Am heißesten: ${veedelName(hot.veedelId)}`} />
-            </ListItem>
-          )}
-        </List>
-      </Group>
-      {hints.length > 0 && (
-        <Group
-          title={`Zur Stufe ${OPERATION_TIERS[tier.index + 1].name}`}
-          icon="trendUp"
-          color="warn"
-          note="Eines davon reicht. Wer größer wird, bekommt härtere Razzien."
-        >
-          <List>
-            {/* Bedingung als Titel, der Stand darunter als Chips: Rechts neben dem Titel war am Handy kein Platz (J7). */}
-            {hints.map((h) => (
-              <ListItem key={h.label}>
-                <ItemContent
-                  icon="arrowUp"
-                  color="warn"
-                  title={h.label}
-                  tags={h.parts.map((p) => ({
-                    label: p.label,
-                    icon: p.met ? 'checkCircle' : undefined,
-                    color: p.met ? 'money' : 'system',
-                  }))}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
-    </Card>
-  );
-}
-
-registerSlot('tab:territory', { id: 'police.tier', title: 'Polizei', order: 30, component: PoliceCard });
-registerSearch({
-  id: 'police.search',
-  label: 'Polizei',
-  order: 60,
-  // Nach dem Verkauf gibt es keine Polizei-Stufe mehr, nur den Zoll (Auftrag 43).
-  items: (state) =>
-    isBusinessSold(state)
-      ? []
-      : [
-          {
-            id: 'police.tier',
-            title: 'Polizei',
-            subtitle: `So sieht dich die Polizei: ${operationTier(state).name}`,
-            icon: 'siren',
-            keywords: 'Razzia Großrazzia Heat Kripo Stufe',
-            run: (ui) => ui.selectTab('territory'),
-          },
-        ],
-});
+// Die Polizei-Karte steht seit dem Feedback vom 13.10.2026 nicht mehr in den Revieren (niemand handelte damit); die
+// Stufe wirkt weiter, Heat steht je Veedel in der Tabelle der Reviere und im Veedel.
 registerHudItem({ id: 'police.heat', order: 30, placement: 'main', component: HeatHud });
 registerSlot('veedel.veedelPanel', { id: 'police.heat', order: 20, component: PoliceSection });
 

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { activeDeal, getDeals, packagePrice, supplierContactId } from './index';
+import { activeDeal, getDeals, getSupplier, packagePrice } from './index';
 
 const DAY = 1440;
 
@@ -28,10 +28,12 @@ describe('suppliers: Rabatt-Aktionen', () => {
       const days = (e.payload.endsAt - e.time) / DAY;
       expect(days).toBeGreaterThanOrEqual(3);
       expect(days).toBeLessThanOrEqual(5);
-      const msg = sim.state.messages.list.find(
-        (m) => m.contactId === supplierContactId(e.payload.supplierId) && m.time === e.time,
+      // Feedback 13.10.2026: Die Aktion steht im Journal (und an der Kachel), nicht mehr im Chat.
+      const name = getSupplier(sim.state, e.payload.supplierId)?.contactName ?? '';
+      const entry = eventsOfType(events, 'journal.added').find(
+        (j) => j.time === e.time && j.payload.entry.text.startsWith(`${name}:`),
       );
-      expect(msg?.text).toContain(`${Math.round(e.payload.discount * 100)} %`);
+      expect(entry?.payload.entry.text).toContain(`${Math.round(e.payload.discount * 100)} %`);
     }
     // Mehrere Wochen Spielzeit: unter Last knapp über den 5 Sekunden Standard.
   }, 30_000);

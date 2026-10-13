@@ -22,7 +22,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityName, isBusinessSold } from '../city';
+import { activeCity, cityName } from '../city';
 import { cityReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
 import { atSpot, getSpot, getSpots, spotCity } from '../spots';
@@ -419,7 +419,9 @@ function note(ctx: Ctx, rh: RightHandPost, text: string, phone = false, silent =
   rh.log.unshift({ time: ctx.now, text });
   if (rh.log.length > LOG_LIMIT) rh.log.length = LOG_LIMIT;
   const m = getStaffMember(ctx.state, rh.staffId);
-  if (phone && m) messages.send(ctx, { contact: staffContact(m), text, silent });
+  // Feedback 13.10.2026: Stille Notizen („Kaution gezahlt“, „wieder da“) nur noch im Protokoll; aufs Handy kommt nur,
+  // was dich jetzt etwas angeht (nicht still, z.B. die Lohnsicherung).
+  if (phone && !silent && m) messages.send(ctx, { contact: staffContact(m), text, silent });
 }
 
 export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
@@ -430,11 +432,6 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   // Eine Rechte Hand pro Stadt: die der Stadt, in der die Person ist (Auftrag 30).
   installPost(ctx, m, m.cityId ?? 'koeln', 0);
   journal.add(ctx, `${m.name} ist jetzt deine Rechte Hand (${formatEuro(m.wage)} pro Tag).`, 'good', { staffId });
-  messages.send(ctx, {
-    contact: staffContact(m),
-    text: 'Ich halte dir den Rücken frei. Jeden Morgen um acht kriegst du von mir die Zahlen.',
-    silent: true,
-  });
   ctx.emit('hierarchy.rightHandAppointed', { staffId });
   return { ok: true };
 }
@@ -751,24 +748,9 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
     ...(report.tip ? [report.tip] : []),
   ];
   if (fp) fp.done = emptyFullPowerDone();
-  const absent = getStaff(ctx.state, { cityId }).filter(isAbsent);
-  if (live) {
-    messages.send(ctx, {
-      contact: staffContact(m),
-      text: lines.join(' '),
-      options: [
-        { id: 'openFinance', label: 'Kasse öffnen', reply: 'Zeig mal die Kasse.' },
-        ...(absent.length > 0 ? [{ id: 'openStaff', label: 'Ausfälle ansehen', reply: 'Wer fällt aus?' }] : []),
-        { id: 'ok', label: 'Gut so', reply: 'Gut so.' },
-      ],
-      expiresIn: 12 * 60,
-      silent: problems === 0,
-    });
-  } else if (report.profit < 0 && !isBusinessSold(ctx.state)) {
-    // Aus einer anderen Stadt schreibt der Statthalter nur, wenn etwas schiefläuft (Auftrag 43: vier Berichte am Tag
-    // fluteten sonst das Handy); den Bericht gibt es immer auf seiner Seite. Nach dem Verkauf gehört alles ihm.
-    messages.send(ctx, { contact: staffContact(m), text: lines.join(' '), silent: true });
-  }
+  // Feedback 13.10.2026: Der Tagesbericht kommt nicht mehr als Chat (er stand schon in der Kasse und auf ihrer Seite);
+  // er steht in ihrem Protokoll und im Journal.
+  journal.add(ctx, `${m.name}: ${lines.join(' ')}`, report.profit < 0 ? 'bad' : 'info', { staffId: m.id });
   rh.log.unshift({
     time: ctx.now,
     text: `Tagesbericht: ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(report.profit)}.`,

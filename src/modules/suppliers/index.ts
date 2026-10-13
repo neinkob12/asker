@@ -973,8 +973,12 @@ export function contactOf(supplier: Supplier, cityId?: string): Contact {
   };
 }
 
+/**
+ * Was ein Lieferant dir ohne Frage sagt (Verspätung, Qualität, Ergebnis einer Entscheidung): seit dem Feedback vom
+ * 13.10.2026 nur noch im Journal; per Chat kommen nur Entscheidungen mit Antworten (troubles.ts).
+ */
 export function tell(ctx: Ctx, supplier: Supplier, text: string): void {
-  messages.send(ctx, { contact: contactOf(supplier, activeCity(ctx.state)), text });
+  journal.add(ctx, `${supplier.contactName}: ${text}`, 'info');
 }
 
 /** Liefert die Lieferung in die Stadt, in der du bist (und gehört das Geschäft noch dir)? */
@@ -1498,7 +1502,8 @@ function rollDeals(ctx: Ctx): void {
       .replace('{discount}', `${Math.round(discount * 100)} %`)
       .replace('{until}', until);
     // Gesagt wird es nur für die Stadt, in der du bist (Auftrag 43); die Aktion anderswo steht in der App dieser Stadt.
-    if (cityId === activeCity(ctx.state)) messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
+    // Feedback 13.10.2026: kein Chat mehr, die Aktion steht als „Aktion“ an der Kachel in der Lieferanten-App.
+    if (cityId === activeCity(ctx.state)) journal.add(ctx, `${supplier.contactName}: ${text}`, 'info');
     ctx.emit('supplier.dealStarted', {
       dealId: deal.id,
       supplierId: supplier.id,

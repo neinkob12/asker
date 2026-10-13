@@ -47,7 +47,6 @@ import {
   formatEuro,
   type GameState,
   journal,
-  messages,
   wallet,
 } from '../../core';
 import { activeCity, isBusinessSold, isVeedelLive, liveVeedel } from '../city';
@@ -58,14 +57,12 @@ import { allProducts, getLots, getWarehouses, nearestWarehouse, take, warehouseM
 import { atSpot, getSpot, spotModifiers, spotsInVeedel } from '../spots';
 import {
   activeRunnerAt,
-  bonusProvider,
   getStaff,
   getStaffMember,
   isLyingLow,
   riskFactor,
   type StaffMember,
   specialistFactor,
-  staffContact,
 } from '../staff';
 import {
   addInfluence,
@@ -121,7 +118,6 @@ import {
   SALE_HEAT_PER_UNIT,
   SNITCH_COOLDOWN,
   SNITCH_HEAT,
-  TICKERS,
   TIP_OFF_DURATION,
   TIP_OFF_RAID_CHANCE_PER_HOUR,
   UNDERCOVER_SHIFTS,
@@ -1121,14 +1117,7 @@ function updateTier(ctx: Ctx): void {
       ? 'Die Kripo hat eine Ermittlungsgruppe gegen dich gebildet. Ab jetzt drohen Großrazzien, mehrere Viertel auf einmal.'
       : 'Die Polizei hat dich auf dem Schirm: Für die bist du jetzt ein Händler. Razzien treffen ganze Viertel und deine Lager dort.';
   journal.add(ctx, `${text} (Stufe: ${info.name})`, 'bad');
-  const contact = bonusProvider(ctx.state, 'raidWarning', cityId);
-  const ticker = TICKERS[cityId] ?? TICKERS.koeln;
-  // Aufs Handy nur aus der Stadt, in der du bist, und nicht mehr nach dem Verkauf (Auftrag 43).
-  if (cityId !== activeCity(ctx.state) || isBusinessSold(ctx.state)) return;
-  const sender = contact ? staffContact(contact) : { ...ticker, kind: 'other' as const };
-  // Auftrag 46d: Polizei-Nachrichten höchstens eine am Tag; der Verlauf hat die Stufe ohnehin.
-  if (messages.sentToday(ctx.state, sender.id)) return;
-  messages.send(ctx, { contact: sender, text: contact ? `Hör zu: ${text}` : text });
+  // Feedback 13.10.2026: Die neue Stufe steht nur im Journal (vorher zusätzlich als Chat).
 }
 
 /** Razzia gegen eine Gang: Sie verliert Einfluss im Veedel. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, MINUTES_PER_DAY as DAY, messages, type Simulation, wallet } from '../../core';
+import { clock, MINUTES_PER_DAY as DAY, journal, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, getWarehouses, store } from '../goods';
 import { getHeat } from '../police';
@@ -310,7 +310,8 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     const before = getHeat(sim.state, veedelId);
     expect(run(sim, 'west', 'tipOff')).toBe(true);
     expect(getHeat(sim.state, veedelId)).toBeGreaterThan(before);
-    expect(messages.thread(sim.state, 'gang:west').length).toBeGreaterThan(0);
+    // Feedback 13.10.2026: ohne Antwort im Journal statt im Chat.
+    expect(journal.entries(sim.state).some((e) => e.text.startsWith(`${gang('west').name}:`))).toBe(true);
   });
 
   it('Chancen: Warnung vor einem Rivalen und bezahlter Gefallen', () => {

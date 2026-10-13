@@ -80,8 +80,8 @@ function note(turn: Turn, text: string, toJournal = true, phone = false): void {
   }
   post.log.unshift({ time: ctx.now, text });
   if (post.log.length > LOG_LIMIT) post.log.length = LOG_LIMIT;
-  if (toJournal) journal.add(ctx, `${lt.name}: ${text}`, 'info', { staffId: lt.id });
-  if (phone) messages.send(ctx, { contact: staffContact(lt), text, silent: true });
+  // Feedback 13.10.2026: Notizen der Leutnants kommen nicht mehr als Chat, sondern ins Journal (vorher still im Handy).
+  if (toJournal || phone) journal.add(ctx, `${lt.name}: ${text}`, 'info', { staffId: lt.id });
 }
 
 function turnFor(ctx: Ctx, post: LieutenantPost, lt: StaffMember): Turn {

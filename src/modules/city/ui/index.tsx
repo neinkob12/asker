@@ -13,7 +13,6 @@ import {
   HudPill,
   Icon,
   IconChip,
-  LockedWidget,
   onGameEvent,
   registerCityViews,
   registerHudItem,
@@ -30,7 +29,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
-import { tutorialLockText } from '../../tutorial';
+
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -50,8 +49,6 @@ import {
   OPEN_RIGHT_HAND,
   offerFrom,
   offerStatus,
-  PLAYER_RANKS,
-  playerRank,
   presentCity,
   travelMinutesBetween,
 } from '../index';
@@ -405,48 +402,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------------------------
 // Ränge des Spielers (Auftrag 36): Titel im HUD (Mehr-Menü) mit der Leiter, Banner und Ton beim Aufstieg.
 
-/**
- * Rang als kleines Widget oben links auf dem Startbildschirm des Handys (vorher Kachel im HUD): der Titel und eine
- * Leiste. Was es zum nächsten Rang braucht, zeigt ein Tipp kurz an; die ganze Leiter steht im Tooltip.
- */
-function RankWidget() {
-  const { state } = useGame();
-  const ui = useUi();
-  const locked = tutorialLockText(state, 'hud.rank');
-  if (locked) return <LockedWidget icon="crown" label="Rang" hint={locked} data-tour="hud.rank" />;
-  const rank = playerRank(state);
-  const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
-  const next = PLAYER_RANKS[reachedAt + 1];
-  const ladder = PLAYER_RANKS.map(
-    (r, i) => `${i <= reachedAt ? '✓' : '○'} ${i === reachedAt ? rank.title : r.title.replace('{city}', '…')}`,
-  );
-  const nextText = !next
-    ? 'Ganz oben angekommen.'
-    : `Nächster Rang: ${next.title.includes('{city}') ? 'Boss einer weiteren Stadt' : next.title}. ${next.hint}`;
-  return (
-    <button
-      type="button"
-      class="phone-widget phone-stat"
-      // Gold wie die Bedeutungsfarbe brand im dunklen Schema (der Startbildschirm ist immer dunkel).
-      style={{ '--stat-accent': 'var(--home-brand)' }}
-      data-tour="hud.rank"
-      title={`Dein Weg:\n${ladder.join('\n')}`}
-      onClick={() => ui.notice(nextText)}
-    >
-      <span class="phone-widget__label">
-        <Icon name="crown" size={12} /> Rang
-      </span>
-      <strong class="phone-stat__title">{rank.title}</strong>
-      <span class="phone-stat__bar" aria-hidden="true">
-        <span style={{ width: `${(100 * (reachedAt + 1)) / PLAYER_RANKS.length}%` }} />
-      </span>
-    </button>
-  );
-}
-
-// Rang als Widget oben auf dem Startbildschirm des Handys (vorher Kachel im HUD), links neben Ruf und Revieren.
-registerSlot('phone.home', { id: 'city.rank', order: 5, component: RankWidget });
-
+// Der Rang hat kein Widget mehr (Feedback 13.10.2026: er wirkt nicht, oben links steht jetzt der Shop). Er wird weiter
+// berechnet (Bestenliste, späteres Level-System); beim Aufstieg gibt es Verlauf und Ton.
 onGameEvent('player.rankUp', 'city.rankUp', (payload, ui) =>
   ui.toast(`Neuer Rang: ${payload.title}`, 'good', { urgent: true, icon: 'crown' }),
 );
