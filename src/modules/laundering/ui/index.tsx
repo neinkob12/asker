@@ -305,7 +305,8 @@ registerPhoneApp({
   color: 'money',
   component: LaunderingApp,
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => !tutorialAllows(state, 'app.laundering'),
+  // Auftrag 46b: Im Tutorial steht die Geldwäsche schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => !tutorialAllows(state, 'app.laundering'),
 });
 registerSearch({
   id: 'laundering.search',

@@ -194,6 +194,13 @@
 .goods-widget__options .ui-icon:first-child {
   color: var(--cat-goods);
 }
+.goods-widget__options.is-locked {
+  color: var(--home-label-2);
+  cursor: default;
+}
+.goods-widget__options.is-locked .ui-icon:first-child {
+  color: inherit;
+}
 
 /* Füllstand des Lagers (Auftrag 33). */
 .goods-capacity {

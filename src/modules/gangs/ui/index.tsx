@@ -844,7 +844,9 @@ registerTab({
   // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43). Am Anfang
   // kommt die App mit Peters Quest.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.gangs'),
+  hiddenWhen: (state) => isBusinessSold(state),
+  // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => !tutorialAllows(state, 'app.gangs'),
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });

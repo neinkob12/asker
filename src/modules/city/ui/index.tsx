@@ -13,6 +13,7 @@ import {
   HudPill,
   Icon,
   IconChip,
+  LockedWidget,
   onGameEvent,
   registerCityViews,
   registerHudItem,
@@ -410,8 +411,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
  */
 function RankWidget() {
   const { state } = useGame();
-  // Auftrag 46b: Im Tutorial erscheint der Rang mit dem ersten Aufstieg.
-  if (!tutorialAllows(state, 'hud.rank')) return null;
+  // Auftrag 46b: Im Tutorial steht der Rang schon da, gesperrt bis zum ersten Aufstieg.
+  if (!tutorialAllows(state, 'hud.rank')) return <LockedWidget icon="crown" label="Rang" data-tour="hud.rank" />;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   const next = PLAYER_RANKS[reachedAt + 1];

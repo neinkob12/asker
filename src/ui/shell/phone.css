@@ -484,8 +484,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin: 0 0 2px;
-  color: var(--stat-accent);
+  margin: 0 0 6px 2px;
+  font-size: var(--type-caption-2);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
 }
 /* Kleines Kennzahl-Widget (Rang, Ruf, Reviere oben nebeneinander): Kopf in der Farbe des Widgets (--stat-accent,
    hell für dunklen Grund), große Zahl oder Titel, Unterzeile, Leiste, Fußzeile. Als Knopf tippbar. */
@@ -505,7 +508,11 @@ button.phone-stat {
 button.phone-stat:hover {
   background: rgba(255, 255, 255, 0.12);
 }
-.phone-stat .phone-stat__value {
+.phone-stat .phone-widget__label {
+  margin: 0 0 2px;
+  color: var(--stat-accent);
+}
+.phone-stat__value {
   font-family: var(--font-hud-display);
   font-size: 34px;
   font-weight: 700;
@@ -551,12 +558,32 @@ button.phone-stat:hover {
 .phone-stat__bar + .phone-stat__foot {
   margin-top: 0;
 }
-.phone-widget__label {
-  margin: 0 0 6px 2px;
-  font-size: var(--type-caption-2);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-caps);
-  text-transform: uppercase;
+/* Gesperrtes Widget (Tutorial, LockedWidget): ausgegraut, Schloss in der Mitte, darunter, wann es kommt. */
+.phone-widget--locked {
+  align-items: flex-start;
+  gap: 4px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--home-label-2);
+  font: inherit;
+  text-align: left;
+}
+.phone-widget--locked .phone-widget__label {
+  color: var(--home-label-2);
+}
+.phone-widget__lock {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  margin: auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--home-label);
+}
+.phone-widget--locked:not(.phone-stat) {
+  min-height: 120px;
 }
 .phone__widgets:empty {
   display: none;
@@ -599,7 +626,9 @@ button.phone-stat:hover {
   transition-duration: 90ms;
 }
 .phone__app-name {
-  max-width: 100%;
+  /* Darf ein paar Pixel in die Lücke zur Nachbarspalte ragen (mittig, nach beiden Seiten): Im schmalen Handy (320 px)
+     fehlten „Einstellungen“ sonst die letzten Buchstaben. */
+  max-width: calc(100% + 10px);
   overflow: hidden;
   /* Kleines Handy (Fenster 1280 × 720): „Einstellungen“ passt mit 11 px ganz hinein statt „Einstellun…“ (N9). */
   font-size: clamp(11px, 3.4cqw, var(--type-caption));
@@ -617,6 +646,30 @@ button.phone-stat:hover {
   min-width: 22px;
   height: 22px;
   box-shadow: 0 0 0 2px var(--hw-black);
+}
+/* Gesperrte App (Tutorial): steht schon da, ausgegraut, mit Schloss oben rechts wie ein Zähler. */
+.phone__app.is-locked .phone__tile {
+  filter: grayscale(1) brightness(0.5);
+}
+/* Gesperrt lässt sich nicht öffnen: kein Zeiger-Cursor. */
+.phone__app.is-locked {
+  cursor: default;
+}
+.phone__app.is-locked .phone__app-name {
+  color: var(--home-label-2);
+}
+.phone__app-lock {
+  position: absolute;
+  top: -6px;
+  left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3a3a3c;
+  box-shadow: 0 0 0 2px var(--hw-black);
+  color: var(--home-label);
 }
 /* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
 .phone__app-preview {

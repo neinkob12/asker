@@ -894,7 +894,9 @@ registerPhoneApp({
   component: SuppliersApp,
   // Nach dem Verkauf kauft man in der App Handel ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.suppliers'),
+  hiddenWhen: (state) => isBusinessSold(state),
+  // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => !tutorialAllows(state, 'app.suppliers'),
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(

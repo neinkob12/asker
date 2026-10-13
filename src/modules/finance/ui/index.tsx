@@ -654,7 +654,8 @@ registerPhoneApp({
   component: FinanceApp,
   badge: (state) => (wageRunway(state).warn ? 1 : 0),
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => !tutorialAllows(state, 'app.finance'),
+  // Auftrag 46b: Im Tutorial steht die Kasse schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => !tutorialAllows(state, 'app.finance'),
 });
 registerPanel({
   id: 'finance.category',

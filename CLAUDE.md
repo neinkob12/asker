@@ -305,6 +305,10 @@ Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set, Aussehen je Ware
 per `data-product` in `goods.css`.
 Die Reviere haben keine Kachel mehr (`NOT_ON_HOME` in `PhoneFrame.tsx`, das Widget öffnet sie), die Kasse steht im
 Raster statt im Dock.
+Gesperrt statt versteckt (13.10.2026): Was im Tutorial noch nicht frei ist, steht schon da, ausgegraut mit Schloss und
+ohne Hinweistext (`lockedWhen: (state) => !tutorialAllows(state, …)` an Tab bzw. App, Widgets mit `<LockedWidget>` aus
+`src/ui`); es lässt sich nicht öffnen, gesperrte Tabs fehlen in Suche und Tastenkürzeln. `hiddenWhen` bleibt für das, was
+es wirklich nicht gibt (nach dem Verkauf). Reihenfolge im Raster: Gangs, Kasse, Geldwäsche, Einstellungen.
 In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
 `hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
