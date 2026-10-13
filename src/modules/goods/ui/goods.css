@@ -196,6 +196,7 @@
 }
 .goods-widget__options.is-locked {
   color: var(--home-label-2);
+  cursor: default;
 }
 .goods-widget__options.is-locked .ui-icon:first-child {
   color: inherit;

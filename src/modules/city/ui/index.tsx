@@ -30,7 +30,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
-import { tutorialLockText } from '../../tutorial';
+import { tutorialAllows } from '../../tutorial';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -412,8 +412,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 function RankWidget() {
   const { state } = useGame();
   // Auftrag 46b: Im Tutorial steht der Rang schon da, gesperrt bis zum ersten Aufstieg.
-  const locked = tutorialLockText(state, 'hud.rank');
-  if (locked) return <LockedWidget icon="crown" label="Rang" text={locked} data-tour="hud.rank" />;
+  if (!tutorialAllows(state, 'hud.rank')) return <LockedWidget icon="crown" label="Rang" data-tour="hud.rank" />;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   const next = PLAYER_RANKS[reachedAt + 1];

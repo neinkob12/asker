@@ -35,7 +35,7 @@ import {
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
-import { tutorialLockText } from '../../tutorial';
+import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   activeWars,
@@ -846,7 +846,7 @@ registerTab({
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => isBusinessSold(state),
   // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
-  lockedWhen: (state) => tutorialLockText(state, 'app.gangs'),
+  lockedWhen: (state) => !tutorialAllows(state, 'app.gangs'),
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });

@@ -567,7 +567,6 @@ button.phone-stat:hover {
   color: var(--home-label-2);
   font: inherit;
   text-align: left;
-  cursor: pointer;
 }
 .phone-widget--locked .phone-widget__label {
   color: var(--home-label-2);
@@ -578,7 +577,7 @@ button.phone-stat:hover {
   align-self: center;
   width: 44px;
   height: 44px;
-  margin: auto 0 4px;
+  margin: auto;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   color: var(--home-label);
@@ -652,8 +651,9 @@ button.phone-stat:hover {
 .phone__app.is-locked .phone__tile {
   filter: grayscale(1) brightness(0.5);
 }
-.phone__app.is-locked:is(:active, .is-pressed) .phone__tile {
-  transform: scale(0.96);
+/* Gesperrt lässt sich nicht öffnen: kein Zeiger-Cursor. */
+.phone__app.is-locked {
+  cursor: default;
 }
 .phone__app.is-locked .phone__app-name {
   color: var(--home-label-2);

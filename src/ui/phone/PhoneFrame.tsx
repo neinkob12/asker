@@ -67,8 +67,8 @@ import { tileColor } from './tile';
 /** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal (sofern vorhanden). */
 const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`];
 
-/** Reihenfolge der Apps im Raster: Kasse, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = ['finance.app', `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
+/** Reihenfolge der Apps im Raster: Gangs, Kasse, Geldwäsche, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = [`${TAB_APP_PREFIX}gangs`, 'finance.app', 'laundering.app', 'core.settings'];
 
 /**
  * Nicht als Kachel auf dem Startbildschirm, aber weiter in Suche und Tastenkürzeln: Die Reviere öffnet das
@@ -86,8 +86,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
-  /** Gesperrt (lockedWhen): ausgegraut mit Schloss, ein Tipp zeigt diesen Text statt die App zu öffnen. */
-  locked?: string;
+  /** Gesperrt (lockedWhen): ausgegraut mit Schloss, lässt sich nicht öffnen. */
+  locked?: boolean;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -103,10 +103,9 @@ function badgeOf(read: () => number | undefined): number {
 }
 
 /** Sperre einer Kachel: Wirft das Modul, gilt die App als frei. */
-function lockOf(read: () => string | null | undefined): { locked?: string } {
+function lockOf(read: () => boolean | undefined): { locked?: boolean } {
   try {
-    const text = read();
-    return text ? { locked: text } : {};
+    return read() ? { locked: true } : {};
   } catch (error) {
     console.error('Sperre einer App', error);
     return {};
@@ -259,26 +258,22 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
   const icon = (
     <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" class="phone__tile" />
   );
-  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss; ein Tipp sagt, wann die App kommt.
+  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss, lässt sich aber nicht öffnen.
   if (app.locked) {
-    const locked = app.locked;
     return (
-      <button
-        type="button"
+      <div
         class={`phone__app is-locked ${props.dock ? 'is-dock' : ''}`}
         data-app-id={app.id}
         data-tour={`phone.app.${app.id}`}
-        aria-disabled="true"
-        onClick={() => runtime.api.notice(`${app.name}: ${locked}`)}
-        aria-label={`${app.name}, gesperrt. ${locked}`}
-        title={locked}
+        role="img"
+        aria-label={`${app.name}, gesperrt`}
       >
         {icon}
         <span class="phone__app-lock" aria-hidden="true">
           <Icon name="lock" size={13} strokeWidth={2.2} />
         </span>
         <span class="phone__app-name">{app.name}</span>
-      </button>
+      </div>
     );
   }
   return (

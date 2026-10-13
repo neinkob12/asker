@@ -137,12 +137,6 @@ export const EVENT_FEATURES: Readonly<Partial<Record<TutorialFeature, keyof Game
   'hud.rank': 'player.rankUp',
 };
 
-/** Text am Schloss für Features, die ein Ereignis freischaltet (die übrigen nennen ihre Stufe). */
-export const LOCK_EVENT_TEXT: Readonly<Partial<Record<TutorialFeature, string>>> = {
-  'hud.reputation': 'Kommt mit deinem ersten Stammkunden',
-  'hud.rank': 'Kommt mit deinem ersten Aufstieg',
-};
-
 /** Welche Rolle beim Personal an welchem Feature hängt (Läufer, Arbeiter und Gärtner sind immer frei). */
 export const ROLE_FEATURE: Readonly<Record<string, TutorialFeature>> = {
   driver: 'staff.driver',

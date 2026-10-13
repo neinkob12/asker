@@ -45,7 +45,7 @@ import {
 import { cargoAmount, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
 import { specialistFactor } from '../../staff';
-import { tutorialLockText } from '../../tutorial';
+import { tutorialAllows } from '../../tutorial';
 import {
   activeDeal,
   assortment,
@@ -896,7 +896,7 @@ registerPhoneApp({
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => isBusinessSold(state),
   // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
-  lockedWhen: (state) => tutorialLockText(state, 'app.suppliers'),
+  lockedWhen: (state) => !tutorialAllows(state, 'app.suppliers'),
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(

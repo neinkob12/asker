@@ -65,7 +65,7 @@ import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
 import { getCargo, getTrips, placeCity } from '../../logistics';
 import { shipmentItems, shipmentsInTransit } from '../../suppliers';
-import { tutorialAllows, tutorialLockText } from '../../tutorial';
+import { tutorialAllows } from '../../tutorial';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -169,8 +169,8 @@ function StockWidget() {
   // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen. Im Tutorial (Auftrag 46b) steht das Lager schon
   // da, gesperrt bis zu seiner Stufe; die Lager-Optionen (Lager-App) kommen später als das Lager selbst.
   const hidden = useGameSelector((state) => isBusinessSold(state));
-  const locked = useGameSelector((state) => tutorialLockText(state, 'hud.stock'));
-  const optionsLocked = useGameSelector((state) => tutorialLockText(state, 'app.goods'));
+  const locked = useGameSelector((state) => !tutorialAllows(state, 'hud.stock'));
+  const optionsLocked = useGameSelector((state) => !tutorialAllows(state, 'app.goods'));
   const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
@@ -206,7 +206,7 @@ function StockWidget() {
     (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
   if (hidden) return null;
-  if (locked) return <LockedWidget icon="warehouse" label="Lager" text={locked} wide data-tour="hud.stock" />;
+  if (locked) return <LockedWidget icon="warehouse" label="Lager" wide data-tour="hud.stock" />;
   const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
   return (
     <section class="phone-widget goods-widget" data-tour="hud.stock" aria-label="Lager">
@@ -245,9 +245,8 @@ function StockWidget() {
       <button
         type="button"
         class={`goods-widget__options ${optionsLocked ? 'is-locked' : ''}`}
-        aria-disabled={optionsLocked ? 'true' : undefined}
-        title={optionsLocked ?? undefined}
-        onClick={() => (optionsLocked ? ui.notice(`Lager-Optionen: ${optionsLocked}`) : ui.openPhone('goods.app'))}
+        disabled={optionsLocked}
+        onClick={() => ui.openPhone('goods.app')}
       >
         <Icon name="warehouse" size={15} />
         <span>Lager-Optionen</span>
