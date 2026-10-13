@@ -175,14 +175,22 @@ function StockWidget() {
   const hidden = useGameSelector((state) => isBusinessSold(state));
   const locked = useGameSelector((state) => tutorialLockText(state, 'hud.stock'));
   const optionsLocked = useGameSelector((state) => tutorialLockText(state, 'app.goods'));
+  // Klick auf einen Spot ohne passende Ware (spots/ui/map.ts): das Fach leuchtet rot und wackelt (Feedback 13.10.2026).
+  const flash = useUiSelector((u) => u.flash);
+  const missing = flash?.key.startsWith(MISSING_PREFIX) ? flash.key.slice(MISSING_PREFIX.length) : null;
   const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
       const incoming = incomingView(state);
+      // Fehlt eine Ware, die sonst kein Fach hat (z.B. Öl ohne Bestand), bekommt sie für den Fingerzeig eins: Sonst
+      // sprang das Handy auf den Startbildschirm, ohne dass etwas aufleuchtete.
       const ids = [
         ...GRID_PRODUCTS,
-        ...OPTIONAL_PRODUCTS.filter((id) => rows.some((r) => r.productId === id) || (incoming[id] ?? 0) > 0),
+        ...OPTIONAL_PRODUCTS.filter(
+          (id) => id === missing || rows.some((r) => r.productId === id) || (incoming[id] ?? 0) > 0,
+        ),
       ];
+      if (missing && !ids.includes(missing) && getProduct(missing)) ids.push(missing);
       return ids.map((productId) => {
         const row = rows.find((r) => r.productId === productId);
         const amount = row?.amount ?? 0;
@@ -209,9 +217,6 @@ function StockWidget() {
     },
     (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
-  // Klick auf einen Spot ohne passende Ware (spots/ui/map.ts): das Fach leuchtet rot und wackelt (Feedback 13.10.2026).
-  const flash = useUiSelector((u) => u.flash);
-  const missing = flash?.key.startsWith(MISSING_PREFIX) ? flash.key.slice(MISSING_PREFIX.length) : null;
   if (hidden) return null;
   if (locked) return <LockedWidget icon="warehouse" label="Lager" hint={locked} wide data-tour="hud.stock" />;
   const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
