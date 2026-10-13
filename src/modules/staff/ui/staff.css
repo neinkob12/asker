@@ -389,11 +389,6 @@
   font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
-.staff-tile__caption {
-  margin-top: 2px;
-  font-size: var(--type-caption-2, 11px);
-  color: var(--color-muted);
-}
 .staff-tile__loyalty {
   font-size: var(--type-subhead, 15px);
   font-weight: var(--font-weight-bold);
@@ -448,4 +443,13 @@
 .staff-tile__action:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* i im Kopf der Problemfälle: beim Drüberfahren steht, dass die Zahl die Loyalität ist */
+.staff-info {
+  display: inline-grid;
+  place-items: center;
+  font-size: 16px;
+  color: var(--phone-label-2, var(--color-muted));
+  cursor: help;
 }

@@ -1,5 +1,5 @@
-// Oberfläche der Gangs: Tab "Gangs" mit einem kleinen Kasten Stärke (deine hervorgehoben, jede Gang als Balken auf
-// derselben Skala), darunter die Gangs als Tabelle (Stärke, Veedel, Status, Knöpfe Angriff, Bündnis, Schutzgeld);
+// Oberfläche der Gangs: Tab "Gangs" mit deiner Stärke oben, darunter die Gangs als Tabelle ohne Kopf (Name mit Status
+// als Wort darunter, Stärke und Veedel übereinander, Knöpfe Angriff, Bündnis, Schutzgeld);
 // Seite je Gang mit Lage, Beziehung und Diplomatie, Dialoge für Überfall und Bündnis, Hinweise auf der Karte.
 
 import type { JSX } from 'preact';
@@ -165,62 +165,41 @@ function StageTag(props: { gang: Gang }) {
   );
 }
 
-/** Status als Symbol ohne Wort (Feedback 13.10.2026): Farbe und Symbol tragen die Stufe, das Wort steht im Tooltip. */
-function StageIcon(props: { gang: Gang }) {
+/**
+ * Status als kurzes Wort in der Farbe der Stufe (Feedback 13.10.2026: das Symbol allein verstand man nicht). Ein
+ * Bündnis zählt vor der Stufe, eine zerschlagene Gang steht als „Erledigt“ da.
+ */
+const STAGE_WORDS: Record<number, string> = { 0: 'Ruhig', 1: 'Warnt', 2: 'Droht', 3: 'Angriff' };
+
+function StageBadge(props: { gang: Gang }) {
   const { state } = useGame();
   const s = getGangStatus(state, props.gang.id);
   if (!s) return null;
   const broken = isGangBroken(state, props.gang.id);
-  const color: CategoryColor = broken ? 'money' : STAGE_COLOR[s.stage];
-  const icon = broken ? 'checkCircle' : s.stage >= 2 ? 'alert' : s.stage === 1 ? 'alertCircle' : 'eyeOff';
-  const label = broken ? 'zerschlagen' : STAGE_NAMES[s.stage];
+  const allied = !broken && isAllied(state, props.gang.id);
+  const color: CategoryColor = broken || allied ? 'money' : STAGE_COLOR[s.stage];
+  const word = broken ? 'Erledigt' : allied ? 'Verbündet' : STAGE_WORDS[s.stage];
+  const title = broken ? 'zerschlagen' : allied ? 'verbündet' : STAGE_NAMES[s.stage];
   return (
-    <span class="gangs-table__stage" style={{ '--stage': `var(--cat-${color})` } as JSX.CSSProperties} title={label}>
-      <Icon name={icon} />
-      <span class="visually-hidden">{label}</span>
+    <span
+      class="gangs-table__stage"
+      style={{ '--stage': `var(--cat-${color})` } as JSX.CSSProperties}
+      title={`${props.gang.name} ${title}`}
+    >
+      {word}
     </span>
   );
 }
 
 /**
- * Kasten Stärke (Feedback 13.10.2026: kleiner, ohne Satz, deine Stärke hervorgehoben): oben du als Zahl und Balken in
- * der Spielfarbe, darunter jede Gang als schmaler Balken auf derselben Skala; die Marke ist deine Stärke.
+ * Deine Stärke (Feedback 13.10.2026): nur noch deine Zahl, die Stärke der Gangs steht in der Tabelle darunter.
  */
 function PowerHeader() {
   const { state } = useGame();
-  const gangs = getGangs(state, activeCity(state));
-  const mine = playerPower(state);
-  const max = Math.max(1, mine, ...gangs.map((g) => gangPower(state, g.id)));
-  const percent = (value: number) => `${Math.round((value / max) * 100)}%`;
   return (
-    <section
-      class="gangs-power"
-      aria-label="Stärke im Vergleich"
-      style={{ '--yours': percent(mine) } as JSX.CSSProperties}
-    >
-      <div class="gangs-power__you">
-        <span class="gangs-power__label">Deine Stärke</span>
-        <strong class="gangs-power__number">{Math.round(mine)}</strong>
-        <span class="gangs-power__bar is-yours" aria-hidden="true">
-          <span class="gangs-power__fill" style={{ '--power': percent(mine) } as JSX.CSSProperties} />
-        </span>
-      </div>
-      <ul class="gangs-power__rows">
-        {gangs.map((g) => {
-          const power = gangPower(state, g.id);
-          const style = { '--gang-color': g.color, '--power': percent(power) } as JSX.CSSProperties;
-          return (
-            <li key={g.id} class={`gangs-power__row ${power > mine ? 'is-stronger' : ''}`} style={style}>
-              <span class="gangs-power__name">{g.name}</span>
-              <span class="gangs-power__bar" aria-hidden="true">
-                <span class="gangs-power__fill" />
-                <span class="gangs-power__mark" title="deine Stärke" />
-              </span>
-              <strong class="gangs-power__value">{Math.round(power)}</strong>
-            </li>
-          );
-        })}
-      </ul>
+    <section class="gangs-power" aria-label="Deine Stärke">
+      <span class="gangs-power__label">Deine Stärke</span>
+      <strong class="gangs-power__number">{Math.round(playerPower(state))}</strong>
     </section>
   );
 }
@@ -233,20 +212,6 @@ function GangsTab() {
     <div class="gangs-tab">
       <PowerHeader />
       <div class="gangs-table">
-        {/* Kopf mit Symbolen (Stärke, Veedel, Status): Wörter passten nicht in die schmalen Spalten. */}
-        <div class="gangs-table__head" aria-hidden="true">
-          <span>Gang</span>
-          <span title="Stärke">
-            <Icon name="fist" />
-          </span>
-          <span title="Veedel">
-            <Icon name="flag" />
-          </span>
-          <span title="Status">
-            <Icon name="alertCircle" />
-          </span>
-          <span />
-        </div>
         {gangs.map((g) => (
           <GangTableRow key={g.id} gang={g} />
         ))}
@@ -267,21 +232,25 @@ function GangTableRow(props: { gang: Gang }) {
   const noTargets = raidTargets(state, gang.id).length === 0;
   return (
     <div class="gangs-table__row" style={{ '--gang-color': gang.color } as JSX.CSSProperties}>
-      <button type="button" class="gangs-table__name" onClick={() => ui.openPanel('gangs.gang', { gangId: gang.id })}>
-        <span class="gangs-table__dot" aria-hidden="true" />
-        <span>{gang.name}</span>
-      </button>
-      <span class={`gangs-table__num${power > playerPower(state) ? ' is-stronger' : ''}`}>{Math.round(power)}</span>
-      <span class="gangs-table__num gangs-table__turf" title="Veedel">
-        <Icon name="flag" />
-        {gangVeedel(state, gang.id).length}
+      {/* Status unter dem Namen: als eigene Spalte blieb für lange Namen kein Platz (Feedback 13.10.2026). */}
+      <span class="gangs-table__who">
+        <button type="button" class="gangs-table__name" onClick={() => ui.openPanel('gangs.gang', { gangId: gang.id })}>
+          <span class="gangs-table__dot" aria-hidden="true" />
+          <span>{gang.name}</span>
+        </button>
+        <StageBadge gang={gang} />
       </span>
-      <span>
-        <StageIcon gang={gang} />
+      <span class="gangs-table__facts">
+        <span class={power > playerPower(state) ? 'is-stronger' : undefined}>
+          <strong>{Math.round(power)}</strong> Stärke
+        </span>
+        <span>
+          <strong>{gangVeedel(state, gang.id).length}</strong> Veedel
+        </span>
       </span>
       <span class="gangs-table__actions">
         <ActionIcon
-          icon="swords"
+          icon="swordsCrossed"
           kind="attack"
           label={`${gang.name} angreifen`}
           title={noTargets ? 'Kein Spot, den du erreichen kannst' : 'Spot überfallen'}

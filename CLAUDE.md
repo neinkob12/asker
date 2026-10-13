@@ -341,12 +341,12 @@ Lager-Widget steht „+ unterwegs“ in der Gruppe unter der Menge. Aachener Wei
 Personal-App neu (13.10.2026): Startseite mit Tabelle „Dein Team“ (Gruppe, Leute, Lohn pro Tag aus `wageDue`, Summe;
 Gruppen `STAFF_GROUPS` in `staff/ui/index.tsx`, Führung = Rechte Hand, Capos, Leutnants), ein Tipp öffnet die Seite der
 Gruppe (Panel `staff.role` mit `{ group }`, bei `'lead'` der Aufbau aus Slot `staff.tree`, bei Fahrern „Anheuern“).
-Darunter bis zu acht Problemfälle als Kacheln (Level, „Loyalität 8/100“; Haft zuerst mit Gitter und Freikaufen, dann
+Darunter bis zu acht Problemfälle als Kacheln (Level, Loyalität als „8/100“, erklärt vom i im Kopf; Haft zuerst mit Gitter und Freikaufen, dann
 niedrigste bekannte Loyalität, jede mit Feuern) und „Bewerber“: bis zu neun Kacheln, drei pro Reihe (recruiting). Läufer und Sicherheit gibt es nur noch am
 Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfragen ist aus der Oberfläche raus.
-Gangs-App neu (13.10.2026): kleiner Kasten Stärke (deine in der Spielfarbe hervorgehoben, Gangs als schmale Balken,
-kein Satz), darunter die Gangs als Tabelle (Name öffnet `gangs.gang`, Stärke, Veedel mit Flagge, Status nur als Symbol,
-Knöpfe Angriff, Bündnis, Schutzgeld; Schutzgeld als Menü `ProtectionSheet`). Die Übersicht der Gang-Kriege ist weg.
+Gangs-App neu (13.10.2026): oben nur „Deine Stärke“, darunter die Gangs als Tabelle ohne Kopf (Name mit Status als
+kurzem Wort darunter: Ruhig, Warnt, Droht, Angriff, Verbündet, Erledigt; Stärke und Veedel übereinander; Knöpfe
+Angriff (Icon `swordsCrossed`), Bündnis, Schutzgeld als Menü `ProtectionSheet`). Die Übersicht der Gang-Kriege ist weg.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -469,7 +469,7 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 `registerPhoneApp`, `registerStatusCounter` (Zähler in der festen Anzeige oben im Handy), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
 **Optik-Regeln (Auftrag 27):** Eigenschaften in Listen als Chips (`ItemContent tags`, `Chip`/`Chips`), nie als „a · b · c“;
-Abschnitte als `Group` (seit 13.10.2026 im iOS-Stil: Titel klein und grau über einem randlosen Kasten mit 12 px Rundung, kein Symbol und keine Farbe im Kopf, Fußnote grau darunter; `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
+Abschnitte als `Group` (seit 13.10.2026 im iOS-Stil: Titel klein, grau und fast bündig über einem randlosen Kasten mit 12 px Rundung, kein Symbol und keine Farbe im Kopf, Fußnote grau darunter; `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
 `Disclosure` oder `Group more`; Namen und Werte brechen nie im Wort um.
 HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 sechs Apps**
 (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), dazu seit dem Hamburger Lager-Kauf die App „Lager“ (`goods.app`: eigene Lager, Standorte kaufen) und vier im Dock (Nachrichten, Lieferanten, Personal,

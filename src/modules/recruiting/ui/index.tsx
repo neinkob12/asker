@@ -2,6 +2,7 @@
 // Rolle, Level, Handgeld und Lohn); ein Tipp öffnet ein Blatt mit Werten, Hintergrund und Einstellen. Läufer und
 // Sicherheit gibt es hier nicht mehr (die heuerst du am Spot an), das Rumfragen („Leute finden“) ist vorerst aus.
 
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, personLook } from '../../../core';
 import {
@@ -257,11 +258,13 @@ function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
         size="md"
       />
       <span class="rc-tile__name">{c.name}</span>
-      <span class="rc-tile__role">{roleName(c.role)}</span>
+      <span class="rc-tile__role" style={{ '--role-tone': `var(--cat-${look.color})` } as JSX.CSSProperties}>
+        {roleName(c.role)}
+      </span>
       <span class="rc-tile__level">Level {c.level}</span>
       <span class="rc-tile__cost">
         <strong>{formatEuro(c.hireCost)}</strong>
-        <span>{formatEuro(c.wage)}/Tag</span>
+        <span>+{formatEuro(c.wage)}/Tag</span>
       </span>
     </button>
   );
@@ -280,14 +283,7 @@ function Candidates() {
   const shown = all.slice(0, CANDIDATE_TILES);
   const open = all.find((c) => c.id === openId) ?? null;
   return (
-    <Group
-      title="Bewerber"
-      icon="userPlus"
-      color="people"
-      count={all.length}
-      note={all.length > 0 ? 'Fett das Handgeld, darunter der Lohn. Ein Tipp zeigt Werte und Hintergrund.' : undefined}
-      more="Bewerber melden sich auf deinen Aushang, Kontakte kommen über loyale Leute, Stammkunden und das Milieu und sind oft besser. Mit eigenen Veedeln und gutem Ruf warten mehr Leute. Wer zu lange wartet, sieht sich anderswo um."
-    >
+    <Group title="Bewerber" icon="userPlus" color="people" count={all.length}>
       {shown.length === 0 ? (
         <Empty icon="userPlus">Gerade niemand. Neue Bewerber kommen alle paar Stunden.</Empty>
       ) : (

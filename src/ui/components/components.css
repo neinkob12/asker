@@ -1713,7 +1713,8 @@
   align-items: flex-end;
   gap: var(--space-2);
   min-height: 0;
-  padding: 0 16px 6px;
+  /* Linksbündig fast an der Kante des Kastens (Feedback 13.10.2026, vorher 16 px eingerückt) */
+  padding: 0 4px 6px;
 }
 /* Kein Symbol im Kopf: iOS-Abschnitte tragen nur Text. */
 .ui-group__head > .ui-chip {
@@ -1812,7 +1813,7 @@
 }
 .ui-group__note {
   margin: 0;
-  padding: 6px 16px 0;
+  padding: 6px 4px 0;
   font-size: var(--type-footnote, 13px);
   line-height: var(--type-footnote-lh, 18px);
   color: var(--phone-label-2, var(--color-muted));
