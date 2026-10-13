@@ -86,7 +86,7 @@ import {
 import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
-import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
+import { bailCost, getStaff, runnerHireCost, SECURITY_HIRE_COST, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -509,27 +509,22 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   if (threatened) {
     const guards = getStaff(state, { role: 'security', cityId: city }).length;
     const runners = getStaff(state, { role: 'runner', cityId: city }).length;
-    if (guards < Math.ceil(runners / 3) + 1) {
-      const candidate = getCandidates(state)
-        .filter(
-          (c) =>
-            c.role === 'security' &&
-            c.wage <= MAX_RUNNER_WAGE * 1.5 &&
-            c.hireCost <= money(state) - reserve(state) - 500,
-        )
-        .sort((a, b) => a.wage - b.wage || b.level - a.level)[0];
-      // Erst das Lager, dann die Spots mit dem meisten Andrang.
+    if (guards < Math.ceil(runners / 3) + 1 && money(state) > SECURITY_HIRE_COST + reserve(state) + 500) {
+      // Sicherheit gibt es nur noch am Spot: anheuern am Spot ohne Sicherheit mit dem meisten Andrang, dann (falls das
+      // Lager noch frei ist) ins Lager versetzen.
       const warehouseGuarded = securityAt(state, { warehouseId: home }).length > 0;
       const spot = getSpots(state, city)
-        .filter((s) => getStaff(state, { spotId: s.id, role: 'security' }).length === 0)
+        .filter((s) => securityAt(state, { spotId: s.id }).length === 0)
         .sort((a, b) => b.demand - a.demand)[0];
-      const assignment = !warehouseGuarded
-        ? { kind: 'warehouse' as const, targetId: home }
-        : spot
-          ? { kind: 'spot' as const, targetId: spot.id }
-          : null;
-      if (candidate && assignment) {
-        run(sim, stats, { type: 'recruiting.hire', payload: { candidateId: candidate.id, assignment } });
+      if (spot) {
+        const hired = run(sim, stats, { type: 'staff.hireSecurity', payload: { spotId: spot.id } });
+        const staffId = hired ? securityAt(sim.state, { spotId: spot.id })[0]?.id : undefined;
+        if (staffId && !warehouseGuarded) {
+          run(sim, stats, {
+            type: 'staff.assign',
+            payload: { staffId, assignment: { kind: 'warehouse', targetId: home } },
+          });
+        }
       }
     }
   }

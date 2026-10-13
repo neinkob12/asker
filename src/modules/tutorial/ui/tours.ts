@@ -110,7 +110,7 @@ function stage0(ctx: TourContext): TourStep[] {
       anchor: 'phone.screen',
       tint: 'people',
       before: () => ui.openPhone('tab:staff'),
-      text: 'Personal. Am Anfang nur Läufer. Wer sich bewirbt, steht hier, oder du fragst selbst rum.',
+      text: 'Personal. Oben dein Team mit Lohn pro Tag, darunter Problemfälle und wen du einstellen könntest.',
     }),
     step({
       id: 'settings',
@@ -321,6 +321,8 @@ function stage7(ctx: TourContext): TourStep[] {
       id: 'appoint',
       anchor: 'staff.lieutenants',
       tint: 'people',
+      // Der Aufbau mit Leutnants steht auf der Seite „Leutnants“ der Personal-App.
+      before: () => ui.openPanel('staff.role', { group: 'lead' }),
       waitFor: { state: (s) => getLieutenants(s).length > 0 },
       text: 'Ernenn jetzt einen: Leutnant ernennen, Person und Spots wählen. Er will dafür mehr Lohn.',
     }),
@@ -362,7 +364,7 @@ function stage8(ctx: TourContext): TourStep[] {
       id: 'driver',
       anchor: 'staff.hire',
       tint: 'people',
-      before: () => ui.openPhone('tab:staff'),
+      before: () => ui.openPanel('staff.role', { group: 'driver' }),
       text: 'Mit dem Hafen gibt et Fahrer. Die holen Schiffsware am Kai ab und bringen sie ins Lager.',
     }),
   ];
@@ -410,7 +412,7 @@ function stage10(ctx: TourContext): TourStep[] {
       tint: 'people',
       before: () => ui.openPhone('tab:staff'),
       waitFor: { state: (s) => getStaff(s, { role: 'accountant', cityId: CITY }).length > 0 },
-      text: 'Neu: der Buchhalter. Einer bringt mehr Gewinn und billigere Leute. Stell einen ein.',
+      text: 'Neu: der Buchhalter. Einer bringt mehr Gewinn und billigere Leute. Stell unten einen ein.',
     }),
     step({
       id: 'app',
@@ -563,7 +565,7 @@ export function phoneOrderTour(ctx: TourContext, contactId: string | undefined):
   };
 }
 
-/** Erster Gang-Angriff (Moment 'firstAttack'): Hotspot-Regel, Sicherheit einstellen und auf den Neumarkt setzen. */
+/** Erster Gang-Angriff (Moment 'firstAttack'): Hotspot-Regel, Sicherheit direkt am Neumarkt anheuern. */
 export function firstAttackTour(ctx: TourContext, gangName: string): TourDef {
   const { ui } = ctx;
   return {
@@ -585,19 +587,11 @@ export function firstAttackTour(ctx: TourContext, gangName: string): TourDef {
       }),
       step({
         id: 'hire',
-        anchor: 'phone.screen',
-        tint: 'people',
-        before: () => ui.openPhone('tab:staff'),
-        waitFor: { state: (s) => getStaff(s, { role: 'security', cityId: CITY }).length > 0 },
-        text: 'Neu im Personal: Sicherheit. Nimm einen Bewerber oder frag rum, und stell einen ein.',
-      }),
-      step({
-        id: 'assign',
         anchor: 'spot.runner',
         tint: 'danger',
         before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
         waitFor: { state: (s) => securityAt(s, { spotId: SPOT }).length > 0 },
-        text: 'Setz ihn auf den Neumarkt. Dann überlegen die et sich zweimal.',
+        text: 'Neu: Sicherheit. Heuer direkt hier am Neumarkt jemanden an. Dann überlegen die et sich zweimal.',
       }),
     ],
   };

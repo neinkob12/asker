@@ -338,6 +338,12 @@ Vorstoß einer Gang). Klick auf einen Spot, dessen
 Ware fehlt: keine Meldung, sondern der Startbildschirm des Handys und das Fach dieser Ware leuchtet rot und wackelt
 (`ui.flash('goods.missing:<ware>')`, `UiState.flash`, `useUiSelector` aus `src/ui`; verfällt nach `FLASH_MS`). Im
 Lager-Widget steht „+ unterwegs“ in der Gruppe unter der Menge. Aachener Weiher liegt an der Aachener Straße.
+Personal-App neu (13.10.2026): Startseite mit Tabelle „Dein Team“ (Gruppe, Leute, Lohn pro Tag aus `wageDue`, Summe;
+Gruppen `STAFF_GROUPS` in `staff/ui/index.tsx`, Führung = Rechte Hand, Capos, Leutnants), ein Tipp öffnet die Seite der
+Gruppe (Panel `staff.role` mit `{ group }`, bei `'lead'` der Aufbau aus Slot `staff.tree`, bei Fahrern „Anheuern“).
+Darunter bis zu acht Problemfälle als Kacheln (Haft zuerst mit Gitter und Freikaufen, dann niedrigste bekannte
+Loyalität, jede mit Feuern) und bis zu acht Bewerber als Kacheln (recruiting). Läufer und Sicherheit gibt es nur noch am
+Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfragen ist aus der Oberfläche raus.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

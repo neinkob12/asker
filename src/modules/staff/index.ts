@@ -28,7 +28,8 @@
 //   hasTrait, traitName, rollTraits fest aus einem Schlüssel), Beziehungen (relationsOf, relationBetween, relationLabel,
 //   RELATIONS: Wirkung beim Entlassen, in Haft, am selben Spot). Die Geschichten der Leute im Chat (stories.ts) sind
 //   seit Auftrag 46d weg; Version 8 nimmt den Zustand `stories` aus alten Spielständen heraus.
-// Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow',
+// Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.hireSecurity' (Sicherheit am Spot), 'staff.fire', 'staff.assign',
+//   'staff.setWage', 'staff.bail', 'staff.lieLow',
 //   (Leute bleiben in der Stadt, in der du sie angeheuert hast; 'staff.relocate' gibt es seit dem 05.10.2026 nicht mehr),
 //   'staff.setJailSupport' (Stillhaltegeld), 'staff.replace' (Ausfall am Spot ersetzen, optional entlassen)
 // Nach einer Festnahme fragt der Leutnant (sonst die Person selbst) still per Handy: Kaution, Ersetzen, Entlassen, Abwarten.
@@ -57,6 +58,7 @@ import {
   fire,
   hireDriver,
   hireRunner,
+  hireSecurity,
   replaceAbsent,
   setJailSupport,
   setWageCommand,
@@ -113,6 +115,7 @@ export {
   RUNNER_HIRE_COST,
   RUNNER_HIRE_COST_MAX,
   RUNNER_HIRE_COST_MIN,
+  SECURITY_HIRE_COST,
   SPECIALIST_EFFECTS,
   SPECIALIST_GOOD_STAT,
   SPECIALIST_NORMAL_STAT,
@@ -159,6 +162,8 @@ declare module '../../core' {
     'staff.hireRunner': { spotId: string };
     /** Fahrer von der Straße anheuern (für Abholungen am Hafen und Fahrten zwischen Lagern). */
     'staff.hireDriver': Record<string, never>;
+    /** Sicherheit von der Straße anheuern und direkt an einen Spot stellen (nur noch am Spot, nicht als Bewerber). */
+    'staff.hireSecurity': { spotId: string };
     'staff.fire': { staffId: string };
     /** Versetzen oder abziehen (null). Läufer an Spots, Sicherheit an Spots oder in Lager. */
     'staff.assign': { staffId: string; assignment: StaffAssignment | null };
@@ -459,6 +464,7 @@ export default defineModule({
   commands: {
     'staff.hireRunner': (ctx, { spotId }) => hireRunner(ctx, spotId),
     'staff.hireDriver': (ctx) => hireDriver(ctx),
+    'staff.hireSecurity': (ctx, { spotId }) => hireSecurity(ctx, spotId),
     'staff.fire': (ctx, { staffId }, meta) => fire(ctx, staffId, meta),
     'staff.setJailSupport': (ctx, { staffId, enabled }) => setJailSupport(ctx, staffId, !!enabled),
     'staff.replace': (ctx, { staffId, fire: fireToo }, meta) => replaceAbsent(ctx, staffId, !!fireToo, meta),

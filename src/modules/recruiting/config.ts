@@ -18,12 +18,15 @@ export const POOL_START = 5;
 export const CANDIDATE_LIFETIME: [number, number] = [1440, 2.5 * 1440];
 export const CONTACT_LIFETIME: [number, number] = [1440, 2 * 1440];
 
-/** Wie oft welcher Typ im Pool auftaucht. Kuriere gibt es seit Auftrag 28 nicht mehr (Gewicht 0). */
+/**
+ * Wie oft welcher Typ im Pool auftaucht. Kuriere gibt es seit Auftrag 28 nicht mehr (Gewicht 0). Läufer und
+ * Sicherheit heuerst du seit dem Umbau der Personal-App nur noch direkt am Spot an (Gewicht 0).
+ */
 export const POOL_ROLE_WEIGHTS: Record<StaffRole, number> = {
-  runner: 50,
+  runner: 0,
   courier: 0,
   driver: 10,
-  security: 20,
+  security: 0,
   lawyer: 8,
   accountant: 9,
   policeContact: 8,
@@ -34,10 +37,10 @@ export const POOL_ROLE_WEIGHTS: Record<StaffRole, number> = {
 
 /** Kontakte aus dem Milieu sind öfter Spezialisten. */
 export const EVENT_ROLE_WEIGHTS: Record<StaffRole, number> = {
-  runner: 20,
+  runner: 0,
   courier: 0,
   driver: 10,
-  security: 25,
+  security: 0,
   lawyer: 18,
   accountant: 16,
   policeContact: 16,

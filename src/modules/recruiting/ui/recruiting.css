@@ -28,3 +28,56 @@
 .rc-sheet__actions .ui-button--primary {
   flex: 1;
 }
+
+/* Könntest du einstellen: Kacheln (Umbau 13.10.2026) */
+.rc-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.rc-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-group);
+  background: var(--phone-group, var(--color-panel-raised));
+  color: var(--color-text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.rc-tile:hover,
+.rc-tile:focus-visible {
+  background: var(--phone-fill-hover);
+}
+.rc-tile__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-tile__tags {
+  justify-content: center;
+}
+.rc-tile__cost {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rc-tile__cost strong {
+  font-size: var(--type-body, 17px);
+  color: var(--cat-dirty);
+}
+.rc-tile__cost span {
+  font-size: var(--type-footnote, 13px);
+  color: var(--color-muted);
+}
