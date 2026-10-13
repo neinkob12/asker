@@ -81,8 +81,11 @@ export interface SidebarTab {
    * es keine Veedel mehr gibt). Per selectTab bleibt der Tab erreichbar.
    */
   hiddenWhen?: (state: GameState) => boolean;
-  /** Zeitweise gesperrt: Die Kachel steht ausgegraut mit Schloss da. Gesperrte Tabs fehlen in Suche und Tastenkürzeln. */
-  lockedWhen?: (state: GameState) => boolean;
+  /**
+   * Zeitweise gesperrt: Die Kachel steht ausgegraut mit Schloss da, ein Tipp zeigt kurz den Hinweis (womit sie frei
+   * wird). Gesperrte Tabs fehlen in Suche und Tastenkürzeln. null = frei.
+   */
+  lockedWhen?: (state: GameState) => string | null;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -165,8 +168,8 @@ export interface PhoneApp {
    * bleibt sie erreichbar); die ersetzte App rückt dann ins Raster.
    */
   dock?: { replaces: string; when: (state: GameState) => boolean };
-  /** Zeitweise gesperrt wie SidebarTab.lockedWhen: ausgegraut mit Schloss. */
-  lockedWhen?: (state: GameState) => boolean;
+  /** Zeitweise gesperrt wie SidebarTab.lockedWhen: ausgegraut mit Schloss, ein Tipp zeigt kurz den Hinweis. */
+  lockedWhen?: (state: GameState) => string | null;
 }
 
 /** Empfehlung für die Karte "Nächster Schritt" (und den sanften Hinweis beim Einstieg). */

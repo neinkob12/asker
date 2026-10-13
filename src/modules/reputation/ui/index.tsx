@@ -18,10 +18,10 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
 import { supplierReputation } from '../../trade';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialAllows, tutorialLockText } from '../../tutorial';
 import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
@@ -69,19 +69,16 @@ function ReputationHud() {
 function ReputationWidget() {
   const { state } = useGame();
   const ui = useUi();
-  // Nach dem Verkauf zählt der Ruf als Lieferant (Kachel im HUD). Auftrag 46b: Im Tutorial steht der Ruf schon da,
-  // gesperrt bis zum ersten Stammkunden.
+  // Nach dem Verkauf zählt der Ruf als Lieferant (Kachel im HUD).
   if (isBusinessSold(state)) return null;
-  if (!tutorialAllows(state, 'hud.reputation')) {
-    return <LockedWidget icon="star" label="Ruf" data-tour="hud.reputation" />;
-  }
+  const locked = tutorialLockText(state, 'hud.reputation');
+  if (locked) return <LockedWidget icon="star" label="Ruf" hint={locked} data-tour="hud.reputation" />;
   const value = getReputation(state);
   // Stufe aus der gezeigten Zahl, sonst stünde bei 59,6 „60 Bekannt“ unter „ab 60: Gefragt“.
   const shown = Math.round(value);
   const tiers = reputationTiers();
   const index = tiers.indexOf(reputationTier(shown));
   const tier = tiers[index];
-  const above = tiers[index + 1];
   // Hell für den dunklen Startbildschirm: Leute (cyan), bei schlechtem Ruf Warnung bzw. Gefahr.
   const accent = shown < 20 ? '#ff7b73' : shown < 40 ? '#ff9f0a' : '#40c8e0';
   return (
@@ -101,7 +98,6 @@ function ReputationWidget() {
       <span class="phone-stat__bar" aria-hidden="true">
         <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
       </span>
-      <span class="phone-stat__foot">{above ? `ab ${above.min}: ${above.name}` : 'ganz oben'}</span>
     </button>
   );
 }
@@ -116,9 +112,8 @@ function TerritoryWidget() {
   // Das Widget ist der Weg in die Reviere (die App hat keine Kachel mehr). Nach dem Verkauf gibt es keine Veedel mehr;
   // im Tutorial steht es schon da, gesperrt bis zur Stufe der Reviere.
   if (isBusinessSold(state)) return null;
-  if (!tutorialAllows(state, 'app.territory')) {
-    return <LockedWidget icon="flag" label="Reviere" data-tour="hud.territory" />;
-  }
+  const locked = tutorialLockText(state, 'app.territory');
+  if (locked) return <LockedWidget icon="flag" label="Reviere" hint={locked} data-tour="hud.territory" />;
   const cityId = activeCity(state);
   const city = cityName(cityId);
   const progress = campaignProgress(state, cityId);
@@ -147,14 +142,6 @@ function TerritoryWidget() {
       <span class="phone-stat__sub">{city}</span>
       <span class="phone-stat__bar" aria-hidden="true">
         <span style={{ width: `${progress.total > 0 ? (100 * progress.controlled) / progress.total : 0}%` }} />
-      </span>
-      <span class="phone-stat__foot">
-        {/* Den Titel „Boss von …“ zeigt schon der Rang daneben: hier nur, was bis zum nächsten Ziel fehlt. */}
-        {progress.complete
-          ? 'komplett'
-          : majorityMakesBoss(cityId) && !progress.majorityReached
-            ? `ab ${progress.majority}: Boss`
-            : `noch ${progress.total - progress.controlled} bis komplett`}
       </span>
     </button>
   );

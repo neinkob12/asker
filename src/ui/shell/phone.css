@@ -497,7 +497,7 @@
   grid-column: span 1;
   align-items: flex-start;
   gap: 2px;
-  min-height: 132px;
+  min-height: 112px;
   border: 0;
   font: inherit;
   text-align: left;
@@ -567,6 +567,7 @@ button.phone-stat:hover {
   color: var(--home-label-2);
   font: inherit;
   text-align: left;
+  cursor: pointer;
 }
 .phone-widget--locked .phone-widget__label {
   color: var(--home-label-2);
@@ -650,10 +651,6 @@ button.phone-stat:hover {
 /* Gesperrte App (Tutorial): steht schon da, ausgegraut, mit Schloss oben rechts wie ein Zähler. */
 .phone__app.is-locked .phone__tile {
   filter: grayscale(1) brightness(0.5);
-}
-/* Gesperrt lässt sich nicht öffnen: kein Zeiger-Cursor. */
-.phone__app.is-locked {
-  cursor: default;
 }
 .phone__app.is-locked .phone__app-name {
   color: var(--home-label-2);
@@ -1495,8 +1492,10 @@ html.is-dragging {
 }
 
 @media (max-width: 760px) {
+  /* Am Handy-Bildschirm ist das offene Handy Vollbild wie ein echtes Handy: Es liegt über der HUD-Reihe (Geld, Uhr,
+     Wetter, Tempo; --z-phone über --z-hud), die Uhrzeit steht oben im Handy (Feedback 13.10.2026). */
   .phone {
-    top: calc(var(--top) + var(--hud-height) + var(--space-2));
+    top: var(--safe-top, 0px);
     left: 0;
     right: 0;
     bottom: 0;

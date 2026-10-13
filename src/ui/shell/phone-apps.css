@@ -735,6 +735,10 @@
   color: var(--cat-danger);
   font-size: 18px;
 }
+/* Hinweis beim Tipp auf Gesperrtes (ui.notice): Schloss in neutraler Farbe statt rotem Warnzeichen. */
+.ui-error-notice__icon.is-hint {
+  color: var(--color-muted);
+}
 .ui-error-notice__text {
   flex: 1;
   min-width: 0;

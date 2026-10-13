@@ -104,8 +104,9 @@ export const NEVER = Number.POSITIVE_INFINITY;
 export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
   'hud.cleanMoney': 8,
   'hud.stock': 5,
-  'hud.reputation': NEVER,
-  'hud.rank': NEVER,
+  // Ruf und Rang sind nur Anzeigen: von Anfang an frei (Feedback 13.10.2026; vorher über Ereignisse).
+  'hud.reputation': 0,
+  'hud.rank': 0,
   'app.territory': 3,
   'app.gangs': 4,
   'app.suppliers': 5,
@@ -132,10 +133,7 @@ export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
 };
 
 /** Features, die ein Ereignis freischaltet (Stufe egal). */
-export const EVENT_FEATURES: Readonly<Partial<Record<TutorialFeature, keyof GameEvents>>> = {
-  'hud.reputation': 'customer.regularGained',
-  'hud.rank': 'player.rankUp',
-};
+export const EVENT_FEATURES: Readonly<Partial<Record<TutorialFeature, keyof GameEvents>>> = {};
 
 /** Welche Rolle beim Personal an welchem Feature hängt (Läufer, Arbeiter und Gärtner sind immer frei). */
 export const ROLE_FEATURE: Readonly<Record<string, TutorialFeature>> = {

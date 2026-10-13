@@ -30,7 +30,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialLockText } from '../../tutorial';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -406,26 +406,32 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 // Ränge des Spielers (Auftrag 36): Titel im HUD (Mehr-Menü) mit der Leiter, Banner und Ton beim Aufstieg.
 
 /**
- * Rang als kleines Widget oben links auf dem Startbildschirm des Handys (vorher Kachel im HUD): der Titel und was es
- * zum nächsten Rang braucht. Die ganze Leiter steht im Tooltip.
+ * Rang als kleines Widget oben links auf dem Startbildschirm des Handys (vorher Kachel im HUD): der Titel und eine
+ * Leiste. Was es zum nächsten Rang braucht, zeigt ein Tipp kurz an; die ganze Leiter steht im Tooltip.
  */
 function RankWidget() {
   const { state } = useGame();
-  // Auftrag 46b: Im Tutorial steht der Rang schon da, gesperrt bis zum ersten Aufstieg.
-  if (!tutorialAllows(state, 'hud.rank')) return <LockedWidget icon="crown" label="Rang" data-tour="hud.rank" />;
+  const ui = useUi();
+  const locked = tutorialLockText(state, 'hud.rank');
+  if (locked) return <LockedWidget icon="crown" label="Rang" hint={locked} data-tour="hud.rank" />;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   const next = PLAYER_RANKS[reachedAt + 1];
   const ladder = PLAYER_RANKS.map(
     (r, i) => `${i <= reachedAt ? '✓' : '○'} ${i === reachedAt ? rank.title : r.title.replace('{city}', '…')}`,
   );
+  const nextText = !next
+    ? 'Ganz oben angekommen.'
+    : `Nächster Rang: ${next.title.includes('{city}') ? 'Boss einer weiteren Stadt' : next.title}. ${next.hint}`;
   return (
-    <div
+    <button
+      type="button"
       class="phone-widget phone-stat"
       // Gold wie die Bedeutungsfarbe brand im dunklen Schema (der Startbildschirm ist immer dunkel).
       style={{ '--stat-accent': '#e2ae4a' }}
       data-tour="hud.rank"
       title={`Dein Weg:\n${ladder.join('\n')}`}
+      onClick={() => ui.notice(nextText)}
     >
       <span class="phone-widget__label">
         <Icon name="crown" size={12} /> Rang
@@ -434,10 +440,7 @@ function RankWidget() {
       <span class="phone-stat__bar" aria-hidden="true">
         <span style={{ width: `${(100 * (reachedAt + 1)) / PLAYER_RANKS.length}%` }} />
       </span>
-      <span class="phone-stat__foot">
-        {!next ? 'ganz oben' : next.title.includes('{city}') ? 'Nächster: neue Stadt' : `Nächster: ${next.title}`}
-      </span>
-    </div>
+    </button>
   );
 }
 
