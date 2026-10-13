@@ -146,6 +146,12 @@
   /* Handy: Flächen, Füllungen und Beschriftungen (iOS: systemGrouped, label) */
   --phone-bg: light-dark(#f2f2f7, #000000);
   --phone-group: light-dark(#ffffff, #1c1c1e);
+  /* Akzent im Handy (Feedback 13.10.2026: das Kölsch-Gold nervte): iOS-Blau für Zurück, Links und Hauptknöpfe.
+     Die Fläche ist etwas dunkler, damit weiße Schrift darauf lesbar bleibt. */
+  --phone-tint: light-dark(#007aff, #0a84ff);
+  --phone-tint-fill: light-dark(#0062cc, #0a6fd8);
+  --phone-tint-fill-hover: light-dark(#0057b5, #1a7ae6);
+  --phone-on-tint: #ffffff;
   --phone-group-2: light-dark(#f2f2f7, #2c2c2e);
   --phone-fill: light-dark(rgba(120, 120, 128, 0.16), rgba(120, 120, 128, 0.24));
   --phone-fill-hover: light-dark(rgba(120, 120, 128, 0.24), rgba(120, 120, 128, 0.36));

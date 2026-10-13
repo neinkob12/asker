@@ -385,8 +385,8 @@
   filter: grayscale(0.6);
 }
 .staff-tile__level {
-  font-size: var(--type-footnote, 13px);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-caption, 12px);
+  color: var(--color-muted);
   white-space: nowrap;
 }
 .staff-tile__loyalty {
@@ -445,11 +445,27 @@
   cursor: default;
 }
 
-/* i im Kopf der Problemfälle: beim Drüberfahren steht, dass die Zahl die Loyalität ist */
+/* i im Kopf der Problemfälle: ein Tipp klappt die Erklärung auf */
 .staff-info {
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  color: var(--phone-tint, var(--color-muted));
+  cursor: pointer;
+}
+.staff-info.is-open {
   color: var(--phone-label-2, var(--color-muted));
-  cursor: help;
+}
+.staff-info__text {
+  margin: 0;
+  font-size: var(--type-footnote, 13px);
+  line-height: var(--type-footnote-lh, 18px);
+  color: var(--phone-label-2, var(--color-muted));
 }

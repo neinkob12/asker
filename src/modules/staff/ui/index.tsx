@@ -315,6 +315,8 @@ function problemCases(team: readonly StaffMember[]): StaffMember[] {
 }
 
 function ProblemTiles(props: { team: readonly StaffMember[] }) {
+  // Das i klappt die Erklärung auf (ein Tooltip beim Drüberfahren gab es am Handy nicht, Feedback 13.10.2026).
+  const [info, setInfo] = useState(false);
   const problems = problemCases(props.team);
   if (problems.length === 0) {
     return <Empty icon="users">Noch niemand im Team. Läufer und Sicherheit heuerst du direkt am Spot an.</Empty>;
@@ -325,16 +327,22 @@ function ProblemTiles(props: { team: readonly StaffMember[] }) {
       icon="alert"
       color="warn"
       value={
-        <span
-          class="staff-info"
-          role="img"
-          title="Die Zahl ist die Loyalität (von 100). In Haft zuerst, dann die niedrigste Loyalität."
-          aria-label="Die Zahl ist die Loyalität (von 100). In Haft zuerst, dann die niedrigste Loyalität."
+        <button
+          type="button"
+          class={`staff-info${info ? ' is-open' : ''}`}
+          aria-expanded={info}
+          aria-label="Was bedeuten die Zahlen?"
+          onClick={() => setInfo(!info)}
         >
           <Icon name="info" />
-        </span>
+        </button>
       }
     >
+      {info && (
+        <p class="staff-info__text">
+          Die Zahl ist die Loyalität von 100. In Haft steht vorne, dann die niedrigste Loyalität.
+        </p>
+      )}
       <div class="staff-tiles">
         {problems.map((m) => (
           <ProblemTile key={m.id} member={m} />
@@ -367,7 +375,7 @@ function ProblemTile(props: { member: StaffMember }) {
           <Portrait person={m} />
           {jailed && <span class="staff-tile__bars" aria-hidden="true" />}
         </span>
-        <span class="staff-tile__level">Level {m.level}</span>
+        <span class="staff-tile__level">Lvl. {m.level}</span>
         {/* Loyalität als „8/100“; was die Zahl ist, sagt das i im Kopf der Gruppe. */}
         <span class={`staff-tile__loyalty is-${tone}`}>
           {loyalty ?? '?'}

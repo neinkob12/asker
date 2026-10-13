@@ -344,9 +344,11 @@ Gruppe (Panel `staff.role` mit `{ group }`, bei `'lead'` der Aufbau aus Slot `st
 Darunter bis zu acht Problemfälle als Kacheln (Level, Loyalität als „8/100“, erklärt vom i im Kopf; Haft zuerst mit Gitter und Freikaufen, dann
 niedrigste bekannte Loyalität, jede mit Feuern) und „Bewerber“: bis zu neun Kacheln, drei pro Reihe (recruiting). Läufer und Sicherheit gibt es nur noch am
 Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfragen ist aus der Oberfläche raus.
-Gangs-App neu (13.10.2026): oben nur „Deine Stärke“, darunter die Gangs als Tabelle ohne Kopf (Name mit Status als
-kurzem Wort darunter: Ruhig, Warnt, Droht, Angriff, Verbündet, Erledigt; Stärke und Veedel übereinander; Knöpfe
-Angriff (Icon `swordsCrossed`), Bündnis, Schutzgeld als Menü `ProtectionSheet`). Die Übersicht der Gang-Kriege ist weg.
+Gangs-App neu (13.10.2026): oben „Deine Stärke“ neutral mit Teilen (`playerPowerParts`: Leute, Veedel, Schwarzgeld,
+Ware) und „Sicherheit an <Spot>“ (`staff.hireSecurity` am belebtesten Spot ohne Sicherheit), darunter die Gangs als
+Kacheln, zwei pro Reihe (Name, Status als Wort: Ruhig, Warnt, Droht, Angriff, Verbündet, Erledigt; Stärke, Veedel;
+Knöpfe Angriff `swordsCrossed`, Bündnis `handshake`, Schutzgeld als Menü `ProtectionSheet`). Kein Gang-Kriege-Abschnitt.
+Akzent im Handy ist iOS-Blau (`--phone-tint`, Flächen `--phone-tint-fill` mit `--phone-on-tint`), nicht mehr Gold.
 Lieferanten-App neu (13.10.2026): Lieferanten als Kacheln, zwei pro Reihe (Symbol je Herkunft `SUPPLIER_ICONS` in
 `suppliers/ui`, Icons `windmill`, `towers`, `tvTower`, `lighthouse`, `canalHouse`, `plane`, `arena`, `dom`; Lieferart als
 Abzeichen, Lieferzeit, Beziehung als fünf Stufen bis „Familie“), gesperrte mit Schloss und gleich „Freischalten“,

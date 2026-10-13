@@ -93,7 +93,7 @@
   color: var(--phone-label-3);
 }
 .set-link:hover .set-link__label {
-  color: var(--cat-brand);
+  color: var(--phone-tint);
 }
 /* Sprachmodelle (Einstellungen › Ton & Musik): je eine Zeile mit Stand, Fortschritt und Laden/Entfernen */
 .set-voices {
@@ -532,7 +532,7 @@
   background: var(--phone-group);
 }
 .msg-bubble.is-open {
-  box-shadow: 0 0 0 1.5px var(--cat-brand);
+  box-shadow: 0 0 0 1.5px var(--phone-tint);
 }
 .msg-expired {
   display: block;
@@ -558,7 +558,7 @@
 }
 /* Offene Frage: Rahmen in Gold (Vorrang vor dem Farbstreifen) */
 .msg-bubbles .msg-bubble.is-open {
-  box-shadow: 0 0 0 1.5px var(--cat-brand);
+  box-shadow: 0 0 0 1.5px var(--phone-tint);
 }
 .msg-typing {
   display: flex;
