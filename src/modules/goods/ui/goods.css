@@ -74,7 +74,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  height: 66px;
+  height: 72px;
   min-width: 0;
   border-radius: 10px;
   background: var(--home-cell);
@@ -109,7 +109,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 .goods-stock__icon {
   position: relative;
@@ -203,24 +203,32 @@
   padding: var(--space-2) var(--space-3) var(--space-3);
 }
 
-/* Wenig Höhe auf dem Startbildschirm (Container home in phone.css): flachere Fächer, damit nichts scrollt. */
+/* Wenig Höhe auf dem Startbildschirm (Container home in phone.css): flachere Fächer, damit nichts scrollt. Icon und
+   Lager-Optionen werden dafür kleiner, die Fächer behalten oben und unten Luft (Feedback 13.10.2026). */
 @container home (max-height: 600px) {
   .goods-stock__cell {
-    height: 54px;
+    height: 62px;
+  }
+  .goods-stock__icon svg {
+    width: 19px;
+    height: 19px;
   }
   .goods-widget__options {
-    min-height: 32px;
+    min-height: 30px;
   }
 }
 @container home (max-height: 500px) {
   .goods-stock__cell {
-    height: 50px;
+    height: 57px;
   }
   .goods-stock__main {
     gap: 2px;
   }
   .goods-stock__plus {
     margin-top: 1px;
+  }
+  .goods-widget {
+    gap: 4px;
   }
 }
 
