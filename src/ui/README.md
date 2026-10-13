@@ -179,7 +179,7 @@ Nur Variablen verwenden.
   34, `--type-title-2` 22, `--type-body` 17 (Fließtext, Zeilentitel, Knöpfe), `--type-subhead` 15 (Zweitzeilen,
   Hinweise), `--type-footnote` 13, `--type-caption` 12, `--type-caption-2` 11 (kleinste erlaubte Größe). Im Handy
   zeigen `--font-size-xs/sm/md/lg` auf Footnote, Subhead, Body, Title 3, damit auch Module iOS-Größen bekommen.
-- **Form:** `--radius-xs/sm/md/lg/xl` (4/6/8/12/16 px), `--radius-group` 16 (Gruppen, Karten), `--radius-tile` 22,5 %
+- **Form:** `--radius-xs/sm/md/lg/xl` (4/6/8/12/16 px), `--radius-group` 12 (Gruppen, Karten, iOS-Stil; Widgets am Startbildschirm 16), `--radius-tile` 22,5 %
   (App-Kacheln), `--radius-round` für Pillen und Zähler. `--stroke` (1 px). `--shadow-panel`, `--shadow-float`.
 - **Bewegung:** `--ease-out`, `--ease-ios`, `--duration(-fast/-slow)`. `prefers-reduced-motion` schaltet Animationen
   aus, `prefers-reduced-transparency` und `prefers-contrast: more` machen Glas deckend.

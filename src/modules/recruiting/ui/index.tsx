@@ -1,4 +1,4 @@
-// Oberfläche der Rekrutierung im Personal: „Könntest du einstellen“ zeigt bis zu acht Leute als Kacheln (Bild, Name,
+// Oberfläche der Rekrutierung im Personal: „Bewerber“ zeigt bis zu neun Leute als Kacheln, drei pro Reihe (Bild, Name,
 // Rolle, Level, Handgeld und Lohn); ein Tipp öffnet ein Blatt mit Werten, Hintergrund und Einstellen. Läufer und
 // Sicherheit gibt es hier nicht mehr (die heuerst du am Spot an), das Rumfragen („Leute finden“) ist vorerst aus.
 
@@ -233,7 +233,7 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
 }
 
 /** Höchstens so viele Leute als Kacheln. */
-const CANDIDATE_TILES = 8;
+const CANDIDATE_TILES = 9;
 
 /** Läufer und Sicherheit stellst du am Spot ein; alte Stände können sie noch unter den Bewerbern haben. */
 const AT_SPOT_ONLY: readonly StaffRole[] = ['runner', 'courier', 'security'];
@@ -254,13 +254,11 @@ function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
         image={c.portrait ?? undefined}
         look={personLook(c.name, c.age)}
         tone={look.color}
-        size="lg"
+        size="md"
       />
       <span class="rc-tile__name">{c.name}</span>
-      <Chips
-        class="rc-tile__tags"
-        items={[{ label: roleName(c.role), icon: look.icon, color: look.color }, { label: `L${c.level}` }]}
-      />
+      <span class="rc-tile__role">{roleName(c.role)}</span>
+      <span class="rc-tile__level">Level {c.level}</span>
       <span class="rc-tile__cost">
         <strong>{formatEuro(c.hireCost)}</strong>
         <span>{formatEuro(c.wage)}/Tag</span>
@@ -269,7 +267,7 @@ function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
   );
 }
 
-/** Gruppe "Könntest du einstellen": Kontakte zuerst (sie sind besser und laufen schneller ab), dann die Bewerber. */
+/** Gruppe "Bewerber" (vorher „Könntest du einstellen“): Kontakte zuerst (sie sind besser und laufen schneller ab), dann die Bewerber. */
 function Candidates() {
   const { state } = useGame();
   const [openId, setOpenId] = useState<string | null>(() => {
@@ -283,11 +281,11 @@ function Candidates() {
   const open = all.find((c) => c.id === openId) ?? null;
   return (
     <Group
-      title="Könntest du einstellen"
+      title="Bewerber"
       icon="userPlus"
       color="people"
       count={all.length}
-      note={all.length > 0 ? 'Ein Tipp zeigt Werte und Hintergrund. Oben das Handgeld, darunter der Lohn.' : undefined}
+      note={all.length > 0 ? 'Fett das Handgeld, darunter der Lohn. Ein Tipp zeigt Werte und Hintergrund.' : undefined}
       more="Bewerber melden sich auf deinen Aushang, Kontakte kommen über loyale Leute, Stammkunden und das Milieu und sind oft besser. Mit eigenen Veedeln und gutem Ruf warten mehr Leute. Wer zu lange wartet, sieht sich anderswo um."
     >
       {shown.length === 0 ? (
@@ -306,7 +304,7 @@ function Candidates() {
 
 registerSlot('tab:staff', {
   id: 'recruiting.section',
-  title: 'Könntest du einstellen',
+  title: 'Bewerber',
   order: 30,
   component: Candidates,
 });

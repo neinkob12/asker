@@ -1645,17 +1645,16 @@
 }
 
 /* ---------------------------------------------------------------- Gruppe, Zeile mit Kachel, Kennzahl-Kacheln */
-/* Abschnitt (Auftrag 27): sichtbare Unterlage mit Rand, farbige Kopfzeile in der Bedeutungsfarbe, Fußnote, "Mehr dazu". */
+/* Abschnitt im Stil der iOS-Einstellungen (Feedback 13.10.2026, vorher farbige Kopfzeile mit Symbol-Kachel): die
+   Überschrift steht klein und grau über dem Kasten, der Kasten hat keinen Rand, die Fußnote steht grau darunter. Die
+   Bedeutungsfarbe (--group-tint) bleibt für Bausteine im Inhalt erhalten, färbt aber nicht mehr den Kopf. */
 .ui-group {
   --group-tint: var(--cat-system);
   --group-tint-soft: var(--cat-system-soft);
+  --group-radius: var(--radius-group);
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--phone-group, var(--color-panel-raised));
-  border: 1px solid var(--phone-separator, var(--color-line));
-  border-radius: var(--radius-group);
-  overflow: hidden;
 }
 .ui-group--money {
   --group-tint: var(--cat-money);
@@ -1711,12 +1710,14 @@
 }
 .ui-group__head {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 40px;
-  padding: 6px 12px;
-  background: var(--group-tint-soft);
-  border-bottom: 1px solid var(--phone-separator, var(--color-line));
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: 0 16px 6px;
+}
+/* Kein Symbol im Kopf: iOS-Abschnitte tragen nur Text. */
+.ui-group__head > .ui-chip {
+  display: none;
 }
 .ui-group__title {
   flex: 1;
@@ -1725,8 +1726,8 @@
   overflow: hidden;
   font-family: var(--font-body);
   font-size: var(--type-footnote, 13px);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-caps);
+  font-weight: 400;
+  letter-spacing: 0.02em;
   line-height: var(--type-footnote-lh, 18px);
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -1739,33 +1740,32 @@
   white-space: normal;
   overflow-wrap: normal;
   word-break: keep-all;
-  color: var(--group-tint);
+  color: var(--phone-label-2, var(--color-muted));
 }
 .ui-group__count {
   flex: none;
-  padding: 0 7px;
-  border-radius: var(--radius-round);
-  background: var(--phone-group, var(--color-panel-raised));
-  font-size: var(--type-caption, 12px);
-  font-weight: var(--font-weight-bold);
-  line-height: 18px;
-  color: var(--group-tint);
+  font-size: var(--type-footnote, 13px);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--type-footnote-lh, 18px);
+  color: var(--phone-label-2, var(--color-muted));
 }
 .ui-group__value {
   flex: none;
   max-width: 50%;
   overflow: hidden;
-  font-size: var(--type-subhead, 15px);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-footnote, 13px);
+  font-weight: var(--font-weight-medium);
   font-variant-numeric: tabular-nums;
+  line-height: var(--type-footnote-lh, 18px);
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--phone-label, var(--color-text));
+  color: var(--phone-label-2, var(--color-muted));
 }
 .ui-group__chevron {
   flex: none;
-  font-size: 16px;
-  color: var(--group-tint);
+  align-self: center;
+  font-size: 14px;
+  color: var(--phone-label-2, var(--color-muted));
   transition: transform var(--duration-fast, 150ms) var(--ease-out, ease-out);
 }
 /* Auf- und zuklappen: Kopf ist ein <summary> ohne Standard-Marker */
@@ -1776,17 +1776,18 @@
 .ui-group--collapsible > summary::-webkit-details-marker {
   display: none;
 }
-.ui-group--collapsible:not([open]) > .ui-group__head {
-  border-bottom: 0;
-}
 .ui-group--collapsible:not([open]) .ui-group__chevron {
   transform: rotate(-90deg);
 }
+/* Der Kasten: flache Fläche ohne Rand, iOS-Rundung */
 .ui-group__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  overflow: hidden;
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--group-radius);
 }
 /* Alles außer Listen bekommt Rand zur Unterlage. Breite Bausteine (width: 100 %, z.B. Auswahl oder Segmente) ragten
    sonst um den Rand über die Gruppe hinaus (Auftrag 43, H13). */
@@ -1805,16 +1806,22 @@
   border: 0;
   border-radius: 0;
 }
+/* Leerer Kasten (nur Kopf und Fußnote): keine leere Fläche */
+.ui-group__body:empty {
+  display: none;
+}
 .ui-group__note {
   margin: 0;
-  padding: 8px 12px 10px;
-  border-top: 1px solid var(--phone-separator, var(--color-line));
+  padding: 6px 16px 0;
   font-size: var(--type-footnote, 13px);
   line-height: var(--type-footnote-lh, 18px);
   color: var(--phone-label-2, var(--color-muted));
 }
 .ui-group__more {
-  border-top: 1px solid var(--phone-separator, var(--color-line));
+  margin-top: var(--space-2);
+  overflow: hidden;
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--group-radius);
 }
 
 /* Ausklappbare Erklärung "Mehr dazu" (Auftrag 27) */

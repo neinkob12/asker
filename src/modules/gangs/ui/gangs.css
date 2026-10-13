@@ -269,7 +269,7 @@
 }
 .gangs-table__row {
   min-height: 52px;
-  border-top: 0.5px solid var(--color-line);
+  border-top: 0.5px solid var(--phone-separator, var(--color-line));
 }
 .gangs-table__name {
   display: flex;
