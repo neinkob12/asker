@@ -647,6 +647,8 @@ export function PhoneFrame() {
     <section
       class={`phone ${device ? 'phone--device' : ''} ${locked ? 'is-locked' : ''}`}
       data-tour="phone"
+      // White Mode (Einstellungen › Anzeige): helle Tokens in tokens.css unter .phone[data-appearance="light"].
+      data-appearance={ui.phoneTheme === 'light' ? 'light' : undefined}
       aria-label="Handy"
       inert={locked}
     >

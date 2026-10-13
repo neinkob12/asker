@@ -79,8 +79,8 @@ function ReputationWidget() {
   const tiers = reputationTiers();
   const index = tiers.indexOf(reputationTier(shown));
   const tier = tiers[index];
-  // Hell für den dunklen Startbildschirm: Leute (cyan), bei schlechtem Ruf Warnung bzw. Gefahr.
-  const accent = shown < 20 ? '#ff7b73' : shown < 40 ? '#ff9f0a' : '#40c8e0';
+  // Farben des Startbildschirms (dunkel oder White Mode): Leute (cyan), bei schlechtem Ruf Warnung bzw. Gefahr.
+  const accent = shown < 20 ? 'var(--home-danger)' : shown < 40 ? 'var(--home-warn)' : 'var(--home-people)';
   return (
     <button
       type="button"
@@ -126,7 +126,7 @@ function TerritoryWidget() {
       type="button"
       class="phone-widget phone-stat"
       // Hell wie die Bedeutungsfarbe Ort im dunklen Schema (der Startbildschirm ist immer dunkel).
-      style={{ '--stat-accent': '#6ab2ff' }}
+      style={{ '--stat-accent': 'var(--home-place)' }}
       data-tour="hud.territory"
       onClick={() => ui.selectTab('territory')}
       title={`${progress.controlled} von ${progress.total} Veedeln: ${

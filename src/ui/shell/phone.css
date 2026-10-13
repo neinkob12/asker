@@ -360,7 +360,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--hw-black);
+  background: var(--home-bg);
   color: var(--home-label);
   overflow: hidden;
 }
@@ -372,9 +372,10 @@
   flex-direction: column;
   gap: 14px;
   padding: calc(var(--phone-status-height) + 8px) var(--phone-gutter) 12px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  overscroll-behavior: contain;
+  /* Feedback 13.10.2026: Der Startbildschirm scrollt nicht, er steht. Auf kleinen Bildschirmen rückt alles enger
+     (Container-Abfrage auf die Höhe unten), damit Mitteilungen, Widgets, Apps und Lager ganz hineinpassen. */
+  overflow: hidden;
+  container: home / size;
 }
 .phone__home-scroll > * {
   flex-shrink: 0;
@@ -390,8 +391,8 @@
   padding: 9px 12px 10px;
   border: 0;
   border-radius: var(--radius-group);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: var(--home-card);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
   color: var(--home-label);
   font: inherit;
   text-align: left;
@@ -399,7 +400,7 @@
   transition: background var(--duration-fast);
 }
 .phone__notices:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--home-card-hover);
 }
 .phone__notices-head {
   display: flex;
@@ -462,28 +463,56 @@
   box-shadow: inset 0 0 0 1px rgba(255, 123, 115, 0.45);
 }
 .phone__notices.is-error .phone__notices-icon {
-  color: #ff7b73;
+  color: var(--home-danger);
 }
 .phone__notices.is-hint {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px var(--home-card-ring);
 }
 .phone__notices.is-hint .phone__notices-icon {
   color: var(--home-label);
 }
 @keyframes phone-notice-in {
   from {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--home-flash);
   }
 }
 /* Dringender Rat (Chat mit Frist, Kunden warten …): steht in den Mitteilungen, kräftig in der Schrift. */
 .phone__notices.is-urgent {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-alert) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--home-alert) 55%, transparent);
 }
 .phone__notices.is-urgent .phone__notices-icon {
-  color: var(--hud-alert);
+  color: var(--home-alert);
 }
 .phone__notices.is-urgent .phone__notices-text {
   font-weight: var(--font-weight-bold);
+}
+/* Wenig Höhe (iPhone SE, kleine Desktops; Höhe ohne Ränder): Abstände, Mitteilungen, Widgets und Lager-Fächer schrumpfen. */
+@container home (max-height: 600px) {
+  .phone__home-scroll {
+    gap: 8px;
+  }
+  .phone__notices {
+    min-height: 60px;
+    padding-block: 7px 8px;
+    gap: 2px;
+  }
+  .phone__notices-text {
+    -webkit-line-clamp: 1;
+  }
+  .phone-stat {
+    min-height: 96px;
+  }
+  .phone__apps {
+    padding-top: 0;
+  }
+}
+@container home (max-height: 500px) {
+  .phone-stat {
+    min-height: 84px;
+  }
+  .phone-stat__value {
+    font-size: 28px;
+  }
 }
 /* Widgets oben auf dem Startbildschirm: Raster aus drei Spalten, breite Widgets über zwei (Lager), kleine über eine
    (Ruf oben rechts). Module setzen .phone-widget und eine Breite, das Raster gehört dem Handy. */
@@ -500,8 +529,8 @@
   padding: 10px;
   border-radius: var(--radius-group);
   /* Der Startbildschirm ist in beiden Schemata schwarz: Widgets als helles Glas darauf, Schrift wie die App-Namen. */
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: var(--home-card);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
   color: var(--home-label);
 }
 .phone-widget--wide {
@@ -536,7 +565,7 @@ button.phone-stat {
   cursor: pointer;
 }
 button.phone-stat:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--home-card-hover);
 }
 .phone-stat .phone-widget__label {
   margin: 0 0 2px;
@@ -570,7 +599,7 @@ button.phone-stat:hover {
   height: 5px;
   margin: auto 0 4px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--home-track);
   overflow: hidden;
 }
 .phone-stat__bar > span {
@@ -593,7 +622,7 @@ button.phone-stat:hover {
   align-items: flex-start;
   gap: 4px;
   border: 0;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--home-card-dim);
   color: var(--home-label-2);
   font: inherit;
   text-align: left;
@@ -610,7 +639,7 @@ button.phone-stat:hover {
   height: 44px;
   margin: auto;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--home-card);
   color: var(--home-label);
 }
 .phone-widget--locked:not(.phone-stat) {
@@ -666,7 +695,7 @@ button.phone-stat:hover {
   letter-spacing: -0.01em;
   font-weight: var(--font-weight-medium);
   line-height: 16px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--home-name-shadow);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -676,7 +705,7 @@ button.phone-stat:hover {
   left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
   min-width: 22px;
   height: 22px;
-  box-shadow: 0 0 0 2px var(--hw-black);
+  box-shadow: 0 0 0 2px var(--home-bg);
 }
 /* Gesperrte App (Tutorial): steht schon da, ausgegraut, mit Schloss oben rechts wie ein Zähler. */
 .phone__app.is-locked .phone__tile {
@@ -694,8 +723,8 @@ button.phone-stat:hover {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #3a3a3c;
-  box-shadow: 0 0 0 2px var(--hw-black);
+  background: var(--home-lock);
+  box-shadow: 0 0 0 2px var(--home-bg);
   color: var(--home-label);
 }
 /* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
