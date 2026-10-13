@@ -1,15 +1,27 @@
 // Mitteilungen oben auf dem Startbildschirm (Feedback 13.10.2026): ein fester Streifen statt einer schwebenden
 // Einblendung. Steht gerade eine kurze Rückmeldung an (ui.error: fehlgeschlagener Befehl oder ui.notice beim Tipp auf
-// Gesperrtes), steht sie hier; sonst die neueste Meldung aus dem Verlauf, ungelesene hervorgehoben. Ein Tipp schließt
-// die Rückmeldung bzw. öffnet den Verlauf.
+// Gesperrtes), steht sie hier; sonst ein dringender Rat (Chat mit Frist, Kunden warten …; früher eine eigene Zeile
+// „Dringend“ darunter), sonst die neueste Meldung aus dem Verlauf, ungelesene hervorgehoben. Ein Tipp schließt die
+// Rückmeldung, führt zum dringenden Rat bzw. öffnet den Verlauf.
 
-import { clock } from '../../core';
+import { clock, type GameState } from '../../core';
 import { Icon } from '../components';
 import { shallowEqual, useRuntime, useRuntimeSelector } from '../hooks';
+import type { Advice } from '../registry';
+import { collectAdvice } from '../shell/NextStep';
+
+/** Ab dieser Priorität steht ein Rat in den Mitteilungen (z.B. Chat mit Frist, Ware alle). */
+export const URGENT_ADVICE = 80;
+
+/** Der dringende Rat, sofern es einen gibt. */
+export function urgentAdvice(state: GameState): Advice | null {
+  const top = collectAdvice(state)[0];
+  return top && top.priority >= URGENT_ADVICE ? top : null;
+}
 
 interface NoticeView {
-  /** 'error' | 'hint' (kurze Rückmeldung), 'alert' (Verlauf), 'empty'. */
-  kind: 'error' | 'hint' | 'alert' | 'empty';
+  /** 'error' | 'hint' (kurze Rückmeldung), 'urgent' (dringender Rat), 'alert' (Verlauf), 'empty'. */
+  kind: 'error' | 'hint' | 'urgent' | 'alert' | 'empty';
   text: string;
   icon: string;
   /** Ungelesene Meldungen im Verlauf. */
@@ -18,7 +30,8 @@ interface NoticeView {
 }
 
 export function HomeNotices() {
-  const { api } = useRuntime();
+  const runtime = useRuntime();
+  const { api } = runtime;
   const view = useRuntimeSelector((rt): NoticeView => {
     const { error, alerts } = rt.ui;
     const unread = alerts.filter((a) => !a.read).length;
@@ -30,6 +43,8 @@ export function HomeNotices() {
         unread,
         time: '',
       };
+    const urgent = rt.state ? urgentAdvice(rt.state) : null;
+    if (urgent) return { kind: 'urgent', text: urgent.title, icon: urgent.icon, unread, time: '' };
     const latest = alerts.find((a) => !a.read) ?? alerts[0];
     if (!latest) return { kind: 'empty', text: 'Nichts Neues.', icon: 'bell', unread: 0, time: '' };
     return {
@@ -46,7 +61,13 @@ export function HomeNotices() {
       type="button"
       class={`phone__notices is-${view.kind} ${view.unread > 0 && !transient ? 'has-unread' : ''}`}
       aria-live="polite"
-      onClick={() => (transient ? api.dismissError() : api.openPhone('core.history'))}
+      onClick={() => {
+        if (transient) return api.dismissError();
+        // Den Rat erst beim Tipp holen (die Aktion ist eine Funktion und steht nicht im Auszug).
+        const urgent = view.kind === 'urgent' && runtime.state ? urgentAdvice(runtime.state) : null;
+        if (urgent?.action) urgent.action(api);
+        else api.openPhone('core.history');
+      }}
     >
       <span class="phone__notices-head">
         <span>Mitteilungen</span>

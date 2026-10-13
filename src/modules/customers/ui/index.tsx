@@ -32,7 +32,6 @@ import { formatProductAmount, getProduct, productName } from '../../goods';
 import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
-  canServe,
   customerRevenue,
   customerTypeName,
   DEALER_STAGES,
@@ -137,15 +136,12 @@ function SpotQuality(props: { spotId: string }) {
 }
 
 function SpotCustomers(props: { spotId: string }) {
-  const { state, dispatch } = useGame();
+  const { state } = useGame();
   const waiting = waitingAt(state, props.spotId);
   const regulars = getRegulars(state, { spotId: props.spotId, status: 'active' }).length;
-  // Nur wen „Alle bedienen“ wirklich bedient: Reicht die Ware nicht für alle, bleibt der Rest stehen.
-  const servable = servableAt(state, props.spotId);
-  const total = servable.reduce((sum, c) => sum + customerRevenue(c), 0);
   return (
-    // Auftrag 46c: Der Anker spot.sell umfasst „Selbst verkaufen“ und die Kundschaft mit „Verkaufen“ (die Tour der
-    // Stufe 1 wartet hier auf den ersten Verkauf, beides muss bedienbar bleiben).
+    // Auftrag 46c: Der Anker spot.sell umfasst „Selbst verkaufen“ und die Kundschaft. Bedient wird seit dem 13.10.2026
+    // nur noch mit einem Tipp auf den Spot auf der Karte (spots/ui/map.ts), die Liste hier zeigt nur, wer wartet.
     <div class="customers-sell" data-tour="spot.sell">
       <StandHere spotId={props.spotId} />
       <Group
@@ -154,7 +150,11 @@ function SpotCustomers(props: { spotId: string }) {
         color="money"
         count={waiting.length}
         note={
-          regulars > 0 ? `${regulars === 1 ? 'Ein Stammkunde' : `${regulars} Stammkunden`} kaufen hier.` : undefined
+          regulars > 0
+            ? `${regulars === 1 ? 'Ein Stammkunde' : `${regulars} Stammkunden`} kaufen hier. Tipp auf den Spot bedient.`
+            : waiting.length > 0
+              ? 'Tipp auf den Spot auf der Karte bedient den Nächsten.'
+              : undefined
         }
       >
         <SpotQuality spotId={props.spotId} />
@@ -169,18 +169,7 @@ function SpotCustomers(props: { spotId: string }) {
             const left = Math.max(0, (c.expiresAt - state.time) / patience);
             const regular = c.regularId ? getRegular(state, c.regularId) : undefined;
             return (
-              <ListItem
-                key={c.id}
-                aside={
-                  <Button
-                    small
-                    disabled={!canServe(state, c.id)}
-                    onClick={() => dispatch({ type: 'customers.serve', payload: { customerId: c.id } })}
-                  >
-                    Verkaufen
-                  </Button>
-                }
-              >
+              <ListItem key={c.id}>
                 <ItemContent
                   icon={regular ? 'star' : 'smile'}
                   color={regular ? 'brand' : 'money'}
@@ -200,24 +189,6 @@ function SpotCustomers(props: { spotId: string }) {
               </ListItem>
             );
           })}
-          {waiting.length > 1 && (
-            <ListItem
-              action
-              value={formatEuro(total)}
-              onClick={() => dispatch({ type: 'customers.serveAll', payload: { spotId: props.spotId } })}
-            >
-              <ItemContent
-                icon="cash"
-                color="brand"
-                title="Alle bedienen"
-                meta={
-                  servable.length < waiting.length
-                    ? `${servable.length} von ${waiting.length} Kunden, die Ware reicht nicht für alle`
-                    : `${waiting.length} Kunden`
-                }
-              />
-            </ListItem>
-          )}
         </List>
       </Group>
     </div>

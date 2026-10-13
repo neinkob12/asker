@@ -66,7 +66,6 @@ export {
 } from './registry';
 export type {
   Alert,
-  CameraMode,
   MapController,
   ToastKind,
   ToastOptions,

@@ -1,7 +1,7 @@
 # Karte (`src/map/`)
 
 Die Grundkarte im **gedämpften Look** ("Nachtschicht", passend zur dunklen Oberfläche): Grau- und Schieferflächen,
-runde Straßen, wenig Details, 3D-Gebäude in Grautönen mit Schatten, Wahrzeichen als schlichte Klötze, vier
+runde Straßen, wenig Details, flache Gebäude in Grautönen mit Schatten, Wahrzeichen als Flächen, vier
 Tageszeiten. Farbe tragen nur Spielinhalte (Reviere, Spots, Gangs, Hotspots). Alle Daten kommen aus
 den OpenFreeMap-Vektorkacheln (OpenMapTiles-Schema, ohne Key). Module importieren alles nur aus
 `src/map/index.ts` und nur aus ihrem `ui/`-Ordner.
@@ -34,8 +34,8 @@ Für die Karte selbst heißt das:
 
 | Datei | Inhalt |
 | --- | --- |
-| `GameMap.ts` | MapLibre-Karte, Kamera 3D/2D, Köln/Europa, Tageszeit und Stimmung anwenden, Layer der Module mounten |
-| `style.ts` | Grundstil: Land, Parks/Wald/Friedhöfe, Wasser mit Uferlinie, Gleise, Straßen (Kontur + Füllung je Klasse), Brücken, Häuserschatten, 3D-Gebäude in vier Höhenbändern, Wahrzeichen |
+| `GameMap.ts` | MapLibre-Karte (nur 2D), Köln/Europa, Tageszeit und Stimmung anwenden, Layer der Module mounten |
+| `style.ts` | Grundstil: Land, Parks/Wald/Friedhöfe, Wasser mit Uferlinie, Gleise, Straßen (Kontur + Füllung je Klasse), Brücken, Häuserschatten, flache Gebäude in vier Höhenbändern, Wahrzeichen |
 | `look.ts` | vier Tageszeit-Paletten (`PALETTES`), weiche Übergänge (`paletteBlend`), Stimmung darüber (`computeLook`), Farbhilfen `mixColor`, `pastel` (getestet) |
 | `landmarks.ts` | Wahrzeichen als gestapelte Klötze mit echten Koordinaten (`LANDMARKS`, `landmarkFeatures`) (getestet) |
 | `vehicles.ts` | 3D-Mini-Fahrzeuge und Schiffe (`createVehicle`, `animateVehicle`) |
@@ -58,7 +58,7 @@ Ebenen der Grundkarte stehen in `BASE_LAYERS`. Eigene Ebenen mit Modul-Präfix a
 - Flächen **nur auf dem Land** (unter Grün, Wasser und Straßen, z.B. die Veedel-Einfärbung):
   `map.addLayer(layer, ABOVE_LAND)`, damit Rhein und Parks klar bleiben
 - Flächen **unter den Straßen**: `map.addLayer(layer, BELOW_ROADS)`
-- Flächen und Linien **unter den 3D-Gebäuden** und ihren Schatten: `map.addLayer(layer, BELOW_BUILDINGS)`
+- Flächen und Linien **unter den Gebäuden** und ihren Schatten: `map.addLayer(layer, BELOW_BUILDINGS)`
 - ohne `beforeId` liegt die Ebene ganz oben (über Gebäuden und Wahrzeichen, z.B. Hotspots)
 
 Keine POIs, keine Straßennamen, keine Hausnummern: Die Grundkarte hat keine Symbol-Ebenen. Nebenstraßen erscheinen
@@ -80,9 +80,8 @@ Gebäudebänder (`BUILDING_BANDS`: unter 9 m, 9–16 m, 16–28 m, darüber). Ne
   (`glow`, eigene Ebene mit Blur). Himmel und Nebel (`setSky`) und das Licht auf den Gebäuden ziehen mit.
 - `MapLook.night` (0 Tag … 1 Nacht) bekommen auch die Effekte: Hotspots leuchten nachts stärker, Fahrzeuge werfen
   Scheinwerferlicht.
-- Kamera: 3D schräg (50°, Standard) oder 2D-Draufsicht, pro Gerät gemerkt (`ui.setCameraMode`, `ui.toggleCamera`,
-  `UiState.camera`). In 2D ist Drehen und Kippen aus. `ui.flyToKoeln()` hält den Modus, `ui.flyToEuropa()` zeigt
-  die Europa-Ansicht (Lieferungen) immer flach.
+- Kamera: seit dem 13.10.2026 immer 2D von oben (kein Kippen, kein Drehen, `maxPitch` 0, Container-Klasse `is-2d`).
+  Gebäude und Wahrzeichen sind flache Flächen (`fill`), es gibt keinen Himmel mehr; Licht nur noch für die Fahrzeuge.
 - Überwachungs-Overlay: `ui.setOverlay(on)`, `UiState.overlay`, pro Gerät gemerkt, **standardmäßig aus**.
 - Die Layer der Module werden schon nach dem Laden des Stils gemountet (`style.load`), nicht erst nach den Kacheln:
   Sind die Kacheln nicht erreichbar, bleiben Spots, Lager und Fahrzeuge trotzdem bedienbar.

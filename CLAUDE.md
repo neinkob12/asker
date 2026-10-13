@@ -317,6 +317,15 @@ Rückmeldung (`ui.error`, `ui.notice`) steht dort statt schwebend, sonst die neu
 Zähler); ein Tipp schließt die Rückmeldung bzw. öffnet den Verlauf. In den Apps schwebt die Rückmeldung wie bisher.
 In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
 `hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
+Feedback 13.10.2026 (2D und Handy): Die Karte ist nur noch 2D von oben (kein Kippen/Drehen, Gebäude und Wahrzeichen
+als flache `fill`-Flächen, kein Himmel; Kamera-Schalter, Norden-Knopf und Menü Ebenen sind weg). Minispiele mit three.js
+laden erst beim Start (`lazyView` in `minigames/ui/kit/lazyView.tsx`). Dringende Ratschläge stehen im Streifen
+„Mitteilungen“ (`urgentAdvice` in `HomeNotices.tsx`), nicht mehr als eigene Zeile; im Spot-Fenster gibt es keinen
+Verkaufen-Knopf mehr, bedient wird nur mit einem Tipp auf den Spot. Wartet dort jemand ohne Läufer, ist der Klickrand
+größer (`spotHitExtra`, `--spot-hit`, nie bis zum nächsten Spot). Revier-Namen erscheinen beim Klick ins Veedel, ein
+Doppelklick öffnet die Reviere mit dem Veedel. Spielfarben über der Karte statt Gold: `--hud-pause`, `--hud-mission`,
+`--hud-go`, `--hud-meter`, `--hud-alert`. Schleier offener HUD-Popover liegt per Portal in der Shell (kein Abschalten
+des backdrop-filter mehr, das ließ den Bildschirm beim Schließen kurz schwarz werden).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

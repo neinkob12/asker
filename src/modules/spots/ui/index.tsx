@@ -3,7 +3,7 @@
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
 import { clock, formatEuro, formatPercent } from '../../../core';
-import { mapEffects, registerMapLayer } from '../../../map';
+import { isMobile, mapEffects, registerMapLayer } from '../../../map';
 import {
   Button,
   Card,
@@ -24,7 +24,7 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold } from '../../city';
-import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
+import { getSalesStats, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount, getWarehouses } from '../../goods';
 import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
@@ -349,37 +349,21 @@ registerAdvisor({
     }
     if (busiest) {
       const spot = busiest;
-      // Ort zuerst: Im schmalen Banner („Dringend“) bleibt so der Ort stehen, auch wenn der Rest gekürzt wird (J5).
+      // Ort zuerst: In den Mitteilungen bleibt so der Ort stehen, auch wenn der Rest gekürzt wird (J5).
       const title = `${spot.name}: ${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'}`;
-      // Stehst du noch nirgends: hinstellen, dann verkaufst du dort automatisch. Sonst sofort alle bedienen.
-      if (!mine && !isPlayerAway(state)) {
-        return {
-          id: 'spots.waiting',
-          priority: 85,
-          icon: 'smile',
-          title,
-          text: 'Stell dich hin, dann verkaufst du dort automatisch, bis du weggehst.',
-          actionLabel: 'Hinstellen',
-          highlight: '.spot-marker',
-          target: { lng: spot.lng, lat: spot.lat },
-          action: (ui) => {
-            ui.dispatch({ type: 'customers.standAt', payload: { spotId: spot.id } });
-            ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
-          },
-        };
-      }
+      // Feedback 13.10.2026: Bedient wird nur mit einem Tipp auf den Spot, der Rat führt nur hin.
       return {
         id: 'spots.waiting',
         priority: 85,
         icon: 'smile',
         title,
-        text: 'Einmal kurz rüber und alle bedienen, oder einen Läufer hinstellen.',
-        actionLabel: 'Verkaufen',
+        text: 'Tipp auf den Spot, dann bedienst du den Nächsten. Oder stell einen Läufer hin.',
+        actionLabel: 'Zum Spot',
         highlight: '.spot-marker',
         target: { lng: spot.lng, lat: spot.lat },
         action: (ui) => {
-          const result = ui.dispatch({ type: 'customers.serveAll', payload: { spotId: spot.id } });
-          if (!result.ok) ui.openPanel('spots.spot', { spotId: spot.id });
+          if (isMobile()) ui.closePhone();
+          ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
         },
       };
     }

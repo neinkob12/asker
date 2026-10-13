@@ -101,15 +101,8 @@ function collect(runtime: UiRuntime): Entry[] {
     group: 'Befehle',
     title: 'Einstellungen',
     icon: 'gear',
-    keywords: 'ton musik lautstärke anzeige kamera vibration',
+    keywords: 'ton musik lautstärke anzeige vibration',
     run: () => api.openPhone('core.settings'),
-  });
-  add({
-    id: 'cmd:camera',
-    group: 'Befehle',
-    title: runtime.ui.camera === '3d' ? 'Kamera: 2D-Draufsicht' : 'Kamera: 3D schräg',
-    icon: 'cube',
-    run: api.toggleCamera,
   });
   add({ id: 'cmd:koeln', group: 'Befehle', title: 'Zurück zur Stadt', icon: 'pin', run: api.flyHome });
   return entries;

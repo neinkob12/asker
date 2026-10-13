@@ -72,6 +72,8 @@ export const veedelLayer: MapLayer = {
     const onLand = map.getLayer(ABOVE_LAND) ? ABOVE_LAND : before;
     let lastSignature = '';
     let hovered: string | null = null;
+    /** Veedel, dessen Name gerade steht (nach einem Klick, Feedback 13.10.2026: nicht mehr beim Überfahren). */
+    let shown: string | null = null;
     let lastSelected = '';
 
     const initial = ctx.getState();
@@ -140,7 +142,7 @@ export const veedelLayer: MapLayer = {
       before,
     );
 
-    // Name mit Herrscher bzw. Heat nur beim Überfahren mit der Maus, über der Mitte des Veedels.
+    // Name mit Herrscher bzw. Heat nach einem Klick ins Veedel, über seiner Mitte. Ein Klick daneben blendet ihn aus.
     const hoverName = el('span', 'veedel-label__name');
     const hoverDetail = el('span', 'veedel-label__detail');
     const label = addHtmlMarker(map, {
@@ -151,6 +153,7 @@ export const veedelLayer: MapLayer = {
     });
     label.element.hidden = true;
     const showLabel = (id: string | null) => {
+      shown = id;
       const veedel = id ? allVeedel().find((v) => v.id === id) : undefined;
       const state = ctx.getState();
       if (!veedel || !state) {
@@ -175,13 +178,27 @@ export const veedelLayer: MapLayer = {
     const unsubscribe = onMapViewChange(() => {
       const state = ctx.getState();
       if (state) draw(state, true);
-      showLabel(hovered);
+      showLabel(shown);
     });
 
-    map.on('click', FILL, (e) => {
-      if (ctx.isPicking()) return;
-      const id = e.features?.[0]?.properties?.id;
-      if (typeof id === 'string') ctx.ui.openPanel('veedel.veedel', { veedelId: id });
+    // Nur Klicks direkt auf die Karte: Ein Klick auf einen Spot oder ein anderes Schild gehört dem Schild.
+    const onCanvas = (e: { originalEvent: Event }) => e.originalEvent.target === map.getCanvas();
+    const veedelAt = (e: { point: { x: number; y: number } }) => {
+      const id = map.queryRenderedFeatures([e.point.x, e.point.y], { layers: [FILL] })[0]?.properties?.id;
+      return typeof id === 'string' ? id : null;
+    };
+    map.on('click', (e) => {
+      if (ctx.isPicking() || !onCanvas(e)) return;
+      showLabel(veedelAt(e));
+    });
+    // Doppelklick: die App Reviere mit genau diesem Veedel (statt hineinzuzoomen).
+    map.on('dblclick', FILL, (e) => {
+      if (ctx.isPicking() || !onCanvas(e)) return;
+      const id = veedelAt(e);
+      if (!id) return;
+      e.preventDefault();
+      ctx.ui.openPhone('tab:territory');
+      ctx.ui.openPanel('veedel.veedel', { veedelId: id });
     });
     map.on('mousemove', FILL, (e) => {
       const id = e.features?.[0]?.properties?.id;
@@ -190,20 +207,18 @@ export const veedelLayer: MapLayer = {
       hovered = id;
       map.setFeatureState({ source: SOURCE, id }, { hover: true });
       map.getCanvas().style.cursor = 'pointer';
-      showLabel(id);
     });
     map.on('mouseleave', FILL, () => {
       if (hovered) map.setFeatureState({ source: SOURCE, id: hovered }, { hover: false });
       hovered = null;
       map.getCanvas().style.cursor = '';
-      showLabel(null);
     });
 
     return {
       update(state, ui) {
         draw(state);
-        // Der Text beim Überfahren zeigt den genauen Heat, auch wenn die Flächen nur in Stufen neu gesetzt werden.
-        if (hovered) showLabel(hovered);
+        // Der Name zeigt den genauen Heat, auch wenn die Flächen nur in Stufen neu gesetzt werden.
+        if (shown) showLabel(shown);
         const selected = ui.panel?.id === 'veedel.veedel' ? (ui.panel.props as { veedelId: string }).veedelId : '';
         if (selected !== lastSelected) {
           lastSelected = selected;

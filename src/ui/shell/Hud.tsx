@@ -8,6 +8,7 @@
 // Sie laufen über den Verlauf (Auftrag 46d: keine Banner, keine Island).
 
 import type { ComponentChildren } from 'preact';
+import { createPortal } from 'preact/compat';
 import { SPEEDS } from '../../core';
 import { ClockHud } from '../builtin/CoreHud';
 import { Badge, ErrorBoundary, Icon } from '../components';
@@ -31,13 +32,22 @@ export function HudItems(props: { items: HudItem[] }) {
   );
 }
 
-/** Popover unter einem HUD-Knopf. Klick daneben oder Escape schließt. */
+/**
+ * Popover unter einem HUD-Knopf. Klick daneben oder Escape schließt. Der Schleier für den Klick daneben liegt direkt in
+ * der Shell: Im Glas-Kasten (backdrop-filter) deckte er sonst nur den Kasten. Früher nahm der Kasten dafür solange seinen
+ * Filter weg; das An- und Ausschalten des Filters über der Karte ließ den Bildschirm beim Schließen kurz schwarz
+ * werden (Feedback 13.10.2026).
+ */
 export function Popover(props: { id: string; children: ComponentChildren; align?: 'left' | 'right'; class?: string }) {
   const { ui, api } = useRuntime();
   if (ui.popover !== props.id) return null;
   return (
     <>
-      <button type="button" class="hud-popover-scrim" aria-label="Schließen" onClick={() => api.setPopover(null)} />
+      {createPortal(
+        <button type="button" class="hud-popover-scrim" aria-label="Schließen" onClick={() => api.setPopover(null)} />,
+        // Neben HUD und Kartensteuerung (gleiche Ebene), sonst läge er über dem Popover.
+        document.querySelector('.shell') ?? document.body,
+      )}
       <div class={`hud-popover hud-popover--${props.align ?? 'left'} ${props.class ?? ''}`} role="dialog">
         {props.children}
       </div>

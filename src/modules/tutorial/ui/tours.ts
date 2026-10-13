@@ -143,17 +143,19 @@ function stage1(ctx: TourContext): TourStep[] {
       text: 'Der Neumarkt, dein Spot. Steht ein Kunde da, erscheint hier die 1. Läuft seine Zeit ab, wird et rot.',
     }),
     step({
+      // Feedback 13.10.2026: Verkauft wird nur noch mit einem Tipp auf den Spot, nicht mehr im Handy.
+      id: 'sell',
+      anchor: 'spot.customer',
+      anchorKey: SPOT,
+      tint: 'brand',
+      waitFor: { event: 'sale.completed' },
+      text: 'Verkauf einmal selbst: Tipp auf den Spot, sobald einer da ist.',
+    }),
+    step({
       id: 'panel',
       anchor: 'spot.panel',
       before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
       text: 'Dat Spot-Fenster: Kunden, Preise, Leute. Alles für diese Ecke.',
-    }),
-    step({
-      id: 'sell',
-      anchor: 'spot.sell',
-      tint: 'brand',
-      waitFor: { event: 'sale.completed' },
-      text: 'Verkauf einmal selbst: Tipp auf Verkaufen, sobald einer da ist.',
     }),
     step({
       id: 'price',

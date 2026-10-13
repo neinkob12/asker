@@ -267,19 +267,6 @@ export function SettingsApp() {
           onChange={ui.setOverlay}
         />
         <div class="set-choice">
-          <span class="set-choice__label">Kamera</span>
-          <SegmentedControl
-            wide
-            aria-label="Kamera"
-            options={[
-              { value: '3d', label: '3D schräg' },
-              { value: '2d', label: '2D Draufsicht' },
-            ]}
-            value={ui.state.camera}
-            onChange={ui.setCameraMode}
-          />
-        </div>
-        <div class="set-choice">
           <span class="set-choice__label">Verkehr</span>
           <SegmentedControl
             wide
