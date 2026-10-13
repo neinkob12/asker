@@ -56,6 +56,7 @@ import {
   homeSwipeOpenness,
   rubberBand,
 } from './gestureModel';
+import { HomeNotices } from './HomeNotices';
 import { chatList } from './messagesModel';
 import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
@@ -403,6 +404,7 @@ const HomeScreen = memo(function HomeScreen() {
   return (
     <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
+        <HomeNotices />
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         {/* Oben kleine Widgets nebeneinander (Rang, Ruf, Reviere), dann die Apps, darunter breite Widgets (Lager). */}
         <div class="phone__widgets">
@@ -663,7 +665,8 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
       </ErrorBoundary>
       {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
       {/* Während eines Anrufs nichts über dem Anrufer. */}
-      {!inCall && <PhoneErrorNotice />}
+      {/* Auf dem Startbildschirm steht die Rückmeldung im Streifen „Mitteilungen“ (HomeNotices), nicht schwebend. */}
+      {!inCall && !atHome && <PhoneErrorNotice />}
       {props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
