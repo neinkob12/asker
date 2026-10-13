@@ -1,7 +1,6 @@
-// Oberfläche der Rekrutierung (Auftrag 27): zwei Gruppen im Personal. "Könntest du einstellen" zeigt Bewerber und
-// Kontakte als eine Zeile pro Person (Avatar, Rolle als Chip, Level, Handgeld, Ablauf; Lohn rechts), nach Rolle
-// filterbar; ein Tipp öffnet ein Blatt mit Werten, Hintergrund und Einstellen. "Leute finden" ist das Rumfragen mit
-// Rollenwahl, das vorher sagt, was es kostet und was es bringt.
+// Oberfläche der Rekrutierung im Personal: „Könntest du einstellen“ zeigt bis zu acht Leute als Kacheln (Bild, Name,
+// Rolle, Level, Handgeld und Lohn); ein Tipp öffnet ein Blatt mit Werten, Hintergrund und Einstellen. Läufer und
+// Sicherheit gibt es hier nicht mehr (die heuerst du am Spot an), das Rumfragen („Leute finden“) ist vorerst aus.
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, personLook } from '../../../core';
@@ -18,19 +17,13 @@ import {
   ListItem,
   onGameEvent,
   registerSlot,
-  SegmentedControl,
-  Select,
   Sheet,
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
-import { getSpots } from '../../spots';
 import {
   canHireRole,
-  isSpecialist,
   roleName,
-  runnerAt,
   STAT_KEYS,
   STAT_NAMES,
   type StaffRole,
@@ -38,18 +31,7 @@ import {
   type TraitId,
   traitName,
 } from '../../staff';
-import { tutorialAllowsRole } from '../../tutorial';
-import {
-  type Candidate,
-  canInterview,
-  getContacts,
-  getPool,
-  knownTraits,
-  SEARCH_ROLES,
-  type SearchRole,
-  SOURCE_NAMES,
-  searchPreview,
-} from '../index';
+import { type Candidate, canInterview, getContacts, getPool, knownTraits, SOURCE_NAMES } from '../index';
 import './recruiting.css';
 
 /** Symbol und Farbe je Rolle (wie im Personal). */
@@ -65,23 +47,6 @@ const ROLE_LOOK: Record<StaffRole, { icon: string; color: 'people' | 'goods' | '
   gardener: { icon: 'flask', color: 'goods' },
 };
 
-type RoleFilter = 'all' | 'runner' | 'driver' | 'security' | 'specialist';
-
-const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
-  { value: 'all', label: 'Alle' },
-  { value: 'runner', label: 'Läufer' },
-  { value: 'driver', label: 'Fahrer' },
-  { value: 'security', label: 'Sicherheit' },
-  { value: 'specialist', label: 'Spezialisten' },
-];
-
-function matchesFilter(c: Candidate, filter: RoleFilter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'specialist') return isSpecialist(c.role);
-  if (filter === 'runner') return c.role === 'runner' || c.role === 'courier';
-  return c.role === filter;
-}
-
 /** Chip einer Eigenschaft (Farbe nach gut, schlecht oder beides). */
 function traitChip(t: TraitId, name: string) {
   return {
@@ -95,44 +60,6 @@ function traitChip(t: TraitId, name: string) {
           : ('warn' as const),
     title: TRAITS[t].hint,
   };
-}
-
-/** Eine Person als Zeile: Avatar, Name, Rolle und Level als Chips, Handgeld, Ablauf; Lohn rechts. */
-function CandidateRow(props: { candidate: Candidate; onOpen: () => void }) {
-  const { state } = useGame();
-  const c = props.candidate;
-  const left = c.expiresAt - state.time;
-  const look = ROLE_LOOK[c.role];
-  const known = knownTraits(c);
-  const hidden = (c.traits ?? []).length - known.length;
-  return (
-    <ListItem onClick={props.onOpen} value={`${formatEuro(c.wage)}/Tag`}>
-      <span class="ui-item">
-        <Avatar
-          name={c.name}
-          image={c.portrait ?? undefined}
-          look={personLook(c.name, c.age)}
-          tone={look.color}
-          size="md"
-        />
-        <span class="ui-item__main">
-          <span class="ui-item__title">{c.name}</span>
-          <Chips
-            class="ui-item__tags"
-            items={[
-              { label: roleName(c.role), icon: look.icon, color: look.color },
-              { label: `Level ${c.level}` },
-              { label: `Handgeld ${formatEuro(c.hireCost)}`, icon: 'coins', color: 'money' },
-              c.source !== 'pool' && { label: SOURCE_NAMES[c.source], icon: 'star', color: 'brand' },
-              ...known.map((t) => traitChip(t, c.name)),
-              hidden > 0 && { label: '?', icon: 'sparkles', color: 'system', title: 'Eigenschaften noch unbekannt' },
-              { label: `noch ${clock.formatDuration(left)}`, icon: 'timer', color: left < 6 * 60 ? 'warn' : 'system' },
-            ]}
-          />
-        </span>
-      </span>
-    </ListItem>
-  );
 }
 
 /**
@@ -209,29 +136,12 @@ onGameEvent('minigame.finished', 'recruiting.reopen', (payload, ui) => {
   ui.openPhone('tab:staff');
 });
 
-/** Auswahl „ohne Einsatz“ beim Einstellen eines Läufers. */
-const NO_SPOT = '';
-
-/**
- * Blatt mit allem zu einer Person: Werte (bekannte als Zahl), Hintergrund, Konditionen, Einstellen oder Ablehnen.
- * Läufer kommen gleich an einen Spot ohne Läufer (J10: vorher standen sie „Frei: ohne Einsatz“ und kosteten Lohn).
- */
+/** Blatt mit allem zu einer Person: Werte (bekannte als Zahl), Hintergrund, Konditionen, Einstellen oder Ablehnen. */
 function CandidateSheet(props: { candidate: Candidate | null; onClose: () => void }) {
   const { state, dispatch } = useGame();
-  const [spotChoice, setSpotChoice] = useState<string | null>(null);
   const c = props.candidate;
   const look = c ? ROLE_LOOK[c.role] : ROLE_LOOK.runner;
-  const freeSpots =
-    c?.role === 'runner' ? getSpots(state, activeCity(state)).filter((spot) => !runnerAt(state, spot.id)) : [];
-  // Ohne eigene Wahl der erste freie Spot; eine Wahl, die nicht mehr frei ist, fällt darauf zurück.
-  const spotId =
-    spotChoice === NO_SPOT || freeSpots.some((spot) => spot.id === spotChoice)
-      ? (spotChoice as string)
-      : (freeSpots[0]?.id ?? NO_SPOT);
-  const close = () => {
-    setSpotChoice(null);
-    props.onClose();
-  };
+  const close = () => props.onClose();
   const roleCheck = c ? canHireRole(state, c.role) : { ok: true as const };
   return (
     <Sheet open={!!c} onClose={close} title={c?.name ?? ''} detents={['medium', 'large']}>
@@ -293,31 +203,6 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               </ListItem>
             </List>
           </Group>
-          {freeSpots.length > 0 && (
-            <Group
-              title="Einsatz"
-              icon="pin"
-              color="place"
-              note={spotId === NO_SPOT ? 'Ohne Spot verkauft niemand, der Lohn läuft trotzdem.' : undefined}
-            >
-              <List>
-                <ListItem>
-                  <ItemContent icon="runner" color="people" title="Steht dann">
-                    <Select
-                      wide
-                      label="Spot"
-                      value={spotId}
-                      options={[
-                        ...freeSpots.map((spot) => ({ value: spot.id, label: spot.name })),
-                        { value: NO_SPOT, label: 'Erst mal ohne Einsatz' },
-                      ]}
-                      onChange={setSpotChoice}
-                    />
-                  </ItemContent>
-                </ListItem>
-              </List>
-            </Group>
-          )}
           {/* Auftrag 46e: nur ein Buchhalter pro Stadt, der Grund steht dabei. */}
           {!roleCheck.ok && <Hint icon="alert">{roleCheck.reason}</Hint>}
           <div class="rc-sheet__actions">
@@ -325,11 +210,7 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               variant="primary"
               disabled={state.wallet.dirty < c.hireCost || !roleCheck.ok}
               onClick={() => {
-                const assignment = spotId === NO_SPOT ? null : { kind: 'spot' as const, targetId: spotId };
-                const hired = dispatch({
-                  type: 'recruiting.hire',
-                  payload: assignment ? { candidateId: c.id, assignment } : { candidateId: c.id },
-                });
+                const hired = dispatch({ type: 'recruiting.hire', payload: { candidateId: c.id } });
                 if (hired.ok) close();
               }}
             >
@@ -351,24 +232,54 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
   );
 }
 
-/** Ab so vielen Leuten in der Liste gibt es den Filter nach Rolle. */
-const FILTER_MIN = 4;
+/** Höchstens so viele Leute als Kacheln. */
+const CANDIDATE_TILES = 8;
+
+/** Läufer und Sicherheit stellst du am Spot ein; alte Stände können sie noch unter den Bewerbern haben. */
+const AT_SPOT_ONLY: readonly StaffRole[] = ['runner', 'courier', 'security'];
+
+/** Eine Person als Kachel: Bild, Name, Rolle, Level, Handgeld und Lohn. */
+function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
+  const c = props.candidate;
+  const look = ROLE_LOOK[c.role];
+  return (
+    <button
+      type="button"
+      class="rc-tile"
+      aria-label={`${c.name}, ${roleName(c.role)}, Level ${c.level}, Handgeld ${formatEuro(c.hireCost)}, Lohn ${formatEuro(c.wage)} pro Tag`}
+      onClick={props.onOpen}
+    >
+      <Avatar
+        name={c.name}
+        image={c.portrait ?? undefined}
+        look={personLook(c.name, c.age)}
+        tone={look.color}
+        size="lg"
+      />
+      <span class="rc-tile__name">{c.name}</span>
+      <Chips
+        class="rc-tile__tags"
+        items={[{ label: roleName(c.role), icon: look.icon, color: look.color }, { label: `L${c.level}` }]}
+      />
+      <span class="rc-tile__cost">
+        <strong>{formatEuro(c.hireCost)}</strong>
+        <span>{formatEuro(c.wage)}/Tag</span>
+      </span>
+    </button>
+  );
+}
 
 /** Gruppe "Könntest du einstellen": Kontakte zuerst (sie sind besser und laufen schneller ab), dann die Bewerber. */
 function Candidates() {
   const { state } = useGame();
-  const [filter, setFilter] = useState<RoleFilter>('all');
   const [openId, setOpenId] = useState<string | null>(() => {
     // Zurück vom Bewerbungsgespräch: gleich wieder beim Blatt.
     const back = reopenAfterInterview;
     reopenAfterInterview = null;
     return back;
   });
-  const all = [...getContacts(state), ...getPool(state)];
-  // Der Filter lohnt erst bei einer längeren Liste (sonst stand er nur im Weg); ohne Filter zählt „Alle“.
-  const filterable = all.length > FILTER_MIN;
-  const shown = filterable ? filter : 'all';
-  const list = all.filter((c) => matchesFilter(c, shown));
+  const all = [...getContacts(state), ...getPool(state)].filter((c) => !AT_SPOT_ONLY.includes(c.role));
+  const shown = all.slice(0, CANDIDATE_TILES);
   const open = all.find((c) => c.id === openId) ?? null;
   return (
     <Group
@@ -376,87 +287,26 @@ function Candidates() {
       icon="userPlus"
       color="people"
       count={all.length}
-      note={all.length > 0 ? 'Ein Tipp zeigt Werte und Hintergrund.' : undefined}
+      note={all.length > 0 ? 'Ein Tipp zeigt Werte und Hintergrund. Oben das Handgeld, darunter der Lohn.' : undefined}
       more="Bewerber melden sich auf deinen Aushang, Kontakte kommen über loyale Leute, Stammkunden und das Milieu und sind oft besser. Mit eigenen Veedeln und gutem Ruf warten mehr Leute. Wer zu lange wartet, sieht sich anderswo um."
     >
-      {filterable && (
-        <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
-      )}
-      {list.length === 0 ? (
-        <Empty icon="userPlus">
-          {all.length === 0
-            ? 'Gerade niemand. Neue Bewerber kommen alle paar Stunden, oder du fragst unten rum.'
-            : 'Niemand mit dieser Rolle. Frag unten gezielt rum.'}
-        </Empty>
+      {shown.length === 0 ? (
+        <Empty icon="userPlus">Gerade niemand. Neue Bewerber kommen alle paar Stunden.</Empty>
       ) : (
-        <List>
-          {list.map((c) => (
-            <CandidateRow key={c.id} candidate={c} onOpen={() => setOpenId(c.id)} />
+        <div class="rc-tiles">
+          {shown.map((c) => (
+            <CandidateTile key={c.id} candidate={c} onOpen={() => setOpenId(c.id)} />
           ))}
-        </List>
+        </div>
       )}
       <CandidateSheet candidate={open} onClose={() => setOpenId(null)} />
     </Group>
   );
 }
 
-/** Gruppe "Leute finden": Rumfragen mit Rollenwahl, vorher steht, was es kostet und bringt. */
-function Search() {
-  const { state, dispatch } = useGame();
-  const [role, setRole] = useState<SearchRole | 'any'>('any');
-  const wanted = role === 'any' ? undefined : role;
-  const preview = searchPreview(state, wanted);
-  const short = state.wallet.dirty < preview.cost;
-  return (
-    <Group
-      title="Leute finden"
-      icon="search"
-      color="brand"
-      // Preis und Zahl stehen schon in der Zeile „Rumfragen“; der Hinweis kommt nur, wenn du warten musst.
-      note={
-        preview.waiting ? `Du hast gerade erst rumgefragt, wieder ab ${clock.formatTime(preview.readyAt)}.` : undefined
-      }
-    >
-      <SegmentedControl
-        wide
-        aria-label="Wen suchst du?"
-        options={[
-          { value: 'any' as const, label: 'Egal wen' },
-          // Auftrag 46b: Im Tutorial nur Rollen, die seine Stufe schon kennt.
-          ...SEARCH_ROLES.filter((r) => tutorialAllowsRole(state, r.value)).map((r) => ({
-            value: r.value,
-            label: r.label.replace(' suchen', ''),
-          })),
-        ]}
-        value={role}
-        onChange={setRole}
-      />
-      <List>
-        <ListItem
-          action
-          disabled={preview.waiting || short}
-          value={formatEuro(preview.cost)}
-          onClick={() => dispatch({ type: 'recruiting.search', payload: wanted ? { role: wanted } : {} })}
-        >
-          <ItemContent
-            icon="megaphone"
-            color="brand"
-            title={wanted ? SEARCH_ROLES.find((r) => r.value === wanted)?.label : 'Rumfragen'}
-            meta={short ? 'Nicht genug Schwarzgeld' : `etwa ${preview.count} Leute, ${preview.roleLabel}`}
-          />
-        </ListItem>
-      </List>
-    </Group>
-  );
-}
-
-function RecruitingSection() {
-  return (
-    <div class="rc-app">
-      <Candidates />
-      <Search />
-    </div>
-  );
-}
-
-registerSlot('tab:staff', { id: 'recruiting.section', title: 'Leute finden', order: 30, component: RecruitingSection });
+registerSlot('tab:staff', {
+  id: 'recruiting.section',
+  title: 'Könntest du einstellen',
+  order: 30,
+  component: Candidates,
+});

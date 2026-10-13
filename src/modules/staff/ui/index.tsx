@@ -1,10 +1,13 @@
-// Oberfläche des Personals: Tab "Personal" mit filterbarer Übersicht, Mitarbeiter-Profil (Akte) als Panel,
+// Oberfläche des Personals: Tab "Personal" mit Team-Tabelle, Problemfällen und Seiten je Gruppe, Mitarbeiter-Profil (Akte) als Panel,
 // Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { formatEuro, type GameState, withPeriod } from '../../../core';
 import {
+  ActionSheet,
   Button,
+  type CategoryColor,
   Chips,
   ContextMenu,
   Empty,
@@ -21,19 +24,19 @@ import {
   registerSearch,
   registerSlot,
   registerTab,
-  SegmentedControl,
   Slot,
-  SummaryTiles,
   useGame,
   useUi,
 } from '../../../ui';
 import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { playerSpot } from '../../customers';
+import { isCapo, isLieutenant, isRightHand } from '../../hierarchy';
 import { getSpots, isSpotOpen } from '../../spots';
-import { tutorialAllowsRole } from '../../tutorial';
+import { tutorialAllows, tutorialAllowsRole } from '../../tutorial';
 import {
   activeRunnerAt,
   assignmentLabel,
+  bailCost,
   DRIVER_HIRE_COST,
   getStaff,
   getStaffMember,
@@ -41,7 +44,6 @@ import {
   isFarmRole,
   isGoodSpecialist,
   isSpecialist,
-  payrollDue,
   RUNNER_DAILY_WAGE,
   RUNNER_HIRE_COST,
   RUNNER_HIRE_COST_MAX,
@@ -49,12 +51,15 @@ import {
   roleName,
   runnerAt,
   runnerHireCost,
+  SECURITY_HIRE_COST,
   STATUS_NAMES,
   type StaffMember,
+  type StaffRole,
   securityAt,
   specialistProvider,
+  wageDue,
 } from '../index';
-import { AbsenceSheet, AbsentGroup } from './absence';
+import { AbsenceSheet, talkHint } from './absence';
 import { effectChips, Portrait, ROLE_ICONS, ROLE_TONES, StatusTag, traitChips } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
@@ -62,6 +67,8 @@ import './staff.css';
 declare module '../../../ui' {
   interface PanelRegistry {
     'staff.profile': { staffId: string };
+    /** Alle Leute einer Gruppe (Tipp auf eine Zeile der Tabelle „Dein Team“). */
+    'staff.role': { group: StaffGroupId };
   }
   interface SlotRegistry {
     /** Abschnitte im Mitarbeiter-Profil (z.B. Beförderung). */
@@ -71,27 +78,78 @@ declare module '../../../ui' {
   }
 }
 
-/** Filter oben: alle (als Aufbau) oder eine Rolle. */
-type RoleFilter = 'all' | 'runner' | 'driver' | 'security' | 'specialist';
+/**
+ * Gruppen der Personal-App (Umbau 13.10.2026): Führung (Rechte Hand, Capos, Leutnants) und je Rolle. Wer Leutnant
+ * oder Rechte Hand ist, steht nur unter Führung, nicht noch einmal bei seiner Rolle.
+ */
+export type StaffGroupId = 'lead' | 'runner' | 'driver' | 'security' | 'lawyer' | 'accountant' | 'policeContact';
 
-const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
-  { value: 'all', label: 'Alle' },
-  { value: 'runner', label: 'Läufer' },
-  { value: 'driver', label: 'Fahrer' },
-  { value: 'security', label: 'Sicherheit' },
-  { value: 'specialist', label: 'Spezialisten' },
+interface StaffGroupDef {
+  id: StaffGroupId;
+  label: string;
+  icon: string;
+  color: CategoryColor;
+  /** Rolle(n) der Gruppe; Führung hat keine. */
+  roles?: readonly StaffRole[];
+  /** Hinweis auf der Seite der Gruppe. */
+  note?: string;
+}
+
+const STAFF_GROUPS: readonly StaffGroupDef[] = [
+  { id: 'lead', label: 'Leutnants', icon: 'crown', color: 'brand' },
+  {
+    id: 'runner',
+    label: 'Läufer',
+    icon: 'runner',
+    color: 'people',
+    roles: ['runner', 'courier'],
+    note: 'Läufer heuerst du direkt am Spot an.',
+  },
+  { id: 'driver', label: 'Fahrer', icon: 'truck', color: 'goods', roles: ['driver'] },
+  {
+    id: 'security',
+    label: 'Sicherheit',
+    icon: 'shield',
+    color: 'danger',
+    roles: ['security'],
+    note: 'Sicherheit heuerst du direkt am Spot an. In ein Lager versetzt du sie über die Akte.',
+  },
+  { id: 'lawyer', label: 'Anwälte', icon: 'scale', color: 'law', roles: ['lawyer'] },
+  { id: 'accountant', label: 'Buchhalter', icon: 'clipboard', color: 'money', roles: ['accountant'] },
+  { id: 'policeContact', label: 'Polizei-Kontakte', icon: 'badge', color: 'law', roles: ['policeContact'] },
 ];
 
-/** Ab so vielen Leuten im Team gibt es den Filter nach Rolle. */
-const FILTER_MIN = 4;
+/** Steht die Person in der Führung (Rechte Hand, Capo, Leutnant)? */
+function isLead(state: GameState, m: StaffMember): boolean {
+  return isRightHand(state, m.id) || isCapo(state, m.id) || isLieutenant(state, m.id);
+}
 
-/** Gruppen je Rolle (oder alle Spezialisten), gleiche Symbole wie im Porträt. */
-const ROLE_GROUPS: { id: RoleFilter; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
-  { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' || m.role === 'courier' },
-  { id: 'driver', label: 'Fahrer', icon: 'truck', match: (m) => m.role === 'driver' },
-  { id: 'security', label: 'Sicherheit', icon: 'shield', match: (m) => m.role === 'security' },
-  { id: 'specialist', label: 'Spezialisten', icon: 'scale', match: (m) => isSpecialist(m.role) },
-];
+/** Gruppe einer Person. */
+function groupOf(state: GameState, m: StaffMember): StaffGroupId {
+  if (isLead(state, m)) return 'lead';
+  return STAFF_GROUPS.find((g) => g.roles?.includes(m.role))?.id ?? 'runner';
+}
+
+/** Posten oder Rolle als Wort (für die Kacheln). */
+function positionName(state: GameState, m: StaffMember): string {
+  if (isRightHand(state, m.id)) return 'Rechte Hand';
+  if (isCapo(state, m.id)) return 'Capo';
+  if (isLieutenant(state, m.id)) return 'Leutnant';
+  return roleName(m.role);
+}
+
+/** Aktuelle Leute der Stadt, in der du bist (ohne Fincas: die stehen in der App Handel bei ihrer Finca). */
+function cityTeam(state: GameState): StaffMember[] {
+  const city = activeCity(state);
+  return getStaff(state).filter((m) => !isFarmRole(m.role) && m.cityId === city);
+}
+
+/** Zeigt die Tabelle diese Gruppe? Mit Leuten immer, sonst nur, wenn das Tutorial sie schon kennt. */
+function groupShown(state: GameState, group: StaffGroupDef, count: number): boolean {
+  if (count > 0 || group.id === 'runner') return true;
+  if (group.id === 'lead') return tutorialAllows(state, 'staff.lieutenants');
+  return (group.roles ?? []).some((role) => tutorialAllowsRole(state, role));
+}
 
 export function StaffRow(props: { member: StaffMember }) {
   const { state } = useGame();
@@ -167,92 +225,220 @@ function StaffRowItem(props: { member: StaffMember }) {
 }
 
 /**
- * Übersicht: Kennzahlen, darunter ab fünf Leuten ein Filter als Segment (Alle, Läufer, Fahrer, Sicherheit,
- * Spezialisten). "Alle" zeigt das Personal als Aufbau (Boss, Rechte Hand, Leutnants mit Spots, Spots ohne
- * Leutnant: Slot 'staff.tree' der Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten, Weitere, Anheuern
- * und Ehemalige. Eine Rolle zeigt nur ihre Leute. Darunter hängt "Leute finden" (recruiting, Slot 'tab:staff').
+ * Startseite der Personal-App (Umbau 13.10.2026): oben dein Team als Tabelle (Rolle, Anzahl, Lohn pro Tag, Summe),
+ * ein Tipp auf eine Zeile öffnet die Seite der Gruppe mit allen Leuten. Darunter bis zu acht Problemfälle als Kacheln
+ * (in Haft zuerst, dann die mit der niedrigsten bekannten Loyalität). Darunter hängt die Rekrutierung
+ * („Könntest du einstellen“, Slot 'tab:staff').
  */
 function StaffOverview() {
   const { state } = useGame();
-  const [filter, setFilter] = useState<RoleFilter>('all');
-  // Das Personal folgt der aktiven Stadt (Auftrag 30); wer in einer anderen Stadt ist, steht unten extra.
+  const ui = useUi();
+  const team = cityTeam(state);
   const city = activeCity(state);
-  // Arbeiter und Gärtner auf den Fincas (Auftrag 42) stehen in der App Handel bei ihrer Finca, nicht hier.
-  const everyone = getStaff(state).filter((m) => !isFarmRole(m.role));
-  const current = everyone.filter((m) => m.cityId === city);
-  const elsewhere = everyone.filter((m) => m.cityId !== city);
-  const absent = current.filter(isAbsent);
-  const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })].filter(
-    (m) => !isFarmRole(m.role) && m.cityId === city,
-  );
-  // Der Filter nach Rolle lohnt erst bei einem größeren Team; ohne Filter zählt „Alle“.
-  const filterable = current.length > FILTER_MIN;
-  const group = filterable ? ROLE_GROUPS.find((g) => g.id === filter) : undefined;
-  // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
-  const free = current.filter((m) => m.status === 'active' && !m.assignment && !isSpecialist(m.role));
-  const specialists = current.filter((m) => isSpecialist(m.role) && !isAbsent(m));
-  const others = current.filter(
-    (m) =>
-      !isAbsent(m) &&
-      (m.assignment?.kind === 'warehouse' ||
-        m.assignment?.kind === 'delivery' ||
-        m.assignment?.kind === 'transport' ||
-        m.assignment?.kind === 'travel'),
-  );
+  const elsewhere = getStaff(state).filter((m) => !isFarmRole(m.role) && m.cityId !== city).length;
+  const rows = STAFF_GROUPS.map((group) => {
+    const members = team.filter((m) => groupOf(state, m) === group.id);
+    return { group, count: members.length, wages: members.reduce((sum, m) => sum + wageDue(state, m), 0) };
+  }).filter((row) => groupShown(state, row.group, row.count));
+  const total = rows.reduce((sum, row) => sum + row.wages, 0);
   return (
     <div class="staff-overview">
-      <SummaryTiles
-        items={[
-          { icon: 'users', color: 'people', value: String(current.length), label: 'Team' },
-          { icon: 'coinEuro', color: 'money', value: formatEuro(payrollDue(state)), label: 'Lohn/Tag' },
+      <Group
+        title="Dein Team"
+        icon="users"
+        color="people"
+        note={
+          // Auftrag 43: Leute anderer Städte nur als Zahl, sie gehören dem Statthalter ihrer Stadt.
+          elsewhere > 0 ? `Dazu ${elsewhere === 1 ? '1 Person' : `${elsewhere} Leute`} in anderen Städten.` : undefined
+        }
+      >
+        <div class="staff-table">
+          <div class="staff-table__head" aria-hidden="true">
+            <span>Rolle</span>
+            <span>Leute</span>
+            <span>Lohn/Tag</span>
+            <span />
+          </div>
+          {rows.map(({ group, count, wages }) => (
+            <button
+              key={group.id}
+              type="button"
+              class="staff-table__row"
+              aria-label={`${group.label}: ${count}, ${formatEuro(wages)} Lohn pro Tag`}
+              onClick={() => ui.openPanel('staff.role', { group: group.id })}
+            >
+              <span class="staff-table__role">
+                <span
+                  class="staff-table__icon"
+                  style={{ '--role-tone': `var(--cat-${group.color})` } as JSX.CSSProperties}
+                >
+                  <Icon name={group.icon} />
+                </span>
+                {group.label}
+              </span>
+              <span class="staff-table__num">{count}</span>
+              <span class="staff-table__num">{formatEuro(wages)}</span>
+              <Icon name="chevronRight" />
+            </button>
+          ))}
+          <div class="staff-table__total">
+            <span>Gesamt pro Tag</span>
+            <span class="staff-table__num">{team.length}</span>
+            <span class="staff-table__num">{formatEuro(total)}</span>
+            <span />
+          </div>
+        </div>
+      </Group>
+      <ProblemTiles team={team} />
+    </div>
+  );
+}
+
+/** Höchstens so viele Problemfälle als Kacheln. */
+const PROBLEM_TILES = 8;
+/** Unbekannte Loyalität zählt beim Sortieren wie ein mittlerer Wert (sonst verriete die Liste, was du nicht weißt). */
+const UNKNOWN_LOYALTY = 50;
+
+const knownLoyalty = (m: StaffMember): number | null => (m.knownStats.includes('loyalty') ? m.stats.loyalty : null);
+
+/** Problemfälle: wer in Haft sitzt, dann die mit der niedrigsten Loyalität, alle Rollen. */
+function problemCases(team: readonly StaffMember[]): StaffMember[] {
+  const loyalty = (m: StaffMember) => knownLoyalty(m) ?? UNKNOWN_LOYALTY;
+  return [...team]
+    .sort(
+      (a, b) =>
+        Number(b.status === 'jailed') - Number(a.status === 'jailed') ||
+        loyalty(a) - loyalty(b) ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, PROBLEM_TILES);
+}
+
+function ProblemTiles(props: { team: readonly StaffMember[] }) {
+  const problems = problemCases(props.team);
+  if (problems.length === 0) {
+    return <Empty icon="users">Noch niemand im Team. Läufer und Sicherheit heuerst du direkt am Spot an.</Empty>;
+  }
+  return (
+    <Group
+      title="Problemfälle"
+      icon="alert"
+      color="warn"
+      note="In Haft zuerst, dann die mit der niedrigsten Loyalität. Ein Tipp öffnet die Akte."
+    >
+      <div class="staff-tiles">
+        {problems.map((m) => (
+          <ProblemTile key={m.id} member={m} />
+        ))}
+      </div>
+    </Group>
+  );
+}
+
+/** Kachel einer Person: Bild, Level, Loyalität; in Haft mit Gitter und „Freikaufen“, immer mit „Feuern“. */
+function ProblemTile(props: { member: StaffMember }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const [firing, setFiring] = useState(false);
+  const m = props.member;
+  const jailed = m.status === 'jailed';
+  const loyalty = knownLoyalty(m);
+  const bail = jailed ? bailCost(state, m.id) : 0;
+  const tone = loyalty === null ? 'unknown' : loyalty < 30 ? 'bad' : loyalty < 50 ? 'warn' : 'ok';
+  return (
+    <div class={`staff-tile${jailed ? ' is-jailed' : ''}`}>
+      <button
+        type="button"
+        class="staff-tile__open"
+        title={`${m.name}, ${positionName(state, m)}`}
+        aria-label={`${m.name}, ${positionName(state, m)}, Level ${m.level}, Loyalität ${loyalty ?? 'unbekannt'}${jailed ? ', in Haft' : ''}`}
+        onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}
+      >
+        <span class="staff-tile__face">
+          <Portrait person={m} />
+          {jailed && <span class="staff-tile__bars" aria-hidden="true" />}
+        </span>
+        <span class="staff-tile__stats">
+          <span class="staff-tile__level">L{m.level}</span>
+          <span class={`staff-tile__loyalty is-${tone}`}>
+            <Icon name="heart" />
+            {loyalty ?? '?'}
+          </span>
+        </span>
+      </button>
+      <div class="staff-tile__actions">
+        {jailed && (
+          <button
+            type="button"
+            class="staff-tile__action is-bail"
+            disabled={state.wallet.dirty < bail}
+            title={`Freikaufen (${formatEuro(bail)})`}
+            aria-label={`${m.name} freikaufen für ${formatEuro(bail)}`}
+            onClick={() => dispatch({ type: 'staff.bail', payload: { staffId: m.id } })}
+          >
+            <Icon name="unlock" />
+          </button>
+        )}
+        <button
+          type="button"
+          class="staff-tile__action is-fire"
+          title="Feuern"
+          aria-label={`${m.name} feuern`}
+          onClick={() => setFiring(true)}
+        >
+          <Icon name="userMinus" />
+        </button>
+      </div>
+      <ActionSheet
+        open={firing}
+        onClose={() => setFiring(false)}
+        title={`${m.name} feuern?`}
+        message={talkHint(m)}
+        actions={[
           {
-            icon: absent.length > 0 ? 'alert' : 'checkCircle',
-            color: absent.length > 0 ? 'warn' : 'money',
-            value: String(absent.length),
-            label: 'Ausfälle',
+            label: 'Feuern',
+            icon: 'userMinus',
+            destructive: true,
+            onSelect: () => dispatch({ type: 'staff.fire', payload: { staffId: m.id } }),
           },
         ]}
       />
-      {filterable && (
-        <Group title="Dein Team" icon="users" color="people">
-          <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
-        </Group>
-      )}
-      {current.length === 0 ? (
-        <Empty icon="users">Noch niemand im Team. Läufer heuerst du am Spot an oder stellst unten jemanden ein.</Empty>
-      ) : group ? (
-        <>
-          <PeopleGroup
-            title={group.label}
-            icon={group.icon}
-            members={current.filter(group.match)}
-            empty={`Niemand mit der Rolle ${group.label}.`}
-          />
-          {group.id === 'driver' && <HireGroup />}
-          <PeopleGroup title="Ehemalige" icon="clock" members={former.filter(group.match)} />
-        </>
-      ) : (
-        <>
-          <Slot name="staff.tree" props={{}} />
-          <AbsentGroup members={absent} />
-          <PeopleGroup title="Frei" icon="user" members={free} note="Ohne Einsatz, Leutnants holen sich freie Leute." />
-          <PeopleGroup title="Spezialisten" icon="scale" members={specialists} />
-          <PeopleGroup title="Weitere" icon="truck" members={others} note="Lager, Lieferungen und Fahrten." />
-          <SpecialistBonuses />
-          <HireGroup />
-          {elsewhere.length > 0 && (
-            // Auftrag 43: nur die Zahl, keine Akten mit Aktionen. Die Leute gehören dem Statthalter ihrer Stadt.
-            <Group
-              title="In anderen Städten"
-              icon="building"
-              color="system"
-              value={elsewhere.length === 1 ? '1 Person' : `${elsewhere.length} Leute`}
-              note="Arbeiten dort für deine Statthalter. Wechsel die Stadt, um sie zu sehen."
-            />
-          )}
-          <PeopleGroup title="Ehemalige" icon="clock" members={former} />
-        </>
-      )}
+    </div>
+  );
+}
+
+/**
+ * Seite einer Gruppe (Tipp auf eine Zeile der Tabelle): alle Leute dieser Gruppe wie bisher als Liste, dazu was zur
+ * Gruppe gehört (Aufbau bei der Führung, Fahrer anheuern, Wirkung der Spezialisten) und die Ehemaligen.
+ */
+function StaffGroupPage(props: { group: StaffGroupId }) {
+  const { state } = useGame();
+  const group = STAFF_GROUPS.find((g) => g.id === props.group) ?? STAFF_GROUPS[1];
+  if (group.id === 'lead') {
+    return (
+      <div class="staff-overview">
+        <Slot name="staff.tree" props={{}} />
+      </div>
+    );
+  }
+  const city = activeCity(state);
+  const members = cityTeam(state).filter((m) => groupOf(state, m) === group.id);
+  const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })].filter(
+    (m) => m.cityId === city && group.roles?.includes(m.role),
+  );
+  const specialist = group.roles?.some((role) => isSpecialist(role)) ?? false;
+  return (
+    <div class="staff-overview">
+      <PeopleGroup
+        title={group.label}
+        icon={group.icon}
+        members={members}
+        note={group.note}
+        empty={`Niemand mit der Rolle ${roleName(group.roles?.[0] ?? 'runner')}.`}
+      />
+      {group.id === 'driver' && <HireGroup />}
+      {specialist && <SpecialistBonuses />}
+      <PeopleGroup title="Ehemalige" icon="clock" members={former} />
     </div>
   );
 }
@@ -267,7 +453,7 @@ function HireGroup() {
       title="Anheuern"
       icon="userPlus"
       color="people"
-      note="Läufer heuerst du am Spot an, alle anderen unten bei „Könntest du einstellen“."
+      note="Fahrer von der Straße sind sofort da. Bessere findest du unter „Könntest du einstellen“."
     >
       <List>
         {/* Auftrag 46b: Fahrer gibt es im Tutorial erst mit dem Hafen. */}
@@ -380,7 +566,7 @@ function SpotStaff(props: { spotId: string }) {
       more={
         runner
           ? undefined
-          : `Von der Straße steht sofort jemand hier, der den Spot kennt: Das Handgeld richtet sich nach Andrang und Preisen (${formatEuro(RUNNER_HIRE_COST_MIN)} bis ${formatEuro(RUNNER_HIRE_COST_MAX)}). Bewerber unter Personal, „Könntest du einstellen“, kosten meist weniger, dafür wartest du, bis jemand Passendes kommt.`
+          : `Von der Straße steht sofort jemand hier, der den Spot kennt: Das Handgeld richtet sich nach Andrang und Preisen (${formatEuro(RUNNER_HIRE_COST_MIN)} bis ${formatEuro(RUNNER_HIRE_COST_MAX)}). Läufer und Sicherheit gibt es nur hier am Spot.`
       }
     >
       <List>
@@ -455,18 +641,41 @@ function SpotStaff(props: { spotId: string }) {
             />
           </ListItem>
         ) : (
-          free('security').map((m) => (
-            <ListItem
-              key={m.id}
-              aside={
-                <Button small onClick={() => assign(m.id)}>
-                  Herholen
-                </Button>
-              }
-            >
-              <ItemContent icon="shield" color="people" title={m.name} meta="freie Sicherheit" />
-            </ListItem>
-          ))
+          <>
+            {/* Sicherheit gibt es seit dem Umbau der Personal-App nur noch hier am Spot. */}
+            {tutorialAllowsRole(state, 'security') && (
+              <ListItem
+                aside={
+                  <Button
+                    small
+                    disabled={state.wallet.dirty < SECURITY_HIRE_COST}
+                    onClick={() => dispatch({ type: 'staff.hireSecurity', payload: { spotId: props.spotId } })}
+                  >
+                    Anheuern ({formatEuro(SECURITY_HIRE_COST)})
+                  </Button>
+                }
+              >
+                <ItemContent
+                  icon="shield"
+                  color="danger"
+                  title="Keine Sicherheit"
+                  meta="Passt auf Ware und Kasse auf."
+                />
+              </ListItem>
+            )}
+            {free('security').map((m) => (
+              <ListItem
+                key={m.id}
+                aside={
+                  <Button small onClick={() => assign(m.id)}>
+                    Herholen
+                  </Button>
+                }
+              >
+                <ItemContent icon="shield" color="people" title={m.name} meta="freie Sicherheit" />
+              </ListItem>
+            ))}
+          </>
         )}
       </List>
     </Group>
@@ -485,6 +694,11 @@ registerTab({
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });
+registerPanel({
+  id: 'staff.role',
+  title: (props) => STAFF_GROUPS.find((g) => g.id === props.group)?.label ?? 'Personal',
+  component: StaffGroupPage,
+});
 registerPanel({
   id: 'staff.profile',
   title: (props, state) => getStaffMember(state, props.staffId)?.name ?? 'Akte',
