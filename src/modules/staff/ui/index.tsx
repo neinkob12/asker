@@ -228,7 +228,7 @@ function StaffRowItem(props: { member: StaffMember }) {
  * Startseite der Personal-App (Umbau 13.10.2026): oben dein Team als Tabelle (Rolle, Anzahl, Lohn pro Tag, Summe),
  * ein Tipp auf eine Zeile öffnet die Seite der Gruppe mit allen Leuten. Darunter bis zu acht Problemfälle als Kacheln
  * (in Haft zuerst, dann die mit der niedrigsten bekannten Loyalität). Darunter hängt die Rekrutierung
- * („Könntest du einstellen“, Slot 'tab:staff').
+ * („Bewerber“, Slot 'tab:staff').
  */
 function StaffOverview() {
   const { state } = useGame();
@@ -282,7 +282,7 @@ function StaffOverview() {
             </button>
           ))}
           <div class="staff-table__total">
-            <span>Gesamt pro Tag</span>
+            <span>Gesamt/Tag</span>
             <span class="staff-table__num">{team.length}</span>
             <span class="staff-table__num">{formatEuro(total)}</span>
             <span />
@@ -324,7 +324,7 @@ function ProblemTiles(props: { team: readonly StaffMember[] }) {
       title="Problemfälle"
       icon="alert"
       color="warn"
-      note="In Haft zuerst, dann die mit der niedrigsten Loyalität. Ein Tipp öffnet die Akte."
+      note="In Haft zuerst, dann die niedrigste Loyalität (von 100). Ein Tipp öffnet die Akte."
     >
       <div class="staff-tiles">
         {problems.map((m) => (
@@ -358,12 +358,12 @@ function ProblemTile(props: { member: StaffMember }) {
           <Portrait person={m} />
           {jailed && <span class="staff-tile__bars" aria-hidden="true" />}
         </span>
-        <span class="staff-tile__stats">
-          <span class="staff-tile__level">L{m.level}</span>
-          <span class={`staff-tile__loyalty is-${tone}`}>
-            <Icon name="heart" />
-            {loyalty ?? '?'}
-          </span>
+        <span class="staff-tile__level">Level {m.level}</span>
+        {/* Feedback 13.10.2026: Herz und Zahl allein las sich wie das Level; jetzt mit Wort und „von 100“. */}
+        <span class="staff-tile__caption">Loyalität</span>
+        <span class={`staff-tile__loyalty is-${tone}`}>
+          {loyalty ?? '?'}
+          <small>/100</small>
         </span>
       </button>
       <div class="staff-tile__actions">
@@ -453,7 +453,7 @@ function HireGroup() {
       title="Anheuern"
       icon="userPlus"
       color="people"
-      note="Fahrer von der Straße sind sofort da. Bessere findest du unter „Könntest du einstellen“."
+      note="Fahrer von der Straße sind sofort da. Bessere findest du unter „Bewerber“."
     >
       <List>
         {/* Auftrag 46b: Fahrer gibt es im Tutorial erst mit dem Hafen. */}

@@ -533,7 +533,7 @@
   flex-direction: column;
   min-width: 0;
   padding: 10px;
-  border-radius: var(--radius-group);
+  border-radius: var(--radius-xl);
   /* Der Startbildschirm ist in beiden Schemata schwarz: Widgets als helles Glas darauf, Schrift wie die App-Namen. */
   background: var(--home-card);
   box-shadow: inset 0 0 0 1px var(--home-card-edge);

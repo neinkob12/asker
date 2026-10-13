@@ -251,28 +251,29 @@
   margin-right: var(--space-2);
 }
 
-/* Personal-App (Umbau 13.10.2026): Team als Tabelle, Problemfälle als Kacheln */
+/* Personal-App (Umbau 13.10.2026): Team als Tabelle, Problemfälle als Kacheln. Tabelle und Kacheln liegen im Kasten
+   der Gruppe (ui-group__body), ohne eigenen Rand. */
+.ui-group .ui-group__body > .staff-table {
+  margin: 0;
+  max-width: none;
+}
 .staff-table {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  background: var(--phone-group, var(--color-panel-raised));
-  border-radius: var(--radius-group);
 }
 .staff-table__head,
 .staff-table__row,
 .staff-table__total {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px 78px 14px;
+  grid-template-columns: minmax(0, 1fr) 30px 72px 12px;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-3) 0 var(--space-4);
+  padding: 0 var(--space-2) 0 var(--space-3);
 }
 .staff-table__head {
-  min-height: 32px;
-  font-size: var(--type-caption, 12px);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-caps);
+  min-height: 28px;
+  font-size: var(--type-caption-2, 11px);
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--color-muted);
 }
@@ -281,15 +282,15 @@
   text-align: right;
 }
 .staff-table__row {
-  min-height: 48px;
+  min-height: 44px;
   width: 100%;
   margin: 0;
   border: 0;
-  border-top: 0.5px solid var(--color-line);
+  border-top: 0.5px solid var(--phone-separator, var(--color-line));
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: var(--type-body, 17px);
+  font-size: var(--type-subhead, 15px);
   text-align: left;
   cursor: pointer;
 }
@@ -298,12 +299,13 @@
   background: var(--phone-fill-hover);
 }
 .staff-table__row > .ui-icon {
+  font-size: 12px;
   color: var(--color-muted);
 }
 .staff-table__role {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -313,23 +315,24 @@
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--role-tone) 18%, transparent);
+  width: 20px;
   color: var(--role-tone);
-  font-size: 16px;
+  font-size: 14px;
 }
 .staff-table__num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* Gesamt/Tag: hervorgehoben, aber ruhig (leicht getönt, fett, Betrag in der Geldfarbe) */
 .staff-table__total {
   min-height: 44px;
-  border-top: 1px solid var(--color-line);
-  font-size: var(--type-body, 17px);
+  background: var(--phone-group-2, var(--color-surface));
+  font-size: var(--type-subhead, 15px);
   font-weight: var(--font-weight-bold);
+}
+.staff-table__total .staff-table__num:nth-child(3) {
+  color: var(--cat-money);
 }
 
 .staff-tiles {
@@ -342,15 +345,15 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding-bottom: 36px;
-  background: var(--phone-group, var(--color-panel-raised));
-  border-radius: var(--radius-group);
+  padding-bottom: 34px;
+  background: var(--phone-group-2, var(--color-surface));
+  border-radius: 10px;
 }
 .staff-tile__open {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
   width: 100%;
   min-height: 44px;
   margin: 0;
@@ -365,6 +368,7 @@
   position: relative;
   display: grid;
   place-items: center;
+  margin-bottom: var(--space-1);
 }
 /* Gitter vor dem Bild, wenn die Person in Haft sitzt */
 .staff-tile__bars {
@@ -380,22 +384,27 @@
 .staff-tile.is-jailed .ui-avatar {
   filter: grayscale(0.6);
 }
-.staff-tile__stats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
+.staff-tile__level {
   font-size: var(--type-footnote, 13px);
-  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
-.staff-tile__level {
-  font-weight: var(--font-weight-bold);
+.staff-tile__caption {
+  margin-top: 2px;
+  font-size: var(--type-caption-2, 11px);
+  color: var(--color-muted);
 }
 .staff-tile__loyalty {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.staff-tile__loyalty small {
+  font-size: var(--type-caption-2, 11px);
+  font-weight: 400;
+  color: var(--color-muted);
 }
 .staff-tile__loyalty.is-ok {
   color: var(--cat-money);
@@ -418,15 +427,15 @@
 .staff-tile__action {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-group);
+  border-radius: 10px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
 }
 .staff-tile__action.is-fire:hover,
