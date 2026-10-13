@@ -333,7 +333,8 @@ setzt `data-appearance="light"` am Handy; Creme-Werte unter `.phone[data-appeara
 Startbildschirm nimmt seine Flächen und Akzente aus `--home-*` (`--home-bg`, `--home-card`, `--home-cell`,
 `--home-brand` …), nie feste Weißwerte; Widgets setzen `--stat-accent` auf ein `--home-*`-Token.
 Danach (13.10.2026, Karte ruhiger): Keine Kreise mehr auf der Karte (Hotspots der Spots, Puls-Ring bei dringend und
-Razzia, goldener Hinweis-Ring `is-coach` samt `CoachHighlight`, Ping bei Konfrontationen). Klick auf einen Spot, dessen
+Razzia, goldener Hinweis-Ring `is-coach` samt `CoachHighlight`, Ping bei Konfrontationen, Ring in Gang-Farbe bei einem
+Vorstoß einer Gang). Klick auf einen Spot, dessen
 Ware fehlt: keine Meldung, sondern der Startbildschirm des Handys und das Fach dieser Ware leuchtet rot und wackelt
 (`ui.flash('goods.missing:<ware>')`, `UiState.flash`, `useUiSelector` aus `src/ui`; verfällt nach `FLASH_MS`). Im
 Lager-Widget steht „+ unterwegs“ in der Gruppe unter der Menge. Aachener Weiher liegt an der Aachener Straße.
