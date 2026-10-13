@@ -853,21 +853,6 @@ kbd {
   left: calc((100% - var(--phone-space)) / 2);
 }
 
-/* Sanft pulsierender Hinweis (Onboarding) an einem Karten-Marker. */
-.maplibregl-marker.is-coach,
-.maplibregl-marker .is-coach {
-  animation: coach-pulse 1.8s ease-in-out infinite;
-}
-@keyframes coach-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(226, 174, 74, 0.8);
-  }
-  60% {
-    box-shadow: 0 0 0 12px rgba(226, 174, 74, 0);
-  }
-}
-
 /* ---------------------------------------------------------------- Suche */
 .palette-backdrop {
   position: fixed;
@@ -1242,12 +1227,6 @@ kbd {
   }
   .mode-choice {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .is-coach {
-    animation: none;
   }
 }
 

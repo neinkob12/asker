@@ -15,7 +15,7 @@ export {
 } from '../audio';
 export * from './components';
 export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
-export { shallowEqual, useGame, useGameSelector, useSession, useUi } from './hooks';
+export { shallowEqual, useGame, useGameSelector, useSession, useUi, useUiSelector } from './hooks';
 export { hourCountdown } from './phone/countdown';
 export { LockedWidget, type LockedWidgetProps } from './phone/LockedWidget';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';

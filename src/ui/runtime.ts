@@ -35,6 +35,9 @@ export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
 export type { PhoneTheme, TrafficLevel } from './prefs';
 
+/** So lange gilt ein Fingerzeig (api.flash), etwas länger als seine Animation. */
+const FLASH_MS = 3000;
+
 export interface ToastOptions {
   /** Ort des Geschehens: Der Verlauf bietet dann "Hinzoomen" an. */
   target?: LngLat;
@@ -100,6 +103,11 @@ export interface UiState {
   alerts: Alert[];
   /** Fehlgeschlagener Befehl des Spielers: kurz sichtbar im Handy (Auftrag 46d: das einzige Banner). */
   error: UiError | null;
+  /**
+   * Kurzer Fingerzeig auf etwas im Handy (api.flash), z.B. 'goods.missing:weed': Das Fach der fehlenden Ware leuchtet
+   * rot und wackelt. id zählt hoch, damit derselbe Schlüssel die Animation neu startet.
+   */
+  flash: { key: string; id: number } | null;
   /** Suche (⌘K / Strg+K) offen? */
   palette: boolean;
   /** Offenes Popover im HUD (z.B. 'more', 'alerts', 'menu'). */
@@ -167,6 +175,8 @@ export interface UiApi {
    * wird. Die nächste ersetzt die vorige.
    */
   notice(text: string): void;
+  /** Fingerzeig ohne Text (siehe UiState.flash); das Modul, das den Schlüssel kennt, zeichnet ihn. */
+  flash(key: string): void;
   /** Verlauf: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
@@ -286,6 +296,7 @@ export class UiRuntime {
       section: null,
       alerts: [],
       error: null,
+      flash: null,
       palette: false,
       popover: null,
       picking: null,
@@ -547,6 +558,19 @@ export class UiRuntime {
           ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
         }),
       notice: (text) => update(() => this.showError(text, true)),
+      flash: (key) => {
+        const id = (ui.flash?.id ?? 0) + 1;
+        update(() => {
+          ui.flash = { key, id };
+        });
+        // Nach der Animation verfallen, sonst wackelt das Fach beim nächsten Öffnen des Startbildschirms wieder.
+        setTimeout(() => {
+          if (ui.flash?.id !== id) return;
+          update(() => {
+            ui.flash = null;
+          });
+        }, FLASH_MS);
+      },
       dismissError: () =>
         update(() => {
           if (this.errorTimer) clearTimeout(this.errorTimer);

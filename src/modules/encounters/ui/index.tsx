@@ -8,7 +8,7 @@ import { mapEffects } from '../../../map';
 import { Button, Chips, Icon, MapDialog, onGameEvent, registerDialog, soundOnEvent, useGame, useUi } from '../../../ui';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
-import { getVeedel, veedelName } from '../../veedel';
+import { veedelName } from '../../veedel';
 import { ENCOUNTER_KINDS, type Encounter, type EncounterResultPart, getEncounter, type StakeId } from '../index';
 import './encounters.css';
 
@@ -158,11 +158,8 @@ onGameEvent('encounter.resolved', 'encounters.result', (payload, ui, state) => {
   if (state.outcome.gameOver || payload.playerKilled) return;
   ui.openDialog('encounters.result', { encounterId: payload.encounterId });
 });
-// Konfrontation: Warnton und ein kurzer Blitz über der Karte, bei Gewalt ein Ping am Ort.
+// Konfrontation: Warnton und ein kurzer Blitz über der Karte (kein Ping-Ring mehr am Ort, Feedback 13.10.2026).
 soundOnEvent('encounter.started', 'alert');
-onGameEvent('encounter.started', 'encounters.fx', (payload, _ui, state) => {
+onGameEvent('encounter.started', 'encounters.fx', () => {
   mapEffects.flash({ strength: 0.3, color: '#ff5a4a' });
-  const spot = payload.request.spotId ? getSpot(state, payload.request.spotId) : undefined;
-  const where = spot ?? (payload.request.veedelId ? getVeedel(payload.request.veedelId)?.center : undefined);
-  if (where) mapEffects.ping(where, { tone: 'bad' });
 });

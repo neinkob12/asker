@@ -32,6 +32,7 @@ import {
   useGame,
   useGameSelector,
   useUi,
+  useUiSelector,
 } from '../../../ui';
 import {
   CUT_STEPS,
@@ -164,6 +165,9 @@ const incomingView = memoState((state) => {
  * die Lager-App (eigene Lager, Ausbau, Standorte). Die Kacheln haben eine feste Höhe, Icon und Menge stehen in der
  * Mitte, die Zeile „+ …“ hängt darunter und verschiebt nichts.
  */
+/** Schlüssel für ui.flash: Fach dieser Ware zeigen, weil sie fehlt. */
+const MISSING_PREFIX = 'goods.missing:';
+
 function StockWidget() {
   const ui = useUi();
   // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen. Im Tutorial (Auftrag 46b) steht das Lager schon
@@ -205,6 +209,9 @@ function StockWidget() {
     },
     (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
+  // Klick auf einen Spot ohne passende Ware (spots/ui/map.ts): das Fach leuchtet rot und wackelt (Feedback 13.10.2026).
+  const flash = useUiSelector((u) => u.flash);
+  const missing = flash?.key.startsWith(MISSING_PREFIX) ? flash.key.slice(MISSING_PREFIX.length) : null;
   if (hidden) return null;
   if (locked) return <LockedWidget icon="warehouse" label="Lager" hint={locked} wide data-tour="hud.stock" />;
   const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
@@ -222,8 +229,9 @@ function StockWidget() {
           const look = PRODUCT_LOOK[cell.productId] ?? { icon: 'boxes' };
           return (
             <span
-              key={cell.productId}
-              class={`goods-stock__cell${cell.empty ? ' is-empty' : ''}`}
+              // Neuer Schlüssel bei jedem Fingerzeig: Die Animation startet neu, auch für dieselbe Ware.
+              key={cell.productId === missing ? `${cell.productId}#${flash?.id}` : cell.productId}
+              class={`goods-stock__cell${cell.empty ? ' is-empty' : ''}${cell.productId === missing ? ' is-missing' : ''}`}
               data-product={cell.productId}
               title={cell.title}
             >
@@ -233,8 +241,8 @@ function StockWidget() {
                   {look.badge && <span class="goods-stock__badge">{look.badge}</span>}
                 </span>
                 <strong>{cell.amount}</strong>
+                {cell.plus && <span class="goods-stock__plus">{cell.plus}</span>}
               </span>
-              {cell.plus && <span class="goods-stock__plus">{cell.plus}</span>}
             </span>
           );
         })}

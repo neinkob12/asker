@@ -80,8 +80,7 @@
 }
 
 /* Ring und Puls liegen mit der Mitte auf der Blase (folgen --sign-bottom) */
-.spot-ring,
-.spot-pulse {
+.spot-ring {
   position: absolute;
   left: 50%;
   bottom: calc(var(--sign-bottom) + var(--bubble) / 2);
@@ -201,37 +200,6 @@
   background: var(--hud-gold);
 }
 
-/* Pulsierender Ring am Boden bei dringend und Razzia */
-.spot-pulse {
-  width: var(--ring-size);
-  height: var(--ring-size);
-  border: 2px solid var(--state-edge);
-  opacity: 0;
-}
-.spot-marker[data-urgency="urgent"] .spot-pulse,
-.spot-marker[data-urgency="raid"] .spot-pulse {
-  animation: spot-pulse 1.4s var(--ease-out) infinite;
-}
-@keyframes spot-pulse {
-  0% {
-    opacity: 0.8;
-    transform: translate(-50%, 50%) scale(0.95);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, 50%) scale(1.6);
-  }
-}
-
-/* Hinweis aus "Nächster Schritt": goldener Ring am Boden statt eines Rahmens um den ganzen Marker */
-.spot-marker.is-coach {
-  animation: none;
-}
-.spot-marker.is-coach .spot-pulse {
-  border-color: var(--hud-gold);
-  animation: spot-pulse 1.6s var(--ease-out) infinite;
-}
-
 /* Plakette: nur Symbole auf kleinem Glas, Kante in der Zustandsfarbe. Läufer (grün) / du (gold), Leutnant (blau). */
 .spot-plate {
   position: absolute;
@@ -301,8 +269,7 @@
 }
 .spot-marker.is-locked .spot-badge,
 .spot-marker.is-locked .spot-plate,
-.spot-marker.is-locked .spot-ring,
-.spot-marker.is-locked .spot-pulse {
+.spot-marker.is-locked .spot-ring {
   display: none;
 }
 .spot-marker.is-locked .spot-lock {
@@ -409,15 +376,14 @@
     right: auto;
     transform: translate(-50%, -100%);
   }
+  /* 2D: Der Kasten ist die Blase, die Plakette sitzt knapp über dem Ring. */
+  .shell-map.is-2d .spot-marker.is-right .spot-plate,
+  .shell-map.is-2d .spot-marker.is-left .spot-plate {
+    top: calc(-1 * (var(--ring-gap) + var(--ring-width) + 3px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spot-marker.is-coach .spot-pulse,
-  .spot-pulse,
-  .spot-marker[data-urgency="urgent"] .spot-pulse,
-  .spot-marker[data-urgency="raid"] .spot-pulse {
-    animation: none;
-  }
   .spot-ring {
     transition: none;
   }
