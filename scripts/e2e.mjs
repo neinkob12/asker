@@ -203,15 +203,24 @@ async function run() {
   await check(
     'Tutorial: nur der Neumarkt, Mission 1 auf der Karte, drei Verkäufe erledigen sie, Belohnung kommt',
     async () => {
-      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten fehlen noch.
+      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten sind noch gesperrt.
       // Marker gibt es für jeden Spot der aktiven Stadt (gesperrte grau, Auftrag 47); offen ist nur der Neumarkt.
       assert.equal(await page.locator('.spot-marker:not(.is-locked)').count(), 1, 'nur ein offener Spot');
       const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       const home = page.locator('.phone__home');
       await home.getByRole('button', { name: /^Einstellungen/ }).waitFor();
-      assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
-      assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
+      // Seit dem 13.10.2026 stehen sie schon da, aber gesperrt (ausgegraut mit Schloss, lockedWhen).
+      assert.equal(
+        await home.locator('.phone__app.is-locked[data-app-id="tab:gangs"]').count(),
+        1,
+        'Gangs gesperrt am Anfang',
+      );
+      assert.equal(
+        await home.locator('.phone__app.is-locked[data-app-id="suppliers.app"]').count(),
+        1,
+        'Lieferanten gesperrt am Anfang',
+      );
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
       // Auftrag 46c: Stufe 0 ist Peters Tour durchs HUD und Handy (zehn Schritte, mit Enter weiter); am Ende schaltet
       // die Tour selbst auf Stufe 1 und stellt das Tempo auf 1.

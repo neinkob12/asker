@@ -54,6 +54,7 @@ import {
   EVENT_FEATURES,
   FEATURE_STAGE,
   LAST_STAGE,
+  LOCK_EVENT_TEXT,
   PETER,
   REWARD,
   ROLE_FEATURE,
@@ -193,6 +194,18 @@ export function tutorialAllows(state: GameState, feature: TutorialFeature): bool
   const t = state.modules.tutorial;
   if (t.unlocked.includes(feature)) return true;
   return t.stage >= FEATURE_STAGE[feature];
+}
+
+/**
+ * Warum ein Feature noch gesperrt ist, als kurzer Text am Schloss (App-Kachel oder Widget im Handy), z.B. „Kommt mit
+ * ‚Buchhalter und Kasse‘“. null = frei. So steht im Tutorial schon alles da, nur ausgegraut.
+ */
+export function tutorialLockText(state: GameState, feature: TutorialFeature): string | null {
+  if (tutorialAllows(state, feature)) return null;
+  const byEvent = EVENT_FEATURES[feature] ? LOCK_EVENT_TEXT[feature] : undefined;
+  if (byEvent) return byEvent;
+  const stage = STAGES[FEATURE_STAGE[feature]];
+  return stage ? `Kommt mit „${stage.title}“` : 'Kommt nach dem Einstieg';
 }
 
 /** Darf diese Rolle gerade angeboten werden (Anheuern, Bewerber, Rumfragen)? Läufer immer. */

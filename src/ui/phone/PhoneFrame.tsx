@@ -86,6 +86,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
+  /** Gesperrt (lockedWhen): ausgegraut mit Schloss, ein Tipp zeigt diesen Text statt die App zu öffnen. */
+  locked?: string;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -100,6 +102,17 @@ function badgeOf(read: () => number | undefined): number {
   }
 }
 
+/** Sperre einer Kachel: Wirft das Modul, gilt die App als frei. */
+function lockOf(read: () => string | null | undefined): { locked?: string } {
+  try {
+    const text = read();
+    return text ? { locked: text } : {};
+  } catch (error) {
+    console.error('Sperre einer App', error);
+    return {};
+  }
+}
+
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
@@ -111,6 +124,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: tabIcon(t),
         color: tabTint(t),
         badge: badgeOf(() => t.badge?.(state)),
+        ...lockOf(() => t.lockedWhen?.(state)),
       }),
     );
   const apps = phoneApps
@@ -123,6 +137,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: a.icon,
         color: a.color ?? 'system',
         badge: badgeOf(() => a.badge?.(state, ui)),
+        ...lockOf(() => a.lockedWhen?.(state)),
         ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
@@ -241,6 +256,31 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
   const { app } = props;
   const runtime = useRuntime();
   const tile = tileColor(app.color);
+  const icon = (
+    <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" class="phone__tile" />
+  );
+  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss; ein Tipp sagt, wann die App kommt.
+  if (app.locked) {
+    const locked = app.locked;
+    return (
+      <button
+        type="button"
+        class={`phone__app is-locked ${props.dock ? 'is-dock' : ''}`}
+        data-app-id={app.id}
+        data-tour={`phone.app.${app.id}`}
+        aria-disabled="true"
+        onClick={() => runtime.api.notice(`${app.name}: ${locked}`)}
+        aria-label={`${app.name}, gesperrt. ${locked}`}
+        title={locked}
+      >
+        {icon}
+        <span class="phone__app-lock" aria-hidden="true">
+          <Icon name="lock" size={13} strokeWidth={2.2} />
+        </span>
+        <span class="phone__app-name">{app.name}</span>
+      </button>
+    );
+  }
   return (
     <ContextMenu
       label={`Schnellaktionen ${app.name}`}
@@ -266,15 +306,7 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
         aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
         title={app.name}
       >
-        <IconChip
-          icon={app.icon}
-          color={tile.color}
-          style={tile.style}
-          shape="tile"
-          solid
-          size="xl"
-          class="phone__tile"
-        />
+        {icon}
         <span class="phone__app-name">{app.name}</span>
         <Badge count={app.badge} />
       </button>

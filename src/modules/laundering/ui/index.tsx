@@ -23,7 +23,7 @@ import {
   useGame,
 } from '../../../ui';
 import { cityName, isBusinessSold, presentCity } from '../../city';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   amountInProgress,
@@ -305,7 +305,8 @@ registerPhoneApp({
   color: 'money',
   component: LaunderingApp,
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => !tutorialAllows(state, 'app.laundering'),
+  // Auftrag 46b: Im Tutorial steht die Geldwäsche schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => tutorialLockText(state, 'app.laundering'),
 });
 registerSearch({
   id: 'laundering.search',

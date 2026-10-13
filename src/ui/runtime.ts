@@ -170,6 +170,11 @@ export interface UiApi {
   toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
   /** Die Rückmeldung zu einem fehlgeschlagenen Befehl ausblenden. */
   dismissError(): void;
+  /**
+   * Kurze Einblendung wie bei einem fehlgeschlagenen Befehl, ohne Befehl: z.B. beim Tipp auf etwas Gesperrtes, wann es
+   * kommt. Die nächste ersetzt die vorige.
+   */
+  notice(text: string): void;
   /** Verlauf: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
@@ -551,6 +556,7 @@ export class UiRuntime {
           if (options.target) alert.target = options.target;
           ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
         }),
+      notice: (text) => update(() => this.showError(text)),
       dismissError: () =>
         update(() => {
           if (this.errorTimer) clearTimeout(this.errorTimer);

@@ -19,6 +19,7 @@ import {
   iconElement,
   List,
   ListItem,
+  LockedWidget,
   memoState,
   ProgressBar,
   registerAdvisor,
@@ -64,7 +65,7 @@ import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
 import { getCargo, getTrips, placeCity } from '../../logistics';
 import { shipmentItems, shipmentsInTransit } from '../../suppliers';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialAllows, tutorialLockText } from '../../tutorial';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -165,9 +166,11 @@ const incomingView = memoState((state) => {
  */
 function StockWidget() {
   const ui = useUi();
-  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen; im Tutorial (Auftrag 46b) kommt das Lager mit
-  // der ersten Lieferung.
-  const hidden = useGameSelector((state) => isBusinessSold(state) || !tutorialAllows(state, 'hud.stock'));
+  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen. Im Tutorial (Auftrag 46b) steht das Lager schon
+  // da, gesperrt bis zu seiner Stufe; die Lager-Optionen (Lager-App) kommen später als das Lager selbst.
+  const hidden = useGameSelector((state) => isBusinessSold(state));
+  const locked = useGameSelector((state) => tutorialLockText(state, 'hud.stock'));
+  const optionsLocked = useGameSelector((state) => tutorialLockText(state, 'app.goods'));
   const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
@@ -203,6 +206,7 @@ function StockWidget() {
     (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
   if (hidden) return null;
+  if (locked) return <LockedWidget icon="warehouse" label="Lager" text={locked} wide data-tour="hud.stock" />;
   const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
   return (
     <section class="phone-widget goods-widget" data-tour="hud.stock" aria-label="Lager">
@@ -238,10 +242,16 @@ function StockWidget() {
           <span key={`free-${i}`} class="goods-stock__cell is-free" aria-hidden="true" />
         ))}
       </button>
-      <button type="button" class="goods-widget__options" onClick={() => ui.openPhone('goods.app')}>
+      <button
+        type="button"
+        class={`goods-widget__options ${optionsLocked ? 'is-locked' : ''}`}
+        aria-disabled={optionsLocked ? 'true' : undefined}
+        title={optionsLocked ?? undefined}
+        onClick={() => (optionsLocked ? ui.notice(`Lager-Optionen: ${optionsLocked}`) : ui.openPhone('goods.app'))}
+      >
         <Icon name="warehouse" size={15} />
         <span>Lager-Optionen</span>
-        <Icon name="chevronRight" size={14} />
+        <Icon name={optionsLocked ? 'lock' : 'chevronRight'} size={14} />
       </button>
     </section>
   );
