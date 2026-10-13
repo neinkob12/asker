@@ -12,7 +12,7 @@ import { setHapticsEnabled } from './haptics';
 import { closeAllOverlays } from './overlays';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
-import { loadPrefs, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
+import { loadPrefs, type PhoneTheme, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
 import {
   type DialogId,
   type DialogRegistry,
@@ -33,7 +33,7 @@ import type { TourApi } from './tour/types';
 /** good/info: Routine (grau im Verlauf), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
-export type { TrafficLevel } from './prefs';
+export type { PhoneTheme, TrafficLevel } from './prefs';
 
 export interface ToastOptions {
   /** Ort des Geschehens: Der Verlauf bietet dann "Hinzoomen" an. */
@@ -112,6 +112,8 @@ export interface UiState {
   traffic: TrafficLevel;
   /** Leise Klicks bei Schaltern und Gesten. Pro Gerät gemerkt. */
   vibration: boolean;
+  /** Farbe des Handys: dunkel oder White Mode. Pro Gerät gemerkt. */
+  phoneTheme: PhoneTheme;
   /**
    * Laufendes Gespräch im Handy (Auftrag 30): Nachricht des angenommenen Anrufs. Das Handy zeigt dann das Gespräch
    * bildschirmfüllend, bis aufgelegt wird. Ein klingelnder Anruf braucht das nicht (der steht im Spielzustand).
@@ -215,6 +217,8 @@ export interface UiApi {
   /** Verkehr auf der Karte: 'off', 'low' oder 'normal'. */
   setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
+  /** Handy dunkel oder im White Mode. */
+  setPhoneTheme(theme: PhoneTheme): void;
   zoomIn(): void;
   zoomOut(): void;
   /**
@@ -288,6 +292,7 @@ export class UiRuntime {
       overlay: prefs.overlay,
       traffic: prefs.traffic,
       vibration: prefs.vibration,
+      phoneTheme: prefs.phoneTheme,
       call: null,
     };
     setHapticsEnabled(prefs.vibration);
@@ -472,6 +477,7 @@ export class UiRuntime {
       overlay: this.ui.overlay,
       traffic: this.ui.traffic,
       vibration: this.ui.vibration,
+      phoneTheme: this.ui.phoneTheme,
     };
     savePrefs(this.storage, prefs);
   }
@@ -714,6 +720,11 @@ export class UiRuntime {
         update(() => {
           ui.vibration = enabled;
           setHapticsEnabled(enabled);
+          this.savePrefs();
+        }),
+      setPhoneTheme: (theme) =>
+        update(() => {
+          ui.phoneTheme = theme;
           this.savePrefs();
         }),
       zoomIn: () => this.map?.zoomIn(),

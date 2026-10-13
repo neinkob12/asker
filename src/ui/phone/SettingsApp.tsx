@@ -259,6 +259,22 @@ export function SettingsApp() {
         <Player />
       </Section>
 
+      <Section icon="phone" color="system" title="Anzeige">
+        <div class="set-choice">
+          <span class="set-choice__label">Handy</span>
+          <SegmentedControl
+            wide
+            aria-label="Farbe des Handys"
+            options={[
+              { value: 'dark', label: 'Dunkel' },
+              { value: 'light', label: 'Hell' },
+            ]}
+            value={ui.state.phoneTheme}
+            onChange={ui.setPhoneTheme}
+          />
+        </div>
+      </Section>
+
       <Section icon="map" color="place" title="Karte">
         <Toggle
           label="Überwachungs-Overlay"

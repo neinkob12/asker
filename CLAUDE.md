@@ -326,6 +326,12 @@ größer (`spotHitExtra`, `--spot-hit`, nie bis zum nächsten Spot). Revier-Name
 Doppelklick öffnet die Reviere mit dem Veedel. Spielfarben über der Karte statt Gold: `--hud-pause`, `--hud-mission`,
 `--hud-go`, `--hud-meter`, `--hud-alert`. Schleier offener HUD-Popover liegt per Portal in der Shell (kein Abschalten
 des backdrop-filter mehr, das ließ den Bildschirm beim Schließen kurz schwarz werden).
+Danach (13.10.2026): Der Startbildschirm des Handys scrollt nicht mehr (`overflow: hidden`, Container `home` mit
+Höhenabfragen in `phone.css` und `goods.css`, die auf kleinen Bildschirmen Abstände und Fächer verkleinern). White Mode
+des Handys: Einstellungen › Anzeige › Handy Dunkel | Hell (`ui.phoneTheme`, `api.setPhoneTheme`, pro Gerät gemerkt),
+setzt `data-appearance="light"` am Handy; Creme-Werte unter `.phone[data-appearance="light"]` in `tokens.css`. Der
+Startbildschirm nimmt seine Flächen und Akzente aus `--home-*` (`--home-bg`, `--home-card`, `--home-cell`,
+`--home-brand` …), nie feste Weißwerte; Widgets setzen `--stat-accent` auf ein `--home-*`-Token.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

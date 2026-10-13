@@ -51,8 +51,8 @@
 }
 
 /* Lager-Widget auf dem Startbildschirm des Handys: 8 Fächer (2 × 4, bei mehr Waren 10), freie leer, darunter
-   „Lager-Optionen“. Der Startbildschirm ist immer schwarz: Die Farben gehören zur Ware selbst und sind nur für
-   dunklen Grund gedacht, deshalb hier und nicht als Bedeutungsfarbe in den Tokens. */
+   „Lager-Optionen“. Die Farben gehören zur Ware selbst, deshalb hier und nicht als Bedeutungsfarbe in den Tokens: hell
+   für den schwarzen Startbildschirm, dunkler im White Mode des Handys (unten). */
 .goods-widget {
   gap: 6px;
 }
@@ -77,11 +77,11 @@
   height: 66px;
   min-width: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--home-cell);
   transition: background var(--duration-fast);
 }
 .goods-stock:hover .goods-stock__cell {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--home-card-hover);
 }
 .goods-stock__cell[data-product="weed"] {
   --product: #4ade80;
@@ -129,7 +129,7 @@
   bottom: -3px;
   padding: 1px 2px;
   border-radius: 3px;
-  background: var(--hw-black, #000);
+  background: var(--home-bg, #000);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--product) 45%, transparent);
   color: var(--product);
   font: 700 8px / 1 var(--font-hud);
@@ -149,8 +149,8 @@
   top: calc(50% + 21px);
   right: 0;
   left: 0;
-  /* Grün wie Geld im dunklen Schema (der Startbildschirm ist immer dunkel). */
-  color: #30d158;
+  /* Grün wie Geld, passend zum Startbildschirm (dunkel oder White Mode). */
+  color: var(--home-money);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
@@ -158,8 +158,8 @@
   white-space: nowrap;
 }
 .goods-stock__cell.is-free {
-  background: rgba(255, 255, 255, 0.025);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: var(--home-cell-dim);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
 }
 .goods-stock__cell.is-empty .goods-stock__icon {
   opacity: 0.35;
@@ -178,14 +178,14 @@
   padding: 0 8px;
   border: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--home-cell);
   color: var(--home-label);
   font-size: 13px;
   font-weight: var(--font-weight-bold);
   cursor: pointer;
 }
 .goods-widget__options:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--home-card-hover);
 }
 .goods-widget__options span {
   flex: 1;
@@ -205,4 +205,53 @@
 /* Füllstand des Lagers (Auftrag 33). */
 .goods-capacity {
   padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* Wenig Höhe auf dem Startbildschirm (Container home in phone.css): flachere Fächer, damit nichts scrollt. */
+@container home (max-height: 600px) {
+  .goods-stock__cell {
+    height: 54px;
+  }
+  .goods-stock__plus {
+    top: calc(50% + 17px);
+  }
+  .goods-widget__options {
+    min-height: 32px;
+  }
+}
+@container home (max-height: 500px) {
+  .goods-stock__cell {
+    height: 50px;
+  }
+  /* Icon und Menge etwas nach oben, damit „+ unterwegs“ darunter Platz hat. */
+  .goods-stock__main {
+    gap: 2px;
+    transform: translateY(-5px);
+  }
+  .goods-stock__plus {
+    top: calc(50% + 12px);
+  }
+}
+
+/* White Mode des Handys: Farben der Waren dunkler, damit sie auf Creme lesbar bleiben. */
+.phone[data-appearance="light"] .goods-stock__cell[data-product="weed"] {
+  --product: #2f8f4e;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="kush"] {
+  --product: #1f7a5c;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="haze"] {
+  --product: #7a7a0f;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="hash"] {
+  --product: #8f5626;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="vape"] {
+  --product: #137a8e;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="edibles"] {
+  --product: #b23c72;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="oil"] {
+  --product: #9a6512;
 }

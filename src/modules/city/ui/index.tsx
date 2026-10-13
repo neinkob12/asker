@@ -428,7 +428,7 @@ function RankWidget() {
       type="button"
       class="phone-widget phone-stat"
       // Gold wie die Bedeutungsfarbe brand im dunklen Schema (der Startbildschirm ist immer dunkel).
-      style={{ '--stat-accent': '#e2ae4a' }}
+      style={{ '--stat-accent': 'var(--home-brand)' }}
       data-tour="hud.rank"
       title={`Dein Weg:\n${ladder.join('\n')}`}
       onClick={() => ui.notice(nextText)}
