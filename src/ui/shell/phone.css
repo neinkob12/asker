@@ -507,8 +507,14 @@
   }
 }
 @container home (max-height: 500px) {
+  .phone__home-scroll {
+    gap: 6px;
+  }
+  .phone__notices {
+    min-height: 54px;
+  }
   .phone-stat {
-    min-height: 84px;
+    min-height: 76px;
   }
   .phone-stat__value {
     font-size: 28px;
