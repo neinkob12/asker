@@ -312,6 +312,9 @@ gesperrte Tabs fehlen in Suche und Tastenkürzeln. `hiddenWhen` bleibt für das,
 Verkauf). Rang und Ruf sind im Tutorial von Anfang an frei. Die Widgets haben keine Fußzeile („ab …“) mehr: Ruf und
 Reviere öffnen per Tipp die Reviere, der Rang zeigt den nächsten Rang kurz an. Am Handy-Bildschirm ist das offene Handy
 Vollbild über der HUD-Reihe. Reihenfolge im Raster: Gangs, Geldwäsche, Kasse, Einstellungen.
+Ganz oben auf dem Startbildschirm steht der Streifen „Mitteilungen“ (`src/ui/phone/HomeNotices.tsx`): Eine kurze
+Rückmeldung (`ui.error`, `ui.notice`) steht dort statt schwebend, sonst die neueste Meldung aus dem Verlauf (ungelesene mit
+Zähler); ein Tipp schließt die Rückmeldung bzw. öffnet den Verlauf. In den Apps schwebt die Rückmeldung wie bisher.
 In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
 `hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
