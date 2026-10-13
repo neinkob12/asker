@@ -237,8 +237,8 @@ async function run() {
       await page.waitForTimeout(800);
       await shot(page, 'tutorial-mission-1');
       const before = await game(page, (s) => s.wallet.dirty);
-      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und öffnet das Spot-Fenster; sie wartet dann auf
-      // den ersten Verkauf (die Uhr läuft dabei, der Test spult trotzdem selbst vor).
+      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und wartet auf den ersten Verkauf per Tipp auf den
+      // Spot (die Uhr läuft dabei, der Test spult trotzdem selbst vor); danach zeigt sie das Spot-Fenster.
       await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:1');
       await page.getByText('Verkauf einmal selbst').waitFor({ timeout: 15000 });
       await page.waitForTimeout(1200);
@@ -252,16 +252,9 @@ async function run() {
           if (waiting > 0) break;
           await advance(page, 10);
         }
-        // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
-        const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
-        if (await sell.isVisible()) {
-          // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
-          await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-          await sell.click();
-        } else {
-          // Ohne offenes Spot-Fenster: Ein Klick auf den Spot verkauft direkt (Feedback vom 08.10.2026).
-          await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
-        }
+        // Verkauft wird nur noch mit einem Tipp auf den Spot (Feedback 13.10.2026, im Handy gibt es keinen Knopf mehr).
+        // Am Handy-Bildschirm liegt danach das Spot-Fenster über der Karte: den Klick direkt am Marker auslösen.
+        await page.locator('.spot-marker[aria-label*="Neumarkt"]').dispatchEvent('click');
         // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
         if (sold === 0) await nextTour(page);
       }

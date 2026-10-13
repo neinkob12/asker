@@ -58,9 +58,25 @@
   --state-edge: var(--spot-raid-edge);
 }
 
-/* 2D-Ansicht: Blase immer ohne Stiel mitten auf dem Spot */
+/* 2D-Ansicht (seit dem 13.10.2026 immer): Blase ohne Stiel mitten auf dem Spot, und der Kasten des Markers ist genau
+   die Blase. Vorher ragte sie unten aus dem Kasten (36 px breit, mit Platz für den Stiel), der Rahmen einer Tour um
+   den Spot lag dann zu groß und zu hoch. translate verschiebt zusätzlich zu MapLibres transform (Anker unten). */
 .shell-map.is-2d .spot-marker {
   --lift: 0;
+  --sign-bottom: 0px;
+  width: var(--bubble);
+  height: var(--bubble);
+  translate: 0 50%;
+}
+.shell-map.is-2d .spot-sign {
+  transform-origin: 50% 50%;
+}
+.shell-map.is-2d .spot-plate {
+  top: calc(var(--bubble) / 2 + var(--label-offset, 0px));
+}
+.shell-map.is-2d .spot-foot,
+.shell-map.is-2d .spot-stem {
+  display: none;
 }
 
 /* Ring und Puls liegen mit der Mitte auf der Blase (folgen --sign-bottom) */
@@ -147,7 +163,20 @@
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* Ziffern genau mittig (Feedback 13.10.2026: die 0 saß etwas tief): Zeilenkasten auf Versal- und Grundlinie kürzen. */
+  text-box: trim-both cap alphabetic;
   color: var(--state-on);
+}
+/* Größerer Klickrand, wenn Kunden warten und kein Läufer da ist (--spot-hit aus map.ts: nie bis zum nächsten Spot). */
+.spot-marker.is-wide-hit::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sign-bottom) + var(--bubble) / 2);
+  width: calc(var(--bubble) + 2 * var(--spot-hit, 0px));
+  height: calc(var(--bubble) + 2 * var(--spot-hit, 0px));
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
 }
 .spot-lock {
   display: none;

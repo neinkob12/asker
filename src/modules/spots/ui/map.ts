@@ -13,7 +13,7 @@
 
 import type { Marker } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
+import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, metersPerPixel, setText } from '../../../map';
 import { iconElement } from '../../../ui';
 import { activeCity } from '../../city';
 import {
@@ -45,6 +45,42 @@ const LIFT_ZOOM = { low: 12, high: 13.5 } as const;
 /** Wie hoch die Blase am Stiel steht (1 = ganz, 0 = mitten auf dem Spot). */
 export function spotLift(zoom: number): number {
   return Math.min(1, Math.max(0, (zoom - LIFT_ZOOM.low) / (LIFT_ZOOM.high - LIFT_ZOOM.low)));
+}
+
+/** Grundgröße der Blase in Pixeln (wie --bubble in spots.css, ganz nah). */
+const BUBBLE_PX = 26;
+/** So viele Pixel greift ein Klick höchstens neben der Blase, wenn Kunden warten und kein Läufer dort steht. */
+const HIT_EXTRA_MAX = 14;
+
+/** Größe der Blase wie in spots.css (--scale aus --spot-lift). */
+function bubblePx(zoom: number): number {
+  return BUBBLE_PX * (0.6 + 0.4 * spotLift(zoom));
+}
+
+/**
+ * Zusätzlicher Klickrand um die Blase in Pixeln (Feedback 13.10.2026: wartet ein Kunde, soll man nicht so oft
+ * danebentippen). Nie so groß, dass sich die Klickflächen der zwei nächsten Spots berühren: Jeder Spot darf höchstens
+ * bis zur halben Entfernung zum nächsten reichen, auch weit herausgezoomt.
+ */
+export function spotHitExtra(nearestMeters: number, lat: number, zoom: number): number {
+  if (!Number.isFinite(nearestMeters)) return HIT_EXTRA_MAX;
+  const half = nearestMeters / metersPerPixel(lat, zoom) / 2;
+  return Math.max(0, Math.min(HIT_EXTRA_MAX, Math.floor(half - bubblePx(zoom) / 2)));
+}
+
+/** Kleinste Entfernung zweier Spots in Metern (Infinity bei weniger als zwei). */
+export function nearestSpotMeters(spots: readonly { lng: number; lat: number }[]): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      const a = spots[i];
+      const b = spots[j];
+      const kx = 111320 * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180);
+      const d = Math.hypot((a.lng - b.lng) * kx, (a.lat - b.lat) * 110540);
+      if (d < best) best = d;
+    }
+  }
+  return best;
 }
 
 /** Hotspots leiser als früher: Den Zustand zeigt jetzt der Ring. */
@@ -169,14 +205,29 @@ export const spotsLayer: MapLayer = {
     let hovered: string | null = null;
     const container = ctx.map.getContainer();
     let lastLift = '';
+    let lastHit = '';
+    /** Nächster Abstand zweier Spots der Stadt und ihre Breite (für den Klickrand), neu bei anderer Lage. */
+    let nearest = { meters: Number.POSITIVE_INFINITY, lat: 50.94, layout: '' };
     const onZoom = () => {
       const zoom = ctx.map.getZoom();
       container.classList.toggle('spots-far', zoom < NAMES_ZOOM);
       // Nur bei Änderung setzen: Jede neue Variable lässt alle Marker neu rechnen.
+      const hit = `${spotHitExtra(nearest.meters, nearest.lat, zoom)}px`;
+      if (hit !== lastHit) {
+        lastHit = hit;
+        container.style.setProperty('--spot-hit', hit);
+      }
       const lift = spotLift(zoom).toFixed(2);
       if (lift === lastLift) return;
       lastLift = lift;
       container.style.setProperty('--spot-lift', lift);
+    };
+    const measureNearest = (state: GameState) => {
+      const spots = mapSpots(state);
+      const layout = spots.map((s) => `${s.lng},${s.lat}`).join('|');
+      if (layout === nearest.layout) return;
+      nearest = { meters: nearestSpotMeters(spots), lat: spots[0]?.lat ?? nearest.lat, layout };
+      onZoom();
     };
     ctx.map.on('zoom', onZoom);
     onZoom();
@@ -304,6 +355,7 @@ export const spotsLayer: MapLayer = {
     return {
       update(state, ui) {
         ensureMarkers();
+        measureNearest(state);
         // Einmal pro Aktualisierung gruppieren statt pro Spot über alle Kunden zu laufen.
         const waitingMap = waitingBySpot(state);
         const runners = runnersBySpot(state);
@@ -322,7 +374,9 @@ export const spotsLayer: MapLayer = {
           const fill = active && look !== 'raid' ? patienceFill(state.time, queue) : 100;
           // Auftrag 23: Wenig bekannte eigene Spots sind blasser; verlegte Spots wandern mit.
           const faint = spotAwareness(state, spot.id) < 0.5;
-          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
+          // Größerer Klickrand, solange jemand wartet und du selbst bedienen musst (kein Läufer am Spot).
+          const wide = waiting > 0 && runners.get(spot.id)?.status !== 'active';
+          const key = `${active}|${look}|${waiting}|${wide}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
           if (key === entry.key) continue;
           entry.key = key;
           entry.marker.setLngLat([spot.lng, spot.lat]);
@@ -332,6 +386,7 @@ export const spotsLayer: MapLayer = {
           entry.element.classList.toggle('is-faint', faint);
           entry.element.style.setProperty('--fill', String(fill));
           entry.element.classList.toggle('is-locked', !active);
+          entry.element.classList.toggle('is-wide-hit', wide);
           entry.element.classList.toggle('is-custom', !!spot.custom);
           entry.element.classList.toggle('selected', spot.id === selected);
           entry.element.dataset.urgency = look;
@@ -349,6 +404,7 @@ export const spotsLayer: MapLayer = {
       destroy() {
         ctx.map.off('zoom', onZoom);
         container.style.removeProperty('--spot-lift');
+        container.style.removeProperty('--spot-hit');
         hotspots.remove();
         hoverCard.marker.remove();
         for (const entry of markers.values()) entry.marker.remove();

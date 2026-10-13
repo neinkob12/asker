@@ -16,21 +16,11 @@ import type { ComponentType } from 'preact';
 import { memo } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
-import {
-  Badge,
-  ContextMenu,
-  ErrorBoundary,
-  Icon,
-  IconChip,
-  type MenuAction,
-  PortalHostContext,
-  SwipeRow,
-} from '../components';
+import { Badge, ContextMenu, ErrorBoundary, Icon, IconChip, type MenuAction, PortalHostContext } from '../components';
 import { sectionTitle } from '../components/section';
 import { shallowEqual, useRuntime, useRuntimeSelector } from '../hooks';
 import { hasOverlay } from '../overlays';
 import {
-  type Advice,
   dialogLocksPhone,
   type PhoneApp,
   panels,
@@ -76,9 +66,6 @@ const HOME_ORDER = [`${TAB_APP_PREFIX}gangs`, 'laundering.app', 'finance.app', '
  * Reviere-Widget oben.
  */
 const NOT_ON_HOME = [`${TAB_APP_PREFIX}territory`];
-
-/** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
-export const URGENT_ADVICE = 80;
 
 /** Eine Kachel auf dem Startbildschirm: Tab eines Moduls oder Handy-App. */
 interface HomeApp {
@@ -313,62 +300,6 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
   );
 }, sameTile);
 
-/**
- * Welchen dringenden Rat der Spieler weggewischt hat (kommt erst wieder, wenn ein anderer kommt). Der Schlüssel enthält
- * den Titel: "core.answer" ist immer dieselbe ID, aber jede Frage (anderer Chat) ein anderer Rat.
- */
-let dismissedAdvice: string | null = null;
-const adviceKey = (advice: Advice) => `${advice.id}|${advice.title}`;
-
-/**
- * Dringender Rat als eine Zeile ganz oben: Kachel, Titel, Knopf. Nach links wischen (oder ×) blendet ihn aus, bis ein
- * anderer dringender Rat kommt. Alles andere, was die Module empfehlen, steht in der Suche (Strg/⌘+K).
- */
-function UrgentAdvice(props: { advice: Advice }) {
-  const runtime = useRuntime();
-  const { api } = runtime;
-  const [, redraw] = useState(0);
-  const { advice } = props;
-  const dismiss = () => {
-    dismissedAdvice = adviceKey(advice);
-    redraw((n) => n + 1);
-    // Den Startbildschirm zeichnet sonst erst der nächste Spielschritt neu (bei Pause bliebe die Zeile stehen).
-    runtime.requestRender();
-  };
-  return (
-    <SwipeRow actions={[{ label: 'Weg', icon: 'close', color: 'system', onSelect: dismiss }]} fullSwipe>
-      <div class="phone__urgent" role="status">
-        <button
-          type="button"
-          class="phone__urgent-main"
-          onClick={() => (advice.action ? advice.action(api) : api.togglePalette(true))}
-        >
-          <IconChip icon={advice.icon} color="brand" solid size="md" shape="tile" />
-          <span class="phone__urgent-text">
-            <span class="phone__urgent-kicker">Dringend</span>
-            <span class="phone__urgent-title">{advice.title}</span>
-          </span>
-          {advice.action && <span class="phone__urgent-action">{advice.actionLabel ?? 'Los'}</span>}
-        </button>
-        <button type="button" class="phone__urgent-close" onClick={dismiss} aria-label="Ausblenden">
-          <Icon name="close" />
-        </button>
-      </div>
-    </SwipeRow>
-  );
-}
-
-/** Der dringende Rat für den Startbildschirm, sofern es einen gibt und er nicht weggewischt wurde. */
-export function urgentAdvice(state: GameState): Advice | null {
-  const top = collectAdvice(state)[0];
-  if (!top || top.priority < URGENT_ADVICE) {
-    // Nichts Dringendes mehr: Kehrt derselbe Rat später zurück, soll er wieder erscheinen.
-    dismissedAdvice = null;
-    return null;
-  }
-  return dismissedAdvice === adviceKey(top) ? null : top;
-}
-
 const sameApps = (a: HomeApp[], b: HomeApp[]) => a.length === b.length && a.every((app, i) => shallowEqual(app, b[i]));
 
 /** Beiträge zu 'phone.home' lesen beliebig im Zustand: Sie ziehen bei jedem neuen Stand nach, der Rest des Bildschirms nicht. */
@@ -378,17 +309,12 @@ function HomeSlot(props: { name: 'phone.home' | 'phone.homeBottom' }) {
 }
 
 /**
- * Startbildschirm. Ohne Props und mit eigenen Auszügen (Kacheln samt Zählern, dringender Rat) gelesen: Er zeichnet nur
- * neu, wenn sich eine Kachel, ein Zähler oder der dringende Rat ändert, nicht bei jedem Simulationsschritt.
+ * Startbildschirm. Ohne Props und mit eigenen Auszügen (Kacheln samt Zählern) gelesen: Er zeichnet nur neu, wenn sich
+ * eine Kachel oder ein Zähler ändert, nicht bei jedem Simulationsschritt. Dringendes steht in den Mitteilungen oben.
  */
 const HomeScreen = memo(function HomeScreen() {
   const runtime = useRuntime();
   const all = useRuntimeSelector((rt) => (rt.state ? homeApps(rt.state, rt.ui) : []), sameApps);
-  // Der Rat selbst (mit Knopf) wird hier gelesen, ausgelöst wird das Neuzeichnen über seinen Schlüssel (ID und Titel).
-  useRuntimeSelector((rt) => {
-    const advice = rt.state ? urgentAdvice(rt.state) : null;
-    return advice ? adviceKey(advice) : null;
-  });
   const state = runtime.state;
   if (!state) return null;
   // Eine App kann zeitweise eine andere im Dock ersetzen (PhoneApp.dock); die ersetzte rückt ins Raster.
@@ -400,12 +326,10 @@ const HomeScreen = memo(function HomeScreen() {
   };
   // Jede App steht genau einmal da: was im Dock liegt (Nachrichten, Lieferanten, Personal, Kasse), nicht im Raster.
   const grid = all.filter((a) => !dockIds.includes(a.id)).sort((a, b) => rank(a) - rank(b));
-  const urgent = urgentAdvice(state);
   return (
     <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
         <HomeNotices />
-        {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         {/* Oben kleine Widgets nebeneinander (Rang, Ruf, Reviere), dann die Apps, darunter breite Widgets (Lager). */}
         <div class="phone__widgets">
           <HomeSlot name="phone.home" />

@@ -125,8 +125,9 @@ anders gefärbt als „Rang“, damit man die drei nicht verwechselt. Die Karte 
 die Kacheln unter die Uhr. Am Handy-Bildschirm stehen Geld (Heat als eine Flamme mit Stufenwort) und Uhr kompakt
 nebeneinander, die Kacheln flach darunter; das Menü steht dort in der Kartensteuerung.
 
-**Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−/Norden, dann 3D/2D
-(gold bei 3D), **Ebenen** und Köln. Das Menü Ebenen füllen Module mit
+**Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−, dann zurück zur Stadt
+und Übersicht (seit dem 13.10.2026 ohne Norden, 3D/2D und Menü Ebenen). Die Einträge für ein Menü Ebenen melden Module
+weiter an (zur Zeit ohne Knopf),
 `registerMapLayerOption({ id, order, group, label, icon?, toggle?, active(ui), select(api, ui) })`, z.B. Veedel nach
 Kontrolle oder Heat (territory) und das Überwachungs-Overlay (Kern).
 

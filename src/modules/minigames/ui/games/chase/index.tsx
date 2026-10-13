@@ -5,15 +5,16 @@
 import { startEncounter } from '../../../../encounters';
 import { getSpots } from '../../../../spots';
 import { getVeedel } from '../../../../veedel';
+import { lazyView } from '../../kit/lazyView';
 import { registerMinigameView } from '../../registry';
-import { ChaseGame } from './ChaseGame';
 import { registerChaseSounds } from './sounds';
 import './chase.css';
 
 registerChaseSounds();
 
 registerMinigameView('chase', {
-  component: ChaseGame,
+  // three.js erst beim Start laden (eigenes Paket).
+  component: lazyView(() => import('./ChaseGame').then((m) => m.ChaseGame)),
   layout: 'stage',
   icon: 'siren',
   controls: {

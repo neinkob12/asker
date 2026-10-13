@@ -193,7 +193,7 @@ describe('Über der Karte: Look Glas (immer dunkel)', () => {
     for (const glass of glasses) {
       for (const map of MAP_SURFACES) {
         const surface = over(get(glass), map);
-        for (const text of ['--hud-ink', '--hud-ink-2', '--hud-gold']) {
+        for (const text of ['--hud-ink', '--hud-ink-2', '--hud-gold', '--hud-mission', '--hud-pause']) {
           expect(ratio(get(text), surface), `${text} auf ${glass}`).toBeGreaterThanOrEqual(4.5);
         }
       }
@@ -225,6 +225,9 @@ describe('Über der Karte: Look Glas (immer dunkel)', () => {
 
   it('Gold-Knopf und Geld-Popup: Schrift mindestens 4.5:1', () => {
     expect(ratio(get('--hud-gold-on'), get('--hud-gold'))).toBeGreaterThanOrEqual(4.5);
+    for (const role of ['pause', 'mission', 'go', 'meter', 'alert']) {
+      expect(ratio(get(`--hud-${role}-on`), get(`--hud-${role}`)), role).toBeGreaterThanOrEqual(4.5);
+    }
     for (const map of MAP_SURFACES) {
       expect(ratio(get('--map-money-on'), over(get('--map-money'), map))).toBeGreaterThanOrEqual(4.5);
       expect(ratio(get('--map-money-loss-on'), over(get('--map-money-loss'), map))).toBeGreaterThanOrEqual(4.5);

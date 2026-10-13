@@ -194,10 +194,10 @@
   outline: none;
 }
 .tour-box__next.ui-button {
-  --btn-bg: var(--hud-gold);
-  --btn-fg: var(--hud-gold-on);
-  --btn-border: var(--hud-gold);
-  --btn-hover: var(--hud-gold);
+  --btn-bg: var(--hud-go);
+  --btn-fg: var(--hud-go-on);
+  --btn-border: var(--hud-go);
+  --btn-hover: var(--hud-go);
   min-width: 96px;
   font-family: var(--font-hud);
   font-weight: 700;

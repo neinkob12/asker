@@ -1,9 +1,8 @@
-// Einstellungen der Oberfläche pro Gerät (localStorage): Überwachungs-Overlay, Kamera, Verkehr auf der Karte, Vibration.
+// Einstellungen der Oberfläche pro Gerät (localStorage): Überwachungs-Overlay, Verkehr auf der Karte, Vibration.
+// Die Kamera ist seit dem 13.10.2026 immer 2D, ein altes Feld camera im Speicher wird überlesen.
 // Ton und Musik merkt sich der Audio-Dienst selbst (src/audio).
 
 import type { KeyValueStorage } from '../core';
-
-export type CameraMode = '3d' | '2d';
 
 /** Verkehr als Kulisse auf der Karte (Auftrag 31): aus, wenig (halb so viele Fahrzeuge) oder normal. */
 export type TrafficLevel = 'off' | 'low' | 'normal';
@@ -11,7 +10,6 @@ export type TrafficLevel = 'off' | 'low' | 'normal';
 export interface UiPrefs {
   /** Überwachungs-Overlay (Scanlines, Rahmen, Koordinaten) auf der Karte, Standard aus. */
   overlay: boolean;
-  camera: CameraMode;
   traffic: TrafficLevel;
   /** Leise Klicks bei Schaltern und Gesten (Haptik). */
   vibration: boolean;
@@ -19,7 +17,6 @@ export interface UiPrefs {
 
 export const DEFAULT_PREFS: UiPrefs = {
   overlay: false,
-  camera: '3d',
   traffic: 'normal',
   vibration: true,
 };
@@ -37,7 +34,6 @@ export function loadPrefs(storage: KeyValueStorage | null): UiPrefs {
     const current = data.v === VERSION;
     return {
       overlay: current && typeof data.overlay === 'boolean' ? data.overlay : DEFAULT_PREFS.overlay,
-      camera: data.camera === '2d' ? '2d' : '3d',
       traffic: data.traffic === 'off' || data.traffic === 'low' ? data.traffic : 'normal',
       vibration: typeof data.vibration === 'boolean' ? data.vibration : DEFAULT_PREFS.vibration,
     };

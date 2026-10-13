@@ -228,7 +228,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   (`--hud-*`, `--spot-*`, `--font-hud*`). Sie halten sich an `--map-right` und folgen dem Ein- und Ausklappen des
   Handys mit derselben Feder (`--dock-*`), die Kamera der Karte auch (Padding in `GameMap`).
 - **Shell** (`shell/`): Karte vollflächig. Darüber das HUD in drei Glas-Gruppen (Geld mit Heat, Uhr mit Wetter, Tempo
-  und Menü, Kennzahl-Kacheln; `Hud.tsx`), die Kartensteuerung (Zoom/Norden, 3D, Ebenen, Köln) und die
+  und Menü, Kennzahl-Kacheln; `Hud.tsx`), die Kartensteuerung (Zoom, Stadt, Übersicht) und die
   Überlagerungen der Module (Slot `map.overlay`). **Alles andere läuft über das Spiel-Handy**
   (`phone/PhoneFrame.tsx`): Tabs der Module sind Apps (`tab:<id>`), Panels erscheinen als Seite im Handy, dazu die
   Handy-Apps, der Verlauf (`core.history`) und ein dringender Rat auf dem Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
@@ -263,8 +263,8 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   `toast(text, kind, options)` (nur Verlauf), `dismissError`, `openPhone(appId?, params?)/closePhone`, `selectTab`
   (öffnet den Tab als App im Handy), `openSection(id)`, `togglePalette`, `setPopover`,
   `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
-  `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
-  `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
+  `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setOverlay`,
+  `setVibration`, `zoomIn`, `zoomOut`.
 - **Registries** (`registry.ts`, alle über `src/ui/index.ts`):
 
 | Funktion | Wofür | Einträge |

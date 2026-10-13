@@ -332,6 +332,18 @@
   /* Gold für Hauptaktionen und Übernahme über der Karte */
   --hud-gold: #f2c766;
   --hud-gold-on: #15120a;
+  /* Spielfarben über der Karte (Feedback 13.10.2026: weniger Gold, hell und bunt wie im Spiel). Jede Rolle eine Farbe,
+     Schrift darauf immer die dunkle -on-Farbe. */
+  --hud-pause: #7fd4ff; /* Eisblau: Pause */
+  --hud-pause-on: #04202e;
+  --hud-mission: #b9a8ff; /* Lavendel: Missionen und Fortschritt im Tutorial */
+  --hud-mission-on: #170f36;
+  --hud-go: #7dedb8; /* Minze: Hauptknopf (Weiter, Los) */
+  --hud-go-on: #03251a;
+  --hud-meter: #ffb68c; /* Pfirsich: Leisten und Segmente (Ruf, Stufen) */
+  --hud-meter-on: #2b1206;
+  --hud-alert: #ff9fb8; /* Bonbon-Rosa: Wichtiges in den Mitteilungen */
+  --hud-alert-on: #2f0a16;
 
   /* Konfrontation als Akte (nur in diesem Dialog): Papier, Innenfläche, Stempel */
   --file-paper: rgba(201, 178, 133, 0.16);

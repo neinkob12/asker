@@ -1,6 +1,7 @@
 // Grundkarte im gedämpften Look: Grau- und Schieferflächen, runde Straßen, wenig Details und
-// 3D-Gebäude in weichen Farben mit Schatten. Alle Daten kommen aus den OpenFreeMap-Vektorkacheln
-// (OpenMapTiles-Schema, ohne Key). Keine POIs, keine Straßennamen, keine Hausnummern.
+// flache Gebäude in weichen Farben mit Schatten (seit dem 13.10.2026 nur 2D: Flächen statt fill-extrusion).
+// Alle Daten kommen aus den OpenFreeMap-Vektorkacheln (OpenMapTiles-Schema, ohne Key). Keine POIs, keine
+// Straßennamen, keine Hausnummern.
 // Die Farben hier sind der Tag; Morgen, Abend, Nacht und Wetter stellt GameMap zur Laufzeit über
 // setPaintProperty ein (siehe look.ts). Deshalb hat jede Farbe ihre eigene Ebene mit festem Wert: Datengetriebene
 // Farben (z.B. nach Straßenklasse) müssten bei jeder Änderung die Kacheln neu aufbauen.
@@ -36,7 +37,7 @@ export const BASE_LAYERS = {
 } as const;
 
 /**
- * Module, deren Flächen oder Linien unter den 3D-Gebäuden (und ihren Schatten) liegen sollen, geben diese ID
+ * Module, deren Flächen oder Linien unter den Gebäuden (und ihren Schatten) liegen sollen, geben diese ID
  * als beforeId an: map.addLayer(layer, BELOW_BUILDINGS).
  */
 export const BELOW_BUILDINGS = BASE_LAYERS.buildingShadow;
@@ -166,21 +167,18 @@ function roadLayer(id: string, filter: FilterSpecification, color: string, casin
   } satisfies LayerSpecification;
 }
 
+/** Gebäude als flache Flächen, nach Höhe in vier Bändern getönt (höher = heller), beim Hineinzoomen eingeblendet. */
 function buildingLayers(): LayerSpecification[] {
   return BASE_LAYERS.buildings.map((id, i) => ({
     id,
-    type: 'fill-extrusion',
+    type: 'fill',
     source: 'openmaptiles',
     'source-layer': 'building',
     minzoom: 13,
     filter: buildingBand(i),
     paint: {
-      'fill-extrusion-color': day.buildings[i],
-      // Beim Hineinzoomen wachsen die Häuser aus dem Boden.
-      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 14, buildingHeight],
-      'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-      'fill-extrusion-opacity': 1,
-      'fill-extrusion-vertical-gradient': true,
+      'fill-color': day.buildings[i],
+      'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 14, 1],
     },
   }));
 }
@@ -209,15 +207,6 @@ export const baseStyle: StyleSpecification = {
       attribution: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap',
     },
     [LANDMARK_SOURCE]: { type: 'geojson', data: landmarkFeatures(0) },
-  },
-  sky: {
-    'sky-color': day.sky,
-    'horizon-color': day.horizon,
-    'fog-color': day.fog,
-    'fog-ground-blend': day.fogBlend,
-    'horizon-fog-blend': 0.6,
-    'sky-horizon-blend': 0.7,
-    'atmosphere-blend': 0,
   },
   light: { anchor: 'map', color: day.light, intensity: day.lightIntensity, position: [1.15, 210, 35] },
   layers: [
@@ -370,15 +359,9 @@ export const baseStyle: StyleSpecification = {
     },
     {
       id: BASE_LAYERS.landmarks,
-      type: 'fill-extrusion',
+      type: 'fill',
       source: LANDMARK_SOURCE,
-      paint: {
-        'fill-extrusion-color': ['get', 'color'],
-        'fill-extrusion-height': ['get', 'height'],
-        'fill-extrusion-base': ['get', 'base'],
-        'fill-extrusion-opacity': 1,
-        'fill-extrusion-vertical-gradient': true,
-      },
+      paint: { 'fill-color': ['get', 'color'] },
     },
   ],
 };

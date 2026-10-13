@@ -475,81 +475,15 @@
     background: rgba(255, 255, 255, 0.2);
   }
 }
-/* Dringender Rat: eine Zeile ganz oben, nach links wischen oder × blendet sie aus */
-.phone__urgent {
-  display: flex;
-  align-items: stretch;
-  background: var(--phone-group);
-  border-radius: var(--radius-group);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-brand) 40%, transparent);
-  overflow: hidden;
+/* Dringender Rat (Chat mit Frist, Kunden warten …): steht in den Mitteilungen, kräftig in der Schrift. */
+.phone__notices.is-urgent {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-alert) 55%, transparent);
 }
-.phone__urgent-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 60px;
-  padding: 8px 4px 8px 12px;
-  border: 0;
-  background: none;
-  color: var(--phone-label);
-  text-align: left;
-  cursor: pointer;
+.phone__notices.is-urgent .phone__notices-icon {
+  color: var(--hud-alert);
 }
-.phone__urgent-main:hover {
-  background: var(--phone-group-2);
-}
-.phone__urgent-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.phone__urgent-kicker {
-  font-size: var(--type-caption-2);
+.phone__notices.is-urgent .phone__notices-text {
   font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-caps);
-  text-transform: uppercase;
-  color: var(--cat-brand);
-}
-/* Bis zu drei Zeilen (J5: einzeilig fiel der Ort weg, „2 Kunden warten am E…“; N9: im kleinen Handy fiel bei zwei
-   Zeilen „wartet“ weg), umbrochen nur zwischen Wörtern. */
-.phone__urgent-title {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--type-subhead);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--type-subhead-lh);
-  overflow-wrap: normal;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-.phone__urgent-action {
-  flex: none;
-  padding: 6px 12px;
-  border-radius: var(--radius-round);
-  /* Helles Gold in beiden Schemata (N11: im Hell-Modus war --cat-brand dunkel, die dunkle Schrift kam auf 3:1). */
-  background: var(--cat-brand-a);
-  color: var(--cat-brand-on);
-  font-size: var(--type-footnote);
-  font-weight: var(--font-weight-bold);
-}
-.phone__urgent-close {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  border: 0;
-  background: none;
-  color: var(--phone-label-2);
-  font-size: 18px;
-  cursor: pointer;
-}
-.phone__urgent-close:hover {
-  color: var(--phone-label);
 }
 /* Widgets oben auf dem Startbildschirm: Raster aus drei Spalten, breite Widgets über zwei (Lager), kleine über eine
    (Ruf oben rechts). Module setzen .phone-widget und eine Breite, das Raster gehört dem Handy. */

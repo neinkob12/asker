@@ -12,7 +12,7 @@ import { setHapticsEnabled } from './haptics';
 import { closeAllOverlays } from './overlays';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
-import { type CameraMode, loadPrefs, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
+import { loadPrefs, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
 import {
   type DialogId,
   type DialogRegistry,
@@ -33,7 +33,7 @@ import type { TourApi } from './tour/types';
 /** good/info: Routine (grau im Verlauf), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
-export type { CameraMode, TrafficLevel } from './prefs';
+export type { TrafficLevel } from './prefs';
 
 export interface ToastOptions {
   /** Ort des Geschehens: Der Verlauf bietet dann "Hinzoomen" an. */
@@ -106,8 +106,6 @@ export interface UiState {
   popover: string | null;
   /** Wartet die Karte gerade auf einen Klick (pickLocation)? */
   picking: { prompt: string } | null;
-  /** Kamera: 3D schräg (Standard) oder 2D-Draufsicht. Pro Gerät gemerkt. */
-  camera: CameraMode;
   /** Überwachungs-Overlay auf der Karte an? Pro Gerät gemerkt. */
   overlay: boolean;
   /** Verkehr als Kulisse auf der Karte: aus, wenig, normal. Pro Gerät gemerkt. */
@@ -130,11 +128,6 @@ export interface MapCamera {
   center: LngLat;
   zoom: number;
   mobileZoom: number;
-  /** Schräge Kamera (3D) wie in der Stadt; sonst Draufsicht. */
-  tilt: boolean;
-  /** Neigung und Drehung der schrägen Kamera in Grad (Standard wie Köln). */
-  pitch?: number;
-  bearing?: number;
   /** Rahmen [West, Süd, Ost, Nord], der ganz zu sehen sein soll (statt center und zoom, Deutschland-Ansicht). */
   bounds?: readonly [number, number, number, number];
 }
@@ -144,20 +137,15 @@ export interface MapController {
   flyToKoeln(): void;
   flyToEuropa(): void;
   flyToCamera(camera: MapCamera): void;
-  /**
-   * Ansicht wechseln, ohne hinzufliegen (Auftrag 31, beim Zoomen): Ausschnitt bleibt, Neigung und Drehung gleiten zur
-   * Ansicht (tilt null = Draufsicht).
-   */
-  settleView(view: string, label: string, tilt: { pitch: number; bearing: number } | null): void;
+  /** Ansicht wechseln, ohne hinzufliegen (Auftrag 31, beim Zoomen): Der Ausschnitt bleibt. */
+  settleView(view: string, label: string): void;
   /** Aktuelle Ansicht: 'city:<id>', 'deutschland' oder 'europa'. */
   currentView(): string;
   flyTo(target: LngLat, zoom?: number): void;
   pickLocation(): Promise<LngLat | null>;
   cancelPick(): void;
-  setCameraMode(mode: CameraMode): void;
   zoomIn(): void;
   zoomOut(): void;
-  resetNorth(): void;
 }
 
 /** Was Oberflächen-Code tun darf. Den Spielzustand ändert er nur über dispatch. */
@@ -223,16 +211,12 @@ export interface UiApi {
   enterView(view: string): void;
   /** Aktuelle Ansicht der Karte ('city:<id>', 'deutschland', 'europa'). */
   mapView(): string;
-  setCameraMode(mode: CameraMode): void;
-  /** Zwischen 3D schräg und 2D-Draufsicht wechseln. */
-  toggleCamera(): void;
   setOverlay(enabled: boolean): void;
   /** Verkehr auf der Karte: 'off', 'low' oder 'normal'. */
   setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
   zoomIn(): void;
   zoomOut(): void;
-  resetNorth(): void;
   /**
    * Tour (Auftrag 46a): Spotlight-Erklärungen über dem Spiel, Schritt für Schritt mit „Weiter“. `start(def)` reiht ein,
    * wenn schon eine läuft; `active()` nennt die laufende; `skip()` beendet sie. Reine Oberfläche, nichts im Spielstand.
@@ -301,7 +285,6 @@ export class UiRuntime {
       palette: false,
       popover: null,
       picking: null,
-      camera: prefs.camera,
       overlay: prefs.overlay,
       traffic: prefs.traffic,
       vibration: prefs.vibration,
@@ -487,7 +470,6 @@ export class UiRuntime {
   private savePrefs(): void {
     const prefs: UiPrefs = {
       overlay: this.ui.overlay,
-      camera: this.ui.camera,
       traffic: this.ui.traffic,
       vibration: this.ui.vibration,
     };
@@ -687,9 +669,6 @@ export class UiRuntime {
           center: camera.center,
           zoom: camera.zoom,
           mobileZoom: camera.mobileZoom,
-          tilt: true,
-          pitch: camera.pitch,
-          bearing: camera.bearing,
         });
       },
       flyHome: () => {
@@ -708,30 +687,19 @@ export class UiRuntime {
           center: views.deutschland.center,
           zoom: views.deutschland.zoom,
           mobileZoom: views.deutschland.zoom - 0.9,
-          tilt: false,
           bounds: state ? views.deutschlandBounds?.(state) : undefined,
         });
       },
       enterView: (view) => {
         if (view === 'deutschland') {
-          this.map?.settleView(view, 'SAT 01 · DEUTSCHLAND', null);
+          this.map?.settleView(view, 'SAT 01 · DEUTSCHLAND');
           return;
         }
         const camera = getCityViews()?.cameras.find((c) => `city:${c.id}` === view);
         if (!camera) return;
-        this.map?.settleView(view, `CAM 01 · ${camera.name.toUpperCase()}`, {
-          pitch: camera.pitch ?? 50,
-          bearing: camera.bearing ?? -20,
-        });
+        this.map?.settleView(view, `CAM 01 · ${camera.name.toUpperCase()}`);
       },
       mapView: () => this.map?.currentView() ?? 'city:koeln',
-      setCameraMode: (mode) =>
-        update(() => {
-          ui.camera = mode;
-          this.map?.setCameraMode(mode);
-          this.savePrefs();
-        }),
-      toggleCamera: () => api.setCameraMode(ui.camera === '3d' ? '2d' : '3d'),
       setOverlay: (enabled) =>
         update(() => {
           ui.overlay = enabled;
@@ -750,7 +718,6 @@ export class UiRuntime {
         }),
       zoomIn: () => this.map?.zoomIn(),
       zoomOut: () => this.map?.zoomOut(),
-      resetNorth: () => this.map?.resetNorth(),
       tour: {
         start: (def) => this.tours.start(def),
         active: () => this.tours.active(),

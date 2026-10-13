@@ -5,15 +5,16 @@
 // Vorschau: ?minispiel=traffic (Nacht mit Regen), &seed=2 (gerade Seeds: Tag, trocken).
 
 import { formatEuro } from '../../../../../core';
+import { lazyView } from '../../kit/lazyView';
 import { registerMinigameView } from '../../registry';
 import { registerTrafficSounds } from './sounds';
-import { TrafficGame } from './TrafficGame';
 import './traffic.css';
 
 registerTrafficSounds();
 
 registerMinigameView('traffic', {
-  component: TrafficGame,
+  // three.js erst beim Start laden (eigenes Paket).
+  component: lazyView(() => import('./TrafficGame').then((m) => m.TrafficGame)),
   layout: 'stage',
   icon: 'siren',
   controls: {
