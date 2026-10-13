@@ -81,8 +81,6 @@ export interface SidebarTab {
    * es keine Veedel mehr gibt). Per selectTab bleibt der Tab erreichbar.
    */
   hiddenWhen?: (state: GameState) => boolean;
-  /** Kurzer Text statt des Symbols auf der Kachel im Handy, z.B. „7/12“ bei den Revieren. null = Symbol. */
-  tileText?: (state: GameState) => string | null;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -165,8 +163,6 @@ export interface PhoneApp {
    * bleibt sie erreichbar); die ersetzte App rückt dann ins Raster.
    */
   dock?: { replaces: string; when: (state: GameState) => boolean };
-  /** Kurzer Text statt des Symbols auf der Kachel, wie SidebarTab.tileText. */
-  tileText?: (state: GameState) => string | null;
 }
 
 /** Empfehlung für die Karte "Nächster Schritt" (und den sanften Hinweis beim Einstieg). */

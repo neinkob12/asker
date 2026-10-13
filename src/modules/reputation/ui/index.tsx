@@ -109,8 +109,9 @@ function ReputationWidget() {
 function TerritoryWidget() {
   const { state } = useGame();
   const ui = useUi();
-  // Gleiche Regel wie beim Ruf: im Tutorial ab dem ersten Stammkunden, nach dem Verkauf gibt es keine Veedel mehr.
-  if (!tutorialAllows(state, 'hud.reputation') || isBusinessSold(state)) return null;
+  // Das Widget ist der Weg in die Reviere (die App hat keine Kachel mehr): im Tutorial mit der Stufe der Reviere, nach
+  // dem Verkauf gibt es keine Veedel mehr.
+  if (!tutorialAllows(state, 'app.territory') || isBusinessSold(state)) return null;
   const cityId = activeCity(state);
   const city = cityName(cityId);
   const progress = campaignProgress(state, cityId);

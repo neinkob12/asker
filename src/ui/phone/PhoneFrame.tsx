@@ -64,11 +64,17 @@ import { bindPressFeedback } from './press';
 import { StatusPill } from './StatusPill';
 import { tileColor } from './tile';
 
-/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
-const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`, 'finance.app'];
+/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal (sofern vorhanden). */
+const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`];
 
-/** Reihenfolge der Apps im Raster: Reviere, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = [`${TAB_APP_PREFIX}territory`, `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
+/** Reihenfolge der Apps im Raster: Kasse, Gangs, Geldwäsche, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = ['finance.app', `${TAB_APP_PREFIX}gangs`, 'laundering.app', 'core.settings'];
+
+/**
+ * Nicht als Kachel auf dem Startbildschirm, aber weiter in Suche und Tastenkürzeln: Die Reviere öffnet das
+ * Reviere-Widget oben.
+ */
+const NOT_ON_HOME = [`${TAB_APP_PREFIX}territory`];
 
 /** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
 export const URGENT_ADVICE = 80;
@@ -80,8 +86,6 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
-  /** Text statt Symbol auf der Kachel (tileText), z.B. „7/12“. */
-  text?: string;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -96,18 +100,6 @@ function badgeOf(read: () => number | undefined): number {
   }
 }
 
-/** Text auf der Kachel: Wirft das Modul, bleibt das Symbol stehen. */
-function tileTextOf(read: (() => string | null) | undefined): { text?: string } {
-  if (!read) return {};
-  try {
-    const text = read();
-    return text ? { text } : {};
-  } catch (error) {
-    console.error('Text einer App-Kachel', error);
-    return {};
-  }
-}
-
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
@@ -119,7 +111,6 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: tabIcon(t),
         color: tabTint(t),
         badge: badgeOf(() => t.badge?.(state)),
-        ...tileTextOf(t.tileText && (() => t.tileText?.(state) ?? null)),
       }),
     );
   const apps = phoneApps
@@ -132,11 +123,10 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: a.icon,
         color: a.color ?? 'system',
         badge: badgeOf(() => a.badge?.(state, ui)),
-        ...tileTextOf(a.tileText && (() => a.tileText?.(state) ?? null)),
         ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
-  return [...tabs, ...apps];
+  return [...tabs, ...apps].filter((a) => !NOT_ON_HOME.includes(a.id));
 }
 
 /**
@@ -278,7 +268,6 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
       >
         <IconChip
           icon={app.icon}
-          text={app.text}
           color={tile.color}
           style={tile.style}
           shape="tile"

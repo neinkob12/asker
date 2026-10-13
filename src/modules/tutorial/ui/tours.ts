@@ -201,9 +201,9 @@ function stage3(ctx: TourContext): TourStep[] {
   return [
     step({
       id: 'app',
-      anchor: 'phone.app.tab:territory',
+      anchor: 'hud.territory',
       before: () => home(ui),
-      text: 'Neue App: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
+      text: 'Neu oben im Handy: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
     }),
     step({
       id: 'list',

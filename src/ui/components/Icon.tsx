@@ -175,8 +175,6 @@ export interface IconChipProps {
   solid?: boolean;
   /** Kleiner Punkt oben rechts: Status. */
   status?: 'good' | 'warn' | 'bad' | 'idle';
-  /** Kurzer Text statt des Symbols (z.B. „7/12“ auf der App-Kachel der Reviere). */
-  text?: string;
   title?: string;
   class?: string;
   style?: JSX.CSSProperties;
@@ -196,7 +194,7 @@ export const IconChip = memo(function IconChip(props: IconChipProps) {
   ];
   return (
     <span class={cls.join(' ')} style={props.style} title={props.title} aria-hidden={props.title ? undefined : 'true'}>
-      {props.text ? <span class="ui-chip__text">{props.text}</span> : <Icon name={props.icon} />}
+      <Icon name={props.icon} />
       {props.status && <span class={`ui-chip__status ui-status-dot ui-status-dot--${props.status}`} />}
     </span>
   );

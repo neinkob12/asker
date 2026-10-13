@@ -37,16 +37,6 @@
   color: var(--chip-tone);
   font-size: calc(var(--chip-size) * 0.5);
 }
-/* Text statt Symbol (App-Kachel der Reviere: „7/12“): eng gesetzt, passt in die Kachel, bricht nie um. */
-.ui-chip__text {
-  font-family: var(--font-hud-display);
-  font-size: calc(var(--chip-size) * 0.36);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 .ui-chip--tile {
   --chip-radius: var(--radius-tile);
 }

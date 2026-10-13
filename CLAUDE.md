@@ -302,7 +302,9 @@ Startbildschirm (Slot `'phone.home'`, Klassen `phone-widget phone-stat` mit `--s
 das Lager-Widget (Slot `'phone.homeBottom'`): 8 Fächer (bei mehr Waren 10) mit Icon und Menge, grün, was unterwegs ist
 (Lieferungen, Kai, Abholungen); Tipp öffnet die Lieferanten, „Lager-Optionen“ die Lager-App (`goods.app` ist `hidden`).
 Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set, Aussehen je Ware in `PRODUCT_LOOK` (`goods/ui`), Farben
-per `data-product` in `goods.css`. Kacheln können Text statt Symbol zeigen (`tileText` an Tab bzw. App, Reviere „7/12“).
+per `data-product` in `goods.css`.
+Die Reviere haben keine Kachel mehr (`NOT_ON_HOME` in `PhoneFrame.tsx`, das Widget öffnet sie), die Kasse steht im
+Raster statt im Dock.
 In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
 `hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
