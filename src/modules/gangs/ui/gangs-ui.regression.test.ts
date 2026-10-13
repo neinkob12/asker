@@ -76,7 +76,7 @@ describe('Hauptquartiere der Gangs nur für die aktive Stadt', () => {
     expect(shown('gang-hq')).toEqual([]);
   });
 
-  it('der Ring eines Vorstoßes nur bei einer Gang der aktiven Stadt', () => {
+  it('kein Ring mehr bei einem Vorstoß (Feedback 13.10.2026: die Kreise auf der Karte verwirrten)', () => {
     const sim = createTestGame();
     switchToHamburg(sim);
     const now = sim.state.time;
@@ -87,8 +87,7 @@ describe('Hauptquartiere der Gangs nur für die aktive Stadt', () => {
     koeln.push = { veedelId: allVeedel('koeln')[0].id, startedAt: now, until: now + 600 };
     hhStatus.push = { veedelId: allVeedel('hamburg')[0].id, startedAt: now, until: now + 600 };
     mount(sim);
-    const rings = shown('gang-push');
-    expect(rings).toHaveLength(1);
-    expect(rings[0].startsWith(`${hh.name} drängt nach`)).toBe(true);
+    expect(shown('gang-push')).toEqual([]);
+    expect(shown('gang-hq')).toHaveLength(getGangs(sim.state, 'hamburg').length);
   });
 });

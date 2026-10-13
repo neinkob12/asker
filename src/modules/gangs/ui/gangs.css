@@ -128,29 +128,6 @@
 .shell-map.zoomed-out .gang-hq__name {
   display: none;
 }
-.gang-push {
-  pointer-events: none;
-}
-.gang-push__ring {
-  display: block;
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-round);
-  border: 2px solid var(--gang-color);
-  background: color-mix(in srgb, var(--gang-color) 12%, transparent);
-  animation: gang-push 1.8s ease-out infinite;
-}
-@keyframes gang-push {
-  0% {
-    transform: scale(0.4);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
-}
-
 /* Kopf des Gangs-Tabs (Auftrag 27): deine Stärke als Zahl, jede Gang als Balken auf derselben Skala */
 .gangs-power {
   display: flex;
