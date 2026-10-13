@@ -13,7 +13,7 @@
 //   getGangs(state, cityId?), getGang(state, id), gangCity(state, id), getGangStatus(state, id), gangVeedel(state, id),
 //   veedelGang(state, veedelId),
 //   gangPower(state, id),
-//   playerPower(state), isGangBroken, hasCeasefire, paysTribute, isAllied, isAtPeace, ceasefireCost,
+//   playerPower(state), playerPowerParts(state) (Leute, Veedel, Geld, Ware), isGangBroken, hasCeasefire, paysTribute, isAllied, isAtPeace, ceasefireCost,
 //   tributeAmount, protectionAmount, gangContact(gang), STAGE_NAMES, GANG_SPOT_MIN_INFLUENCE, ALLIANCE_COST, WARN_AT
 // Befehle: 'gangs.ceasefire', 'gangs.payTribute', 'gangs.refuse', 'gangs.demandProtection', 'gangs.collect',
 //   'gangs.releaseProtection', 'gangs.ally', 'gangs.attack', 'gangs.acceptOffer'
@@ -125,8 +125,10 @@ export {
   isAllied,
   isAtPeace,
   isGangBroken,
+  type PlayerPowerParts,
   paysTribute,
   playerPower,
+  playerPowerParts,
   protectionAmount,
   raidTargets,
   STAGE_NAMES,

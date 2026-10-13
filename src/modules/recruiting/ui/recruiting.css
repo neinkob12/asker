@@ -56,29 +56,35 @@
 .rc-tile:focus-visible {
   background: var(--phone-fill-hover);
 }
-.rc-tile .ui-avatar {
+/* Bild mit der Rolle als Abzeichen unten rechts (wie das Porträt im Personal) */
+.rc-tile__face {
+  position: relative;
+  display: grid;
+  place-items: center;
   margin-bottom: 4px;
 }
-.rc-tile__name,
 .rc-tile__role {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--phone-group, var(--color-panel-raised));
+  box-shadow: 0 0 0 2px var(--phone-group-2, var(--color-surface));
+  color: var(--role-tone);
+}
+.rc-tile__name {
   max-width: 100%;
   overflow: hidden;
+  font-size: var(--type-footnote, 13px);
+  font-weight: var(--font-weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rc-tile__name {
-  font-size: var(--type-footnote, 13px);
-  font-weight: var(--font-weight-bold);
-}
-.rc-tile__role {
-  margin-top: 1px;
-  color: var(--role-tone);
-  font-size: var(--type-caption-2, 11px);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.01em;
-}
 .rc-tile__level {
-  margin-top: 2px;
   font-size: var(--type-caption-2, 11px);
   color: var(--color-muted);
 }

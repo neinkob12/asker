@@ -264,7 +264,7 @@
   border: 0;
   border-radius: var(--radius-round);
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: var(--type-subhead);
   font-weight: var(--font-weight-bold);
   touch-action: none;
@@ -910,7 +910,7 @@ html.is-dragging {
   padding: 0 8px 0 0;
   border: 0;
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: var(--type-body);
   cursor: pointer;
 }
@@ -978,7 +978,7 @@ html.is-dragging {
   min-height: var(--phone-nav-height);
 }
 .phone-screen__actions .ui-button--subtle {
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 /* Aktionen aus Abschnitten (Portal in die Leiste): Text in der Markenfarbe wie bei iOS, die Hauptaktion bleibt Gold */
 .phone-screen__actions .ui-portal {
@@ -987,7 +987,7 @@ html.is-dragging {
 .phone-screen__actions .ui-button:not(.ui-button--primary, .ui-button--danger) {
   --btn-bg: transparent;
   --btn-hover: var(--phone-fill);
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 .phone-screen__search-button {
   display: grid;
@@ -998,7 +998,7 @@ html.is-dragging {
   border: 0;
   border-radius: var(--radius-round);
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: 21px;
   cursor: pointer;
 }
@@ -1171,9 +1171,9 @@ html.is-dragging {
   font-size: var(--type-body);
 }
 .phone .ui-button--primary {
-  --btn-bg: var(--color-primary);
-  --btn-hover: var(--color-primary-hover);
-  --btn-fg: var(--color-on-primary);
+  --btn-bg: var(--phone-tint-fill);
+  --btn-hover: var(--phone-tint-fill-hover);
+  --btn-fg: var(--phone-on-tint);
 }
 .phone .ui-button--success {
   --btn-bg: var(--money);
@@ -1188,7 +1188,7 @@ html.is-dragging {
 .phone .ui-button--subtle {
   --btn-bg: transparent;
   --btn-hover: var(--phone-fill);
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 .phone .ui-button--link {
   --btn-fg: var(--cat-place);
@@ -1499,7 +1499,7 @@ html.is-dragging {
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-caps);
-  color: var(--cat-brand);
+  color: var(--phone-tint);
 }
 .mobile-dock__title {
   overflow: hidden;
@@ -1517,8 +1517,8 @@ html.is-dragging {
   justify-content: center;
   gap: 2px;
   width: 72px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--phone-tint-fill);
+  color: var(--phone-on-tint);
   border: 0;
   border-radius: var(--radius-group);
   box-shadow: var(--shadow-float);

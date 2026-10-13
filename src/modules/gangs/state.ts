@@ -255,18 +255,35 @@ export function gangPower(state: GameState, id: string): number {
 }
 
 /** Stärke des Spielers auf derselben Skala: Leute (ohne Spezialisten), Veedel, Schwarzgeld, Ware. */
-export function playerPower(state: GameState, cityId: string = activeCity(state)): number {
+/** Woraus sich deine Stärke zusammensetzt (je Teil schon in Stärke-Punkten), für die Anzeige in der Gangs-App. */
+export interface PlayerPowerParts {
+  /** Läufer und Sicherheit in der Stadt. */
+  people: number;
+  /** Eigene Veedel der Stadt. */
+  veedel: number;
+  /** Schwarzgeld (ein Konto für alle Städte). */
+  money: number;
+  /** Ware in den Lagern der Stadt. */
+  goods: number;
+}
+
+export function playerPowerParts(state: GameState, cityId: string = activeCity(state)): PlayerPowerParts {
   // Pro Stadt (Auftrag 30): Leute, Veedel und Ware dort zählen; das Geld ist ein Konto für alle Städte.
   const people = getStaff(state, { status: 'active', cityId }).filter(
     (m) => m.role === 'runner' || m.role === 'courier' || m.role === 'security',
   ).length;
   const veedel = controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === cityId).length;
-  return (
-    people * PEOPLE_POWER +
-    veedel * VEEDEL_POWER +
-    wallet.balance(state, 'dirty') / MONEY_PER_POWER +
-    getStock(state, { cityId }) / GOODS_PER_POWER
-  );
+  return {
+    people: people * PEOPLE_POWER,
+    veedel: veedel * VEEDEL_POWER,
+    money: wallet.balance(state, 'dirty') / MONEY_PER_POWER,
+    goods: getStock(state, { cityId }) / GOODS_PER_POWER,
+  };
+}
+
+export function playerPower(state: GameState, cityId: string = activeCity(state)): number {
+  const p = playerPowerParts(state, cityId);
+  return p.people + p.veedel + p.money + p.goods;
 }
 
 /** Keine Leute und kein Revier mehr. */

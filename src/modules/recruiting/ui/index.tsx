@@ -13,6 +13,7 @@ import {
   Empty,
   Group,
   Hint,
+  Icon,
   ItemContent,
   List,
   ListItem,
@@ -239,7 +240,21 @@ const CANDIDATE_TILES = 9;
 /** Läufer und Sicherheit stellst du am Spot ein; alte Stände können sie noch unter den Bewerbern haben. */
 const AT_SPOT_ONLY: readonly StaffRole[] = ['runner', 'courier', 'security'];
 
-/** Eine Person als Kachel: Bild, Name, Rolle, Level, Handgeld und Lohn. */
+/** Kurzer Name für die Kachel: Vorname und Anfangsbuchstabe des Nachnamens („Hakan B.“), Spitznamen fallen weg. */
+function shortName(name: string): string {
+  const words = name
+    .replace(/[„"“»«][^„"“»«]*[“"”«»]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length <= 1) return words[0] ?? name;
+  const last = words[words.length - 1];
+  return `${words[0]} ${last.endsWith('.') && last.length <= 3 ? last : `${last.charAt(0)}.`}`;
+}
+
+/**
+ * Eine Person als Kachel: Bild mit der Rolle als Abzeichen unten rechts (wie bei den Problemfällen), kurzer Name,
+ * Level, Handgeld und Lohn.
+ */
 function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
   const c = props.candidate;
   const look = ROLE_LOOK[c.role];
@@ -247,21 +262,24 @@ function CandidateTile(props: { candidate: Candidate; onOpen: () => void }) {
     <button
       type="button"
       class="rc-tile"
+      title={`${c.name}, ${roleName(c.role)}`}
       aria-label={`${c.name}, ${roleName(c.role)}, Level ${c.level}, Handgeld ${formatEuro(c.hireCost)}, Lohn ${formatEuro(c.wage)} pro Tag`}
       onClick={props.onOpen}
     >
-      <Avatar
-        name={c.name}
-        image={c.portrait ?? undefined}
-        look={personLook(c.name, c.age)}
-        tone={look.color}
-        size="md"
-      />
-      <span class="rc-tile__name">{c.name}</span>
-      <span class="rc-tile__role" style={{ '--role-tone': `var(--cat-${look.color})` } as JSX.CSSProperties}>
-        {roleName(c.role)}
+      <span class="rc-tile__face">
+        <Avatar
+          name={c.name}
+          image={c.portrait ?? undefined}
+          look={personLook(c.name, c.age)}
+          tone={look.color}
+          size="md"
+        />
+        <span class="rc-tile__role" style={{ '--role-tone': `var(--cat-${look.color})` } as JSX.CSSProperties}>
+          <Icon name={look.icon} size={13} />
+        </span>
       </span>
-      <span class="rc-tile__level">Level {c.level}</span>
+      <span class="rc-tile__name">{shortName(c.name)}</span>
+      <span class="rc-tile__level">Lvl. {c.level}</span>
       <span class="rc-tile__cost">
         <strong>{formatEuro(c.hireCost)}</strong>
         <span>+{formatEuro(c.wage)}/Tag</span>
