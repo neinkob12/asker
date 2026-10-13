@@ -324,7 +324,16 @@ function ProblemTiles(props: { team: readonly StaffMember[] }) {
       title="Problemfälle"
       icon="alert"
       color="warn"
-      note="In Haft zuerst, dann die niedrigste Loyalität (von 100). Ein Tipp öffnet die Akte."
+      value={
+        <span
+          class="staff-info"
+          role="img"
+          title="Die Zahl ist die Loyalität (von 100). In Haft zuerst, dann die niedrigste Loyalität."
+          aria-label="Die Zahl ist die Loyalität (von 100). In Haft zuerst, dann die niedrigste Loyalität."
+        >
+          <Icon name="info" />
+        </span>
+      }
     >
       <div class="staff-tiles">
         {problems.map((m) => (
@@ -359,8 +368,7 @@ function ProblemTile(props: { member: StaffMember }) {
           {jailed && <span class="staff-tile__bars" aria-hidden="true" />}
         </span>
         <span class="staff-tile__level">Level {m.level}</span>
-        {/* Feedback 13.10.2026: Herz und Zahl allein las sich wie das Level; jetzt mit Wort und „von 100“. */}
-        <span class="staff-tile__caption">Loyalität</span>
+        {/* Loyalität als „8/100“; was die Zahl ist, sagt das i im Kopf der Gruppe. */}
         <span class={`staff-tile__loyalty is-${tone}`}>
           {loyalty ?? '?'}
           <small>/100</small>

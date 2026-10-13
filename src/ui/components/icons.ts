@@ -373,6 +373,17 @@ export const ICONS = {
     'M9.5 6.5L18 3h3v3l-3.5 8.5',
     'M5 14l-2 2l4 4l2-2',
   ],
+  /** Zwei gekreuzte Schwerter (Angriff in der Gangs-Tabelle, Feedback 13.10.2026). */
+  swordsCrossed: [
+    'M4 4h3.5l8 8',
+    'M4 4v3.5l8 8',
+    'M20 4h-3.5l-8 8',
+    'M20 4v3.5l-8 8',
+    'M13 17.5l4.5-4.5',
+    'M6.5 13l4.5 4.5',
+    'M16.5 16.5l3 3',
+    'M7.5 16.5l-3 3',
+  ],
   anchor: [circle(12, 5, 2), 'M12 7v14', 'M7.5 11.5h9', 'M4 15a8 8 0 0 0 16 0', 'M4 15l-1.5 1.8', 'M20 15l1.5 1.8'],
   web: [
     'M12 3.5l6.2 2.3l2.3 6.2l-2.3 6.2l-6.2 2.3l-6.2-2.3l-2.3-6.2l2.3-6.2z',
