@@ -371,7 +371,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: calc(var(--phone-status-height) + 2px) var(--phone-gutter) 12px;
+  /* Oben Platz für die kurze Einblendung (Hinweis beim Tipp auf Gesperrtes, fehlgeschlagener Befehl, bis zwei Zeilen):
+     Sie liegt unter der Statusleiste und verdeckt so keine Widgets (Feedback 13.10.2026). */
+  padding: calc(var(--phone-status-height) + 68px) var(--phone-gutter) 12px;
   overflow-y: auto;
   scrollbar-width: none;
   overscroll-behavior: contain;
