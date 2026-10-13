@@ -80,6 +80,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
+  /** Text statt Symbol auf der Kachel (tileText), z.B. „7/12“. */
+  text?: string;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -94,6 +96,18 @@ function badgeOf(read: () => number | undefined): number {
   }
 }
 
+/** Text auf der Kachel: Wirft das Modul, bleibt das Symbol stehen. */
+function tileTextOf(read: (() => string | null) | undefined): { text?: string } {
+  if (!read) return {};
+  try {
+    const text = read();
+    return text ? { text } : {};
+  } catch (error) {
+    console.error('Text einer App-Kachel', error);
+    return {};
+  }
+}
+
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
@@ -105,6 +119,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: tabIcon(t),
         color: tabTint(t),
         badge: badgeOf(() => t.badge?.(state)),
+        ...tileTextOf(t.tileText && (() => t.tileText?.(state) ?? null)),
       }),
     );
   const apps = phoneApps
@@ -117,6 +132,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: a.icon,
         color: a.color ?? 'system',
         badge: badgeOf(() => a.badge?.(state, ui)),
+        ...tileTextOf(a.tileText && (() => a.tileText?.(state) ?? null)),
         ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
@@ -262,6 +278,7 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
       >
         <IconChip
           icon={app.icon}
+          text={app.text}
           color={tile.color}
           style={tile.style}
           shape="tile"
@@ -335,9 +352,9 @@ export function urgentAdvice(state: GameState): Advice | null {
 const sameApps = (a: HomeApp[], b: HomeApp[]) => a.length === b.length && a.every((app, i) => shallowEqual(app, b[i]));
 
 /** Beiträge zu 'phone.home' lesen beliebig im Zustand: Sie ziehen bei jedem neuen Stand nach, der Rest des Bildschirms nicht. */
-function HomeSlot() {
+function HomeSlot(props: { name: 'phone.home' | 'phone.homeBottom' }) {
   useRuntimeSelector(() => stateRevision());
-  return <Slot name="phone.home" />;
+  return <Slot name={props.name} />;
 }
 
 /**
@@ -368,13 +385,17 @@ const HomeScreen = memo(function HomeScreen() {
     <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
+        {/* Oben kleine Widgets nebeneinander (Rang, Ruf, Reviere), dann die Apps, darunter breite Widgets (Lager). */}
         <div class="phone__widgets">
-          <HomeSlot />
+          <HomeSlot name="phone.home" />
         </div>
         <div class="phone__apps">
           {grid.map((a) => (
             <AppTile key={a.id} app={a} onOpen={() => runtime.api.openPhone(a.id)} />
           ))}
+        </div>
+        <div class="phone__widgets">
+          <HomeSlot name="phone.homeBottom" />
         </div>
       </div>
       {dock.length > 0 && (
@@ -628,16 +649,30 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
         <nav class="phone__nav">
-          <button
-            type="button"
-            class="phone__nav-button"
-            onPointerDown={homeSwipe}
-            onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
-            aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
-            title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
-          >
-            <span class="phone__home-indicator" />
-          </button>
+          {atHome ? (
+            <button
+              type="button"
+              class="phone__nav-button"
+              onPointerDown={homeSwipe}
+              onClick={api.closePhone}
+              aria-label="Handy weglegen"
+              title="Handy weglegen (T)"
+            >
+              <span class="phone__home-indicator" />
+            </button>
+          ) : (
+            // In jeder App ein sichtbarer Home-Knopf (statt nur des Balkens): tippen = Startbildschirm, hochwischen ebenso.
+            <button
+              type="button"
+              class="phone__nav-button phone__home-button"
+              onPointerDown={homeSwipe}
+              onClick={() => api.openPhone(null)}
+              aria-label="Startbildschirm"
+              title="Startbildschirm"
+            >
+              <Icon name="home" size={18} />
+            </button>
+          )}
         </nav>
       )}
     </div>

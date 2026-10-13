@@ -404,39 +404,44 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------------------------
 // Ränge des Spielers (Auftrag 36): Titel im HUD (Mehr-Menü) mit der Leiter, Banner und Ton beim Aufstieg.
 
-function RankHud() {
+/**
+ * Rang als kleines Widget oben links auf dem Startbildschirm des Handys (vorher Kachel im HUD): der Titel und was es
+ * zum nächsten Rang braucht. Die ganze Leiter steht im Tooltip.
+ */
+function RankWidget() {
   const { state } = useGame();
   // Auftrag 46b: Im Tutorial erscheint der Rang mit dem ersten Aufstieg.
   if (!tutorialAllows(state, 'hud.rank')) return null;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
+  const next = PLAYER_RANKS[reachedAt + 1];
+  const ladder = PLAYER_RANKS.map(
+    (r, i) => `${i <= reachedAt ? '✓' : '○'} ${i === reachedAt ? rank.title : r.title.replace('{city}', '…')}`,
+  );
   return (
-    <HudPill
+    <div
+      class="phone-widget phone-stat"
+      // Gold wie die Bedeutungsfarbe brand im dunklen Schema (der Startbildschirm ist immer dunkel).
+      style={{ '--stat-accent': '#e2ae4a' }}
       data-tour="hud.rank"
-      icon="crown"
-      color="brand"
-      label="Rang"
-      value={rank.title}
-      title={`Dein Rang: ${rank.title}`}
-      details={
-        <div class="city-ranks">
-          <span class="hud-label is-brand">Dein Weg</span>
-          <ol class="city-ranks__list">
-            {PLAYER_RANKS.map((r, i) => (
-              <li key={r.id} class={i < reachedAt ? 'is-done' : i === reachedAt ? 'is-now' : ''}>
-                <Icon name={i <= reachedAt ? 'checkCircle' : 'plusCircle'} />
-                <span class="city-ranks__title">{i === reachedAt ? rank.title : r.title.replace('{city}', '…')}</span>
-                {i === reachedAt + 1 && <span class="city-ranks__hint">{r.hint}</span>}
-              </li>
-            ))}
-          </ol>
-        </div>
-      }
-    />
+      title={`Dein Weg:\n${ladder.join('\n')}`}
+    >
+      <span class="phone-widget__label">
+        <Icon name="crown" size={12} /> Rang
+      </span>
+      <strong class="phone-stat__title">{rank.title}</strong>
+      <span class="phone-stat__bar" aria-hidden="true">
+        <span style={{ width: `${(100 * (reachedAt + 1)) / PLAYER_RANKS.length}%` }} />
+      </span>
+      <span class="phone-stat__foot">
+        {!next ? 'ganz oben' : next.title.includes('{city}') ? 'Nächster: neue Stadt' : `Nächster: ${next.title}`}
+      </span>
+    </div>
   );
 }
 
-registerHudItem({ id: 'city.rank', order: 4, placement: 'more', icon: 'crown', component: RankHud });
+// Rang als Widget oben auf dem Startbildschirm des Handys (vorher Kachel im HUD), links neben Ruf und Revieren.
+registerSlot('phone.home', { id: 'city.rank', order: 5, component: RankWidget });
 
 onGameEvent('player.rankUp', 'city.rankUp', (payload, ui) =>
   ui.toast(`Neuer Rang: ${payload.title}`, 'good', { urgent: true, icon: 'crown' }),

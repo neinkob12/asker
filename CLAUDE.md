@@ -297,9 +297,14 @@ oben) und ohne Blatt-Titel (`MapDialog sheetTitle={false}`).
 Danach: Spot-Hover zeigt nur den Namen; Spots werden beim Herauszoomen kleiner (`--scale` aus `--spot-lift`), unter
 `NAMES_ZOOM` ohne Plaketten, gesperrte nur als Punkt; die Art eines Spots (Club, Park, Kneipe …) hat kein Symbol und
 keinen Chip mehr (`SPOT_TYPES` bleibt als Daten, wirkt nur noch über `spotModifiers`).
-Lager-Karte im HUD (12.10.2026): Raster 3×2 mit Icon und Menge je Ware (Öl nur, wenn vorhanden), darunter grün,
-was unterwegs ist (Lieferungen, Kai, Abholungen); Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set,
-Aussehen je Ware in `PRODUCT_LOOK` (`goods/ui`), Farben per `data-product` in `goods.css`.
+Lager im Handy (13.10.2026): Rang, Ruf und Reviere sind kein HUD mehr, sondern kleine Widgets oben auf dem
+Startbildschirm (Slot `'phone.home'`, Klassen `phone-widget phone-stat` mit `--stat-accent`); darunter die Apps, darunter
+das Lager-Widget (Slot `'phone.homeBottom'`): 8 Fächer (bei mehr Waren 10) mit Icon und Menge, grün, was unterwegs ist
+(Lieferungen, Kai, Abholungen); Tipp öffnet die Lieferanten, „Lager-Optionen“ die Lager-App (`goods.app` ist `hidden`).
+Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set, Aussehen je Ware in `PRODUCT_LOOK` (`goods/ui`), Farben
+per `data-product` in `goods.css`. Kacheln können Text statt Symbol zeigen (`tileText` an Tab bzw. App, Reviere „7/12“).
+In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
+`hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

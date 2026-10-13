@@ -198,6 +198,11 @@ registerTab({
   // Nach dem Verkauf gibt es keine Veedel mehr (Auftrag 43). Am Anfang kommt die App mit Peters Quest.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.territory'),
+  // Auf der Kachel im Handy steht statt des Symbols, wie viele Veedel der aktiven Stadt dir gehören („7/12“).
+  tileText: (state) => {
+    const progress = campaignProgress(state, activeCity(state));
+    return `${progress.controlled}/${progress.total}`;
+  },
 });
 
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
