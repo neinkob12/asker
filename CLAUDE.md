@@ -297,6 +297,9 @@ oben) und ohne Blatt-Titel (`MapDialog sheetTitle={false}`).
 Danach: Spot-Hover zeigt nur den Namen; Spots werden beim Herauszoomen kleiner (`--scale` aus `--spot-lift`), unter
 `NAMES_ZOOM` ohne Plaketten, gesperrte nur als Punkt; die Art eines Spots (Club, Park, Kneipe …) hat kein Symbol und
 keinen Chip mehr (`SPOT_TYPES` bleibt als Daten, wirkt nur noch über `spotModifiers`).
+Lager-Karte im HUD (12.10.2026): Raster 3×2 mit Icon und Menge je Ware (Öl nur, wenn vorhanden), darunter grün,
+was unterwegs ist (Lieferungen, Kai, Abholungen); Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set,
+Aussehen je Ware in `PRODUCT_LOOK` (`goods/ui`), Farben per `data-product` in `goods.css`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

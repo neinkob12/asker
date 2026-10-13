@@ -56,28 +56,112 @@
   flex-direction: column;
   gap: var(--space-2);
 }
-.goods-flyout__rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* Die Karte ist für das Raster etwas breiter als die anderen HUD-Karten. */
+.hud-flyout:has(> .goods-flyout) {
+  width: min(316px, calc(100vw - 24px));
+}
+/* Raster 3×2 (Öl als siebte Kachel, wenn vorhanden). Die Farben gehören zur Ware selbst und sind nur für das dunkle
+   Glas gedacht (die Karte im HUD ist immer dunkel), deshalb hier und nicht als Bedeutungsfarbe in den Tokens. */
+.goods-stock {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.goods-flyout__rows li {
+.goods-stock__cell {
+  --product: var(--hud-ink);
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 64px;
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--hud-glass-fill);
+}
+.goods-stock__cell[data-product="weed"] {
+  --product: #4ade80;
+}
+.goods-stock__cell[data-product="kush"] {
+  --product: #a7f3d0;
+}
+.goods-stock__cell[data-product="haze"] {
+  --product: #e3f26b;
+}
+.goods-stock__cell[data-product="hash"] {
+  --product: #d39b5f;
+}
+.goods-stock__cell[data-product="vape"] {
+  --product: #5ee1f0;
+}
+.goods-stock__cell[data-product="edibles"] {
+  --product: #f4a6cb;
+}
+.goods-stock__cell[data-product="oil"] {
+  --product: #f5b84a;
+}
+/* Icon und Menge genau in der Mitte der Kachel. */
+.goods-stock__main {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  font-size: 13px;
+  align-items: center;
+  gap: 7px;
 }
-.goods-flyout__rows strong {
+.goods-stock__icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--product);
+}
+.goods-stock__icon.has-badge {
+  margin-right: 5px;
+}
+/* Nur Umriss, scharf: ein enger, schwacher Schein in der Farbe der Ware. */
+.goods-stock__icon svg {
+  overflow: visible;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--product) 55%, transparent));
+}
+.goods-stock__badge {
+  position: absolute;
+  right: -6px;
+  bottom: -3px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: var(--hud-glass-solid);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--product) 45%, transparent);
+  color: var(--product);
+  font: 700 8px / 1 var(--font-hud);
+  letter-spacing: 0.03em;
+}
+.goods-stock__main strong {
   font-family: var(--font-hud-display);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.goods-flyout__rows span,
-.goods-flyout__empty {
-  margin: 0;
+/* Unterwegs: hängt unter der Mitte, damit Icon und Menge stehen bleiben, wenn die Zeile dazukommt. */
+.goods-stock__plus {
+  position: absolute;
+  top: calc(50% + 16px);
+  right: 0;
+  left: 0;
+  color: var(--cat-money);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+.goods-stock__cell.is-empty .goods-stock__icon {
+  opacity: 0.35;
+}
+.goods-stock__cell.is-empty .goods-stock__icon svg {
+  filter: none;
+}
+.goods-stock__cell.is-empty strong {
   color: var(--hud-ink-2);
 }
 
