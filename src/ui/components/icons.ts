@@ -373,6 +373,63 @@ export const ICONS = {
     'M9.5 6.5L18 3h3v3l-3.5 8.5',
     'M5 14l-2 2l4 4l2-2',
   ],
+  // Lieferanten (Feedback 13.10.2026): ein Symbol je Herkunft statt nur Schiff oder Transporter.
+  /** Rotterdam: Windmühle */
+  windmill: [
+    'M10.5 21l.8-9h1.4l.8 9',
+    'M9 21h6',
+    circle(12, 10, 1.2),
+    'M11.2 9.2L6 4l-1.5 1.5l5.2 5.2',
+    'M12.8 9.2L18 4l1.5 1.5l-5.2 5.2',
+    'M11.2 10.8L6 16l-1.5-1.5l5.2-5.2',
+    'M12.8 10.8L18 16l1.5-1.5l-5.2-5.2',
+  ],
+  /** Frankfurt: Bankentürme */
+  towers: [
+    rect(4, 10, 6, 11, 1),
+    rect(12, 4, 8, 17, 1),
+    'M16 2v2',
+    'M6.5 13.5h1',
+    'M6.5 17h1',
+    'M15 8h2',
+    'M15 11.5h2',
+    'M15 15h2',
+    'M3 21h18',
+  ],
+  /** Berlin: Fernsehturm */
+  tvTower: ['M12 2v5.5', circle(12, 10, 2.5), 'M12 12.5V21', 'M10.5 13l-1 8', 'M13.5 13l1 8', 'M8 21h8', 'M10 7.5h4'],
+  /** Hamburg: Leuchtturm */
+  lighthouse: [
+    'M9 21l1.5-11h3L15 21',
+    'M7.5 21h9',
+    rect(10, 6, 4, 4, 0.8),
+    'M12 3.5V6',
+    'M10.5 14h3',
+    'M10 17.5h4',
+    'M4.5 6.5l3 1',
+    'M19.5 6.5l-3 1',
+  ],
+  /** Amsterdam: Grachtenhaus */
+  canalHouse: [
+    'M7 21V10l2-2V5.5h1.5V4h3v1.5H15V8l2 2v11z',
+    'M10 12h1.5',
+    'M12.5 12h1.5',
+    'M10 15.5h1.5',
+    'M12.5 15.5h1.5',
+    'M11 21v-2.5h2V21',
+  ],
+  /** Cargo City (Flughafen): Flugzeug */
+  plane: [
+    'M12 2.5c.9 0 1.4 1 1.4 2v5l7 4.2v2.1l-7-2.1v4.3l2.1 1.7v1.6L12 20.4l-3.5.9v-1.6l2.1-1.7V13.7l-7 2.1v-2.1l7-4.2v-5c0-1 .5-2 1.4-2z',
+  ],
+  /** Verona: Arena */
+  arena: [
+    'M3 9c0-2 4-3.5 9-3.5S21 7 21 9v8c0 2-4 3.5-9 3.5S3 19 3 17z',
+    'M3 9c0 2 4 3.5 9 3.5S21 11 21 9',
+    'M7 12v6.5',
+    'M12 12.5v7.5',
+    'M17 12v6.5',
+  ],
   /** Zwei gekreuzte Schwerter (Angriff in der Gangs-Tabelle, Feedback 13.10.2026). */
   swordsCrossed: [
     'M4 4h3.5l8 8',

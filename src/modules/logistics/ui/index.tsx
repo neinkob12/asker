@@ -23,6 +23,7 @@ import {
   SummaryTiles,
   soundOnEvent,
   Tag,
+  Toggle,
   useGame,
   useUi,
 } from '../../../ui';
@@ -39,18 +40,21 @@ import {
   warehousePlace,
   warehouseSites,
 } from '../../goods';
-import { getStaff, getStaffMember } from '../../staff';
+import { DRIVER_HIRE_COST, getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
 import { getSuppliers } from '../../suppliers';
+import { tutorialAllowsRole } from '../../tutorial';
 import {
   berthCost,
   cargoRisk,
   cargoRiskFrom,
   choiceOnWay,
   defaultPickupWarehouse,
+  driverWhereabouts,
   freeDrivers,
   getCargo,
   getLogisticsLog,
   getTrips,
+  harborDriverOn,
   hasBerth,
   isInterCityTrip,
   itemsText,
@@ -674,31 +678,109 @@ declare module '../../../ui' {
 
 registerPanel({ id: 'logistics.port', title: () => 'Hafen', component: PortPanel });
 
-/** In der Lieferanten-App (Dock): Hafen, Routen und Fahrer, damit die Logistik schnell erreichbar ist. */
+/**
+ * Unten in der Lieferanten-App: nur der Hafen (Feedback 13.10.2026). Fahrer stellst du in der Lager-App ein, Routen
+ * gibt es erst mit der zweiten Stadt (Hafen-Seite).
+ */
 function SupplierLogistics() {
   const { state } = useGame();
   const ui = useUi();
   const cityId = activeCity(state);
   const cargo = getCargo(state).length;
+  if (!PORTS[cityId]) return null;
   return (
-    <Group icon="truck" color="goods" title="Logistik">
+    <Group icon="anchor" color="goods" title="Logistik">
       <List>
-        {PORTS[cityId] && (
-          <ListItem onClick={() => ui.openPanel('logistics.port', {})}>
-            <ItemContent
-              icon="anchor"
-              color="goods"
-              title={portName(cityId)}
-              meta={hasBerth(state) ? (cargo > 0 ? `${cargo} am Kai` : 'Liegeplatz') : 'Noch kein Liegeplatz'}
-            />
-          </ListItem>
-        )}
-        <LogisticsLinks />
+        <ListItem onClick={() => ui.openPanel('logistics.port', {})}>
+          <ItemContent
+            icon="anchor"
+            color="goods"
+            title={portName(cityId)}
+            meta={hasBerth(state) ? (cargo > 0 ? `${cargo} am Kai` : 'Liegeplatz') : 'Noch kein Liegeplatz'}
+          />
+        </ListItem>
       </List>
     </Group>
   );
 }
+
+/**
+ * Fahrer in der Lager-App (Feedback 13.10.2026): In jeder Stadt reicht ein Fahrer, der zwischen Hafen und Lager pendelt.
+ * Hier heuerst du ihn an und schaltest den Hafen-Fahrer an: Dann holt er Ware am Kai von selbst ins Lager.
+ */
+function DriverSection() {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const cityId = activeCity(state);
+  if (!tutorialAllowsRole(state, 'driver')) return null;
+  const drivers = getStaff(state, { role: 'driver', cityId });
+  const port = !!PORTS[cityId];
+  const auto = harborDriverOn(state, cityId);
+  return (
+    <Group
+      icon="truck"
+      color="goods"
+      title="Fahrer"
+      note={
+        drivers.length === 0
+          ? 'Ohne Fahrer holst du Ware am Kai selbst ab.'
+          : port && !auto
+            ? 'Sonst fragt der Hafen bei jeder Ladung im Chat.'
+            : undefined
+      }
+    >
+      <List>
+        {drivers.map((m) => {
+          const trip = driverWhereabouts(state, m.id).trip;
+          return (
+            <ListItem key={m.id} onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
+              <ItemContent
+                icon="user"
+                color="people"
+                title={m.name}
+                meta={
+                  m.status !== 'active'
+                    ? STATUS_NAMES[m.status]
+                    : trip
+                      ? `unterwegs, an ${clock.formatTime(trip.arrivesAt)}`
+                      : m.assignment
+                        ? 'im Einsatz'
+                        : 'frei'
+                }
+              />
+            </ListItem>
+          );
+        })}
+        {drivers.length === 0 && (
+          <ListItem
+            action
+            disabled={state.wallet.dirty < DRIVER_HIRE_COST}
+            value={formatEuro(DRIVER_HIRE_COST)}
+            onClick={() => dispatch({ type: 'staff.hireDriver', payload: {} })}
+          >
+            <ItemContent
+              icon="userPlus"
+              color="goods"
+              title="Fahrer anheuern"
+              meta="Pendelt zwischen Hafen und Lager"
+            />
+          </ListItem>
+        )}
+      </List>
+      {port && drivers.length > 0 && (
+        <Toggle
+          checked={auto}
+          icon="anchor"
+          label="Hafen-Fahrer"
+          hint="Holt Ware am Kai von selbst ins Lager"
+          onChange={(enabled) => dispatch({ type: 'logistics.setHarborDriver', payload: { enabled } })}
+        />
+      )}
+    </Group>
+  );
+}
 registerSlot('suppliers.list', { id: 'logistics.links', order: 10, component: SupplierLogistics });
+registerSlot('goods.app', { id: 'logistics.drivers', order: 5, component: DriverSection });
 registerSlot('goods.warehouse', { id: 'logistics.warehouse', order: 20, component: WarehouseLogistics });
 registerMapLayer(logisticsLayer);
 

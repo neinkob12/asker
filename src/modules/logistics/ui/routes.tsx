@@ -23,7 +23,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName } from '../../city';
+import { activeCity, citiesUnlocked, cityName } from '../../city';
 import { getVehicles, VEHICLE_MODELS, vehicleName } from '../../fleet';
 import {
   allProducts,
@@ -691,25 +691,29 @@ export function LogisticsLinks() {
     .sort((a, b) => a - b)[0];
   const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) });
   const free = drivers.filter((m) => m.status === 'active' && !m.assignment).length;
+  // Routen fahren zwischen Lagern und Städten: erst mit der zweiten Stadt (Feedback 13.10.2026), außer es gibt schon welche.
+  const showRoutes = routes.length > 0 || citiesUnlocked(state).length > 1;
   return (
     <>
-      <ListItem onClick={() => ui.openPanel('logistics.routes', {})}>
-        <ItemContent
-          icon="route"
-          color="goods"
-          title="Routen"
-          meta={
-            routes.length === 0
-              ? 'Ware nach Fahrplan, auch zwischen den Städten'
-              : running > 0
-                ? `${running} unterwegs`
-                : next !== undefined
-                  ? `nächste ${whenText(state.time, next)}`
-                  : 'alle ruhen'
-          }
-          tags={routes.length > 0 ? [{ label: `${routes.length}`, icon: 'route', color: 'goods' }] : undefined}
-        />
-      </ListItem>
+      {showRoutes && (
+        <ListItem onClick={() => ui.openPanel('logistics.routes', {})}>
+          <ItemContent
+            icon="route"
+            color="goods"
+            title="Routen"
+            meta={
+              routes.length === 0
+                ? 'Ware nach Fahrplan, auch zwischen den Städten'
+                : running > 0
+                  ? `${running} unterwegs`
+                  : next !== undefined
+                    ? `nächste ${whenText(state.time, next)}`
+                    : 'alle ruhen'
+            }
+            tags={routes.length > 0 ? [{ label: `${routes.length}`, icon: 'route', color: 'goods' }] : undefined}
+          />
+        </ListItem>
+      )}
       <ListItem onClick={() => ui.openPanel('logistics.drivers', {})}>
         <ItemContent
           icon="truck"

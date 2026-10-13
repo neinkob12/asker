@@ -261,9 +261,9 @@ function StockWidget() {
         aria-disabled={optionsLocked ? 'true' : undefined}
         onClick={() => (optionsLocked ? ui.notice(`Lager-Optionen: ${optionsLocked}`) : ui.openPhone('goods.app'))}
       >
-        <Icon name="warehouse" size={15} />
+        <Icon name="warehouse" size={20} />
         <span>Lager-Optionen</span>
-        <Icon name={optionsLocked ? 'lock' : 'chevronRight'} size={14} />
+        <Icon name={optionsLocked ? 'lock' : 'chevronRight'} size={16} />
       </button>
     </section>
   );

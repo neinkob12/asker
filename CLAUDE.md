@@ -347,6 +347,13 @@ Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfra
 Gangs-App neu (13.10.2026): oben nur „Deine Stärke“, darunter die Gangs als Tabelle ohne Kopf (Name mit Status als
 kurzem Wort darunter: Ruhig, Warnt, Droht, Angriff, Verbündet, Erledigt; Stärke und Veedel übereinander; Knöpfe
 Angriff (Icon `swordsCrossed`), Bündnis, Schutzgeld als Menü `ProtectionSheet`). Die Übersicht der Gang-Kriege ist weg.
+Lieferanten-App neu (13.10.2026): Lieferanten als Kacheln, zwei pro Reihe (Symbol je Herkunft `SUPPLIER_ICONS` in
+`suppliers/ui`, Icons `windmill`, `towers`, `tvTower`, `lighthouse`, `canalHouse`, `plane`, `arena`, `dom`; Lieferart als
+Abzeichen, Lieferzeit, Beziehung als fünf Stufen bis „Familie“), gesperrte mit Schloss und gleich „Freischalten“,
+sobald alles erfüllt ist. Unten nur noch der Hafen (Logistik); Routen erst ab der zweiten Stadt (`LogisticsLinks`).
+Fahrer stehen in der Lager-App (Slot `'goods.app'`, `DriverSection` in `logistics/ui`): anheuern und der Hafen-Fahrer
+(`logistics.setHarborDriver`, `harborDriverOn`, Zustand `harborDriver` pro Stadt, Version 7): ein freier Fahrer holt
+Ware am Kai von selbst ins Lager und beantwortet die Frage des Hafens. „Lager-Optionen“ am Startbildschirm ist größer.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
