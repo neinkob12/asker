@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, messages, type Simulation } from '../../core';
+import { journal, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getOrders, offerDelivery, offerWholesale } from '../customers';
 import { getStock, store } from '../goods';
@@ -316,7 +316,7 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     sim.advance(24 * 60);
     const report = rh(sim).lastReport;
     expect(report?.done).toBe('3 Lieferungen gefahren, 1 Abholung am Hafen, 2 Anfragen dir überlassen');
-    const text = messages.thread(sim.state, `staff:${boss.id}`).at(-1)?.text ?? '';
+    const text = journal.entries(sim.state).find((e) => e.text.startsWith(`${boss.name}:`))?.text ?? '';
     expect(text).toMatch(/Erledigt: 3 Lieferungen gefahren/);
     expect(rh(sim).done.deliveries).toBe(0);
     if ((report?.profit ?? -1) >= 0) expect(rh(sim).xp).toBeGreaterThan(xp);

@@ -7,16 +7,10 @@ import { clock, type GameState, MINUTES_PER_DAY } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Button,
-  Card,
   type ChipSpec,
   Chips,
-  Disclosure,
-  Group,
   HudPill,
   IconChip,
-  ItemContent,
-  List,
-  ListItem,
   MapDialog,
   onGameEvent,
   popupMayOpen,
@@ -27,20 +21,11 @@ import {
   useIsMobile,
   useUi,
 } from '../../../ui';
-import { activeCity, bribeFactor, cityName, relationFactor } from '../../city';
-import { saleInfluenceFactor } from '../../territory';
+import { activeCity, cityName } from '../../city';
+
 import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
-import {
-  activeEvents,
-  CITY_EVENTS,
-  type CityEventDef,
-  eventDemand,
-  eventEnd,
-  getEventDef,
-  nextEventStart,
-  upcomingEvents,
-} from '../index';
+import { activeEvents, type CityEventDef, eventDemand, eventEnd, getEventDef } from '../index';
 import './events.css';
 import { eventsLayer } from './map';
 
@@ -115,80 +100,8 @@ function EventChip() {
 
 registerHudItem({ id: 'events.chip', order: 6, placement: 'more', icon: 'party', component: EventChip });
 
-/** Charakter der Stadt (Klüngel bzw. kühl und korrekt), Werte aus CITIES. */
-function characterText(cityId: string): { title: string; text: string } {
-  const relation = relationFactor(cityId);
-  const bribe = bribeFactor(cityId);
-  const share = Math.round(Math.abs(1 - bribe) * 100);
-  if (relation > 1) {
-    return {
-      title: 'Kölscher Klüngel',
-      text:
-        `Hier kennt jeder jeden: Vertrauen bei Lieferanten und Beziehungen zu Gangs wachsen schneller ` +
-        `(× ${factorText(relation)}), Freikaufen und Kaution kosten ${share} % weniger, und dein Kontakt bei der ` +
-        'Polizei warnt öfter vor Razzien.',
-    };
-  }
-  const influence = saleInfluenceFactor(cityId);
-  return {
-    title: 'Kühl und korrekt',
-    text:
-      `Gefallen gibt es nur gegen Bezahlung: Vertrauen und Beziehungen wachsen langsamer (× ${factorText(relation)}), ` +
-      `Freikaufen und Kaution kosten ${share} % mehr.` +
-      (influence < 1
-        ? ` Und die Gangs sitzen fester: Ein Verkauf bringt hier nur ${Math.round(influence * 100)} % Einfluss.`
-        : ''),
-  };
-}
-
-function CityLife() {
-  const { state } = useGame();
-  const cityId = activeCity(state);
-  const soon = upcomingEvents(state, cityId, 21);
-  // Große Feste (Zyklus, z.B. Wiesn) stehen auch drin, wenn sie weiter weg sind (Auftrag 43, L8).
-  const later = CITY_EVENTS.filter(
-    (def) => def.cityId === cityId && def.schedule.kind === 'cycle' && !soon.some((e) => e.def.id === def.id),
-  )
-    .map((def) => ({ def, start: nextEventStart(def, state.time), running: false }))
-    .filter((e): e is { def: CityEventDef; start: number; running: false } => e.start !== null);
-  const next = [...soon, ...later];
-  const character = characterText(cityId);
-  return (
-    <Card
-      title="Stadtleben"
-      icon="calendar"
-      color="place"
-      summary={next.find((e) => e.running)?.def.name ?? cityName(cityId)}
-    >
-      <Group title="Feste und Spiele" icon="party" color="place" count={next.length}>
-        {next.length === 0 ? (
-          <p class="ui-hint">In den nächsten drei Wochen steht nichts an.</p>
-        ) : (
-          <List>
-            {next.map(({ def, start, running }) => (
-              <ListItem
-                key={`${def.id}-${start}`}
-                value={running ? remaining(state, def) : `${clock.weekdayName(start, true)}, Tag ${clock.day(start)}`}
-              >
-                <ItemContent
-                  icon={def.icon}
-                  color={running ? 'money' : 'place'}
-                  title={def.name}
-                  tags={effectChips(def)}
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Group>
-      <Disclosure label={character.title} icon="handshake">
-        {character.text}
-      </Disclosure>
-    </Card>
-  );
-}
-
-registerSlot('tab:territory', { id: 'events.cityLife', title: 'Stadtleben', order: 25, component: CityLife });
+// „Stadtleben / Feste und Spiele“ steht seit dem Feedback vom 13.10.2026 nicht mehr in den Revieren: Events laufen
+// weiter und melden sich mit ihrem Pop-up zum Start.
 
 // --- Pop-up zum Start (Auftrag 46e): statt der Nachricht vom Kiosk ein Glas-Dialog mit „Ware bestellen“ ---
 

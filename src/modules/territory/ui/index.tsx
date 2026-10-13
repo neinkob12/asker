@@ -1,24 +1,20 @@
-// Oberfläche der Reviere: Veedel auf der Karte, Abschnitt "Revier" im Veedel-Panel und der Tab "Reviere"
-// mit dem Kampagnenziel "Köln übernehmen".
+// Oberfläche der Reviere: Veedel auf der Karte, Abschnitt "Revier" im Veedel-Panel und der Tab "Reviere" mit Ruf und
+// Fortschritt der Stadt als Kacheln und den Veedel als Tabelle (Feedback 13.10.2026).
 
-import { useEffect, useState } from 'preact/hooks';
 import { formatNumber, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
-  Card,
   Group,
-  Hint,
+  Icon,
   ItemContent,
   List,
   ListItem,
   onGameEvent,
-  ProgressBar,
   registerAdvisor,
   registerGameStat,
   registerMapLayerOption,
   registerSlot,
   registerTab,
-  SegmentedControl,
   Slot,
   soundOnEvent,
   useGame,
@@ -26,6 +22,7 @@ import {
 } from '../../../ui';
 import { activeCity, citiesUnlocked, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { getHeat, heatLevel } from '../../police';
+import { getSpots } from '../../spots';
 import { tutorialAllows } from '../../tutorial';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -46,7 +43,7 @@ import {
 import { veedelLayer } from './map';
 import './takeover';
 import './territory.css';
-import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
+import { getMapView, MAP_VIEW_OPTIONS, setMapView } from './view';
 
 /** Ein Satz zum Kampagnenziel einer Stadt: Meilenstein bei der Mehrheit, Ziel sind alle Veedel. */
 export function campaignHint(progress: CampaignProgress, city = 'Köln', boss = true): string {
@@ -121,70 +118,90 @@ function InfluenceSection(props: { veedelId: string }) {
   );
 }
 
-function useMapView(): VeedelMapView {
-  const [view, setView] = useState(getMapView());
-  useEffect(() => onMapViewChange(setView), []);
-  return view;
+declare module '../../../ui' {
+  interface SlotRegistry {
+    /** Kacheln oben in den Revieren neben dem Fortschritt (z.B. Ruf aus reputation). */
+    'territory.tiles': Record<string, never>;
+  }
 }
 
-/** Tab "Reviere": Kampagnenziel, Kartenansicht, alle Veedel auf einen Blick, darunter Spots, Ruf und Polizei. */
+/**
+ * Tab "Reviere" (Feedback 13.10.2026, eine Seite ohne viel Scrollen): oben Ruf (Slot 'territory.tiles') und der
+ * Fortschritt der Stadt als Kacheln, darunter die Veedel als Tabelle (wer herrscht, dein Einfluss, deine Spots, Heat).
+ * Ein Tipp auf ein Veedel öffnet seine Seite mit den Spots. Spots, Stadtleben und Polizei stehen nicht mehr hier.
+ */
 function TerritoryTab() {
   const { state } = useGame();
   const ui = useUi();
-  const view = useMapView();
   const cityId = activeCity(state);
   const city = cityName(cityId);
   const progress = campaignProgress(state, cityId);
+  const spots = getSpots(state, cityId);
   return (
-    <>
-      <Card title={progress.complete ? `${city} komplett` : `${city} übernehmen`}>
-        <ProgressBar value={progress.controlled / progress.total} label="Kampagnenfortschritt" />
-        <Hint>{campaignHint(progress, city, majorityMakesBoss(cityId))}</Hint>
-      </Card>
-      <Card
-        title="Veedel"
-        actions={
-          <SegmentedControl aria-label="Kartenansicht" options={MAP_VIEW_OPTIONS} value={view} onChange={setMapView} />
-        }
-      >
-        <List>
-          {allVeedel(activeCity(state)).map((v) => {
+    <div class="territory-page">
+      <div class="territory-tiles">
+        <Slot name="territory.tiles" props={{}} />
+        <div class="territory-tile" title={campaignHint(progress, city, majorityMakesBoss(cityId))}>
+          <span class="territory-tile__label">{progress.complete ? `${city} komplett` : city}</span>
+          <strong class="territory-tile__value">
+            {progress.controlled}/{progress.total}
+          </strong>
+          <span class="territory-tile__sub">
+            {progress.complete
+              ? 'alle Veedel'
+              : progress.majorityReached
+                ? `alle ${progress.total} für komplett`
+                : `Mehrheit ab ${progress.majority}`}
+          </span>
+          <span class="territory-tile__bar" aria-hidden="true">
+            <span style={{ width: `${(100 * progress.controlled) / Math.max(1, progress.total)}%` }} />
+          </span>
+        </div>
+      </div>
+      <Group title="Veedel" icon="flag" color="place">
+        <div class="territory-table">
+          <div class="territory-table__head" aria-hidden="true">
+            <span />
+            <span>Einfluss</span>
+            <span>Spots</span>
+            <span>Heat</span>
+            <span />
+          </div>
+          {allVeedel(cityId).map((v) => {
             const heat = getHeat(state, v.id);
-            const mine = getInfluence(state, v.id, PLAYER_FACTION);
+            const owner = controllerOf(state, v.id);
+            const count = spots.filter((sp) => sp.veedelId === v.id).length;
             return (
-              <ListItem
+              <button
                 key={v.id}
+                type="button"
+                class="territory-table__row"
+                aria-label={`${v.name}, ${owner === null ? 'niemand' : factionName(state, owner)} herrscht`}
                 onClick={() => {
                   ui.openPanel('veedel.veedel', { veedelId: v.id });
                   ui.flyTo(v.center, 14);
                 }}
-                aside={
-                  view === 'heat' ? (
-                    <span class={`territory-heat territory-heat--${heatLevel(heat).id}`}>{Math.round(heat)}</span>
-                  ) : (
-                    <span class="territory-mine" title="Dein Einfluss">
-                      {formatNumber(mine)}
-                    </span>
-                  )
-                }
               >
-                <span class="territory-list__row">
-                  <span class="territory-list__name">{v.name}</span>
-                  <FactionName state={state} faction={controllerOf(state, v.id)} />
+                <span class="territory-table__name">
+                  <span
+                    class="territory-faction__dot"
+                    style={{ background: factionColor(state, owner) }}
+                    title={owner === null ? 'niemand' : factionName(state, owner)}
+                  />
+                  <span>{v.name}</span>
                 </span>
-              </ListItem>
+                <span class={`territory-table__num${owner === PLAYER_FACTION ? ' is-mine' : ''}`}>
+                  {formatNumber(getInfluence(state, v.id, PLAYER_FACTION))}
+                </span>
+                <span class="territory-table__num">{count > 0 ? count : '–'}</span>
+                <span class={`territory-table__num territory-heat--${heatLevel(heat).id}`}>{Math.round(heat)}</span>
+                <Icon name="chevronRight" size={12} />
+              </button>
             );
           })}
-        </List>
-        <Hint>
-          {view === 'heat'
-            ? 'Rechts: Heat im Veedel. Ab 30 gibt es Kontrollen, ab 60 Razzien.'
-            : 'Rechts: dein Einfluss. Klick auf ein Veedel zeigt Details.'}
-        </Hint>
-      </Card>
-      {/* Spots, Ruf und Polizei-Stufe (seit Auftrag 26 hier statt im Geschäft) */}
-      <Slot name="tab:territory" />
-    </>
+        </div>
+      </Group>
+    </div>
   );
 }
 

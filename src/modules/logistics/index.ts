@@ -764,6 +764,16 @@ export function receiveCargo(
       : `Container im ${port.name}: ${goods} stehen am Kai und warten auf die Abholung.`,
     'good',
   );
+  ctx.emit('cargo.docked', {
+    cargoId: cargo.id,
+    supplierId: item.supplierId,
+    productId: item.productId,
+    amount: item.amount,
+  });
+  // Hafen-Fahrer an (Feedback 13.10.2026): Er fährt gleich los, dann braucht es keine Frage im Chat. Ist keiner frei,
+  // fragt der Hafen wie bisher; der Fahrer beantwortet die Frage, sobald er die Ware holt.
+  if (harborDriverOn(ctx.state, cityId)) harborDriverRun(ctx, cityId);
+  if (!ctx.state.modules.logistics.cargo.some((c) => c.id === cargo.id)) return cargo.id;
   messages.send(ctx, {
     contact: portContact(cityId),
     text: texts.pick(ctx, `port:${cityId}:docked`, portTexts(cityId).docked, {
@@ -789,14 +799,6 @@ export function receiveCargo(
     // Routine: Die Rechte Hand darf den Fahrer schicken (Aufgabe "Hafen abholen").
     routine: true,
   });
-  ctx.emit('cargo.docked', {
-    cargoId: cargo.id,
-    supplierId: item.supplierId,
-    productId: item.productId,
-    amount: item.amount,
-  });
-  // Hafen-Fahrer an: Er fährt gleich los (die Frage oben beantwortet er dabei).
-  if (harborDriverOn(ctx.state, cityId)) harborDriverRun(ctx, cityId);
   return cargo.id;
 }
 

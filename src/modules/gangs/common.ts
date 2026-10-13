@@ -127,11 +127,13 @@ export function say(
   // Auftrag 34: Die Gang erinnert sich (verpfiffen, pünktlich gezahlt …) und sagt es.
   const memory = MEMORY_KEYS.includes(key) ? memoryLine(ctx, gang.id) : '';
   const text = memory ? `${base} ${memory}` : base;
-  return messages.send(ctx, {
-    contact,
-    text,
-    ...(options?.length ? { options, expiresIn } : {}),
-  });
+  // Feedback 13.10.2026: Was keine Antwort braucht (Überfall gewonnen, Einschüchterung …), steht nur im Journal; per
+  // Chat kommen nur Forderungen und Angebote mit Antworten.
+  if (!options?.length) {
+    journal.add(ctx, `${gang.name}: ${text}`, 'bad');
+    return 0;
+  }
+  return messages.send(ctx, { contact, text, options, expiresIn });
 }
 
 /** Bricht alle Abkommen mit der Gang (nach einem Angriff oder Verrat). Gibt zurück, ob eins bestand. */

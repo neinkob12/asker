@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { distanceMeters, formatEuro, loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
+import {
+  distanceMeters,
+  formatEuro,
+  journal,
+  loadSimulation,
+  messages,
+  type Simulation,
+  START_DIRTY_MONEY,
+} from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getLots, getStock } from '../goods';
 import { getCargo } from '../logistics';
@@ -190,8 +198,8 @@ describe('suppliers', () => {
     expect(availablePackages(sim.state, 'hamburg').length).toBeGreaterThan(0);
     expect(eventsOfType(events, 'supplier.unlocked')[0].payload).toEqual({ supplierId: 'hamburg', fee });
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(false);
-    // Seine Antwort steht im Chat.
-    expect(messages.thread(sim.state, 'supplier:hamburg').at(-1)?.text).toMatch(/app/i);
+    // Seine Antwort steht im Journal (Feedback 13.10.2026: ohne Frage kein Chat).
+    expect(journal.entries(sim.state).find((e) => e.text.startsWith('Hein:'))?.text).toMatch(/app/i);
   });
 
   it('Kalle und Toni stellen sich beim ersten Tick vor (ein Pop-up für beide), mit Text in ihrer Stimme', () => {
@@ -352,7 +360,9 @@ describe('suppliers', () => {
     expect(isBlocked(sim.state, 'frankfurt')).toBe(true);
     expect(order(sim, 'frankfurt', 'weed25').ok).toBe(false);
     expect(eventsOfType(events, 'supplier.overdue')).toHaveLength(1);
-    expect(messages.thread(sim.state, 'supplier:frankfurt').at(-1)?.text).toContain(formatEuro(Math.round(debt * 1.1)));
+    expect(journal.entries(sim.state).find((e) => e.text.startsWith('Toni:'))?.text).toContain(
+      formatEuro(Math.round(debt * 1.1)),
+    );
     sim.dispatch({ type: 'suppliers.repay', payload: { supplierId: 'frankfurt' } });
     expect(isBlocked(sim.state, 'frankfurt')).toBe(false);
     expect(order(sim, 'frankfurt', 'weed25').ok).toBe(true);
