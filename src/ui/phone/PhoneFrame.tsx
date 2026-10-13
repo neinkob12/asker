@@ -67,8 +67,8 @@ import { tileColor } from './tile';
 /** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal (sofern vorhanden). */
 const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`];
 
-/** Reihenfolge der Apps im Raster: Gangs, Kasse, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = [`${TAB_APP_PREFIX}gangs`, 'finance.app', 'laundering.app', 'core.settings'];
+/** Reihenfolge der Apps im Raster: Gangs, Geldwäsche, Kasse, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = [`${TAB_APP_PREFIX}gangs`, 'laundering.app', 'finance.app', 'core.settings'];
 
 /**
  * Nicht als Kachel auf dem Startbildschirm, aber weiter in Suche und Tastenkürzeln: Die Reviere öffnet das
