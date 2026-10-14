@@ -354,11 +354,18 @@ async function run() {
   });
 
   await check('Ware im Handy bei den Lieferanten bestellen', async () => {
-    // Am Desktop ist das Handy angedockt und zeigt noch die Spot-Details: zum Startbildschirm.
-    // Am Handy-Bildschirm liegt es nach dem Anheuern noch offen über der Karte.
-    if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
-    else await page.getByRole('button', { name: /^Handy/ }).click();
-    await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
+    // Am Handy-Bildschirm liegt unten die Leiste (Dock): Lieferanten öffnet sie direkt. Am Desktop ist das Handy
+    // angedockt und zeigt noch die Spot-Details: zum Startbildschirm, dann die App im Dock.
+    const openSuppliers = async () => {
+      if (await page.locator('.mapfirst-tabs').count()) {
+        await page.locator('.mapfirst-tabs').getByRole('button', { name: 'Lieferanten', exact: true }).click();
+        return;
+      }
+      if (await page.locator('.phone').count()) await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      else await page.getByRole('button', { name: /^Handy/ }).click();
+      await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
+    };
+    await openSuppliers();
     await page.getByRole('button', { name: /Toni.*Frankfurt/ }).click();
     await shot(page, 'lieferant');
     await page.locator('.phone').getByRole('button', { name: 'Kaufen', exact: true }).first().click();
@@ -366,13 +373,11 @@ async function run() {
     assert.deepEqual(shipments, ['frankfurt']);
     await shot(page, 'bestellt');
     // Zurück zum Startbildschirm.
-    await page.locator('.phone__nav-button').click();
-    await page.locator('.phone__nav-button').click();
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
     // Gesperrte Lieferanten zeigen, was noch fehlt.
-    if (!(await page.locator('.phone').count())) await page.getByRole('button', { name: /^Handy/ }).click();
-    await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
+    await openSuppliers();
     assert.ok(await page.getByRole('button', { name: /Jansen.*Liegeplatz/ }).isVisible());
-    await page.locator('.phone__nav-button').click();
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
   });
 
   await check('Hafen-Seite (über das Lager): Liegeplatz braucht sauberes Geld', async () => {
@@ -391,8 +396,10 @@ async function run() {
     assert.equal(await game(page, (s) => s.modules.logistics.berths.koeln != null), true);
     await shot(page, 'hafen');
     // Zurück zum Startbildschirm, dann das Handy weglegen.
-    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
+    await page.evaluate(() => {
+      window.koeln.runtime.api.openPhone(null);
+      window.koeln.runtime.api.closePhone();
+    });
   });
 
   await check('Kasse im Handy: Gewinn- und Verlustrechnung', async () => {
