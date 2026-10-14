@@ -703,66 +703,84 @@ export function PhoneFrame() {
 }
 
 /*
- * Prototyp „Karte zuerst“ (Handy-Bildschirm, `?ui=karte`): Die Karte bleibt der Grund. Das Handy ist ein Blatt von
- * unten mit zwei Höhen (halb: Karte bleibt oben sichtbar, ganz: bis unter das HUD), darunter eine feste Tab-Leiste.
- * Ein Tab öffnet seine App im Blatt, „Karte“ schiebt das Blatt weg, „Mehr“ zeigt alle Apps. Ziehen am Griff wechselt
- * die Höhe oder schließt. Die Seiten selbst sind dieselben wie im Spiel-Handy.
+ * Prototyp „Karte zuerst“ (Handy-Bildschirm, `?ui=karte`): Die Karte bleibt der Grund, unten liegt das Dock des
+ * Spiel-Handys als feste Leiste (wie dort ohne Namen unter den Kacheln): Karte, die vier Dock-Apps (dieselben Kacheln, Farben und Zähler wie am Desktop, auch
+ * wenn eine App eine andere zeitweise ersetzt) und Start (Startbildschirm mit allen Apps). Ein Tipp auf eine App öffnet
+ * das Handy ganz, wie am Desktop; innen gilt dasselbe System (Startbildschirm, Apps, „‹ Titel“ zurück). Nur ein Spot
+ * oder ein anderes Ziel auf der Karte öffnet es halb, damit die Karte darüber sichtbar bleibt. Ziehen am Griff wechselt
+ * die Höhe oder legt das Handy weg.
  */
 type SheetDetent = 'half' | 'full';
 
-interface MapFirstTab {
-  label: string;
-  icon: string;
-  /** Wurzel im Seitenstapel, an der der Tab erkennt, dass er aktiv ist (null = Karte, 'home' = Mehr). */
-  match: { kind: NavEntry['kind']; id: string } | null;
-  open: (api: UiApi) => void;
+/** Dock-Apps in der Reihenfolge des Docks (mit Ersatz-Apps wie am Startbildschirm). */
+function dockApps(state: GameState, ui: UiState): HomeApp[] {
+  const all = homeApps(state, ui);
+  return DOCK.map((id) => all.find((a) => a.replaces === id) ?? all.find((a) => a.id === id)).filter(
+    (a): a is HomeApp => !!a,
+  );
 }
 
-const MAP_FIRST_TABS: MapFirstTab[] = [
-  { label: 'Karte', icon: 'map', match: null, open: (api) => api.closePhone() },
-  {
-    label: 'Chats',
-    icon: 'messages',
-    match: { kind: 'app', id: 'core.messages' },
-    open: (api) => api.openPhone('core.messages'),
-  },
-  {
-    label: 'Einkauf',
-    icon: 'truck',
-    match: { kind: 'app', id: 'suppliers.app' },
-    open: (api) => api.openPhone('suppliers.app'),
-  },
-  { label: 'Leute', icon: 'users', match: { kind: 'tab', id: 'staff' }, open: (api) => api.selectTab('staff') },
-  {
-    label: 'Kasse',
-    icon: 'wallet',
-    match: { kind: 'app', id: 'finance.app' },
-    open: (api) => api.openPhone('finance.app'),
-  },
-  { label: 'Mehr', icon: 'grid', match: { kind: 'home', id: 'home' }, open: (api) => api.openPhone(null) },
-];
-
-function activeTab(ui: UiState): MapFirstTab | null {
-  if (!ui.phone.open) return MAP_FIRST_TABS[0];
+/** App-ID der Wurzel im Seitenstapel ('home' = Startbildschirm, null = Handy weggelegt). */
+function rootAppId(ui: UiState): string | null {
+  if (!ui.phone.open) return null;
   const root = ui.phone.stack[1] ?? ui.phone.stack[0];
+  if (root.kind === 'home') return 'home';
+  return root.kind === 'tab' ? `${TAB_APP_PREFIX}${root.id}` : root.id;
+}
+
+function MapFirstTabButton(props: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  tile: { icon: string; color: string; badge: number; solid: boolean };
+}) {
+  const tile = tileColor(props.tile.color);
   return (
-    MAP_FIRST_TABS.find((t) => t.match && t.match.kind === root.kind && t.match.id === root.id) ??
-    (root.kind === 'home' ? MAP_FIRST_TABS[MAP_FIRST_TABS.length - 1] : null)
+    <button
+      type="button"
+      class={`mapfirst-tab ${props.active ? 'is-active' : ''}`}
+      aria-current={props.active ? 'page' : undefined}
+      aria-label={props.tile.badge > 0 ? `${props.label}, ${props.tile.badge} neu` : props.label}
+      title={props.label}
+      onClick={props.onClick}
+    >
+      <span class="mapfirst-tab__icon">
+        <IconChip
+          icon={props.tile.icon}
+          color={props.tile.solid ? tile.color : 'system'}
+          style={props.tile.solid ? tile.style : undefined}
+          shape="tile"
+          solid={props.tile.solid}
+          size="lg"
+        />
+        <Badge count={props.tile.badge} />
+      </span>
+    </button>
   );
 }
 
 function MapFirstPhone(props: { state: GameState; unread: number; locked: boolean; device: boolean }) {
   const runtime = useRuntime();
   const { ui, api } = runtime;
-  const [detent, setDetent] = useState<SheetDetent>('half');
+  const [detent, setDetent] = useState<SheetDetent>('full');
+  // Höhe für das nächste Öffnen: ganz aus der Leiste, halb aus der Karte (Spot, Veedel …).
+  const nextDetent = useRef<SheetDetent>('half');
   const sheet = useRef<HTMLElement>(null);
   const open = ui.phone.open;
-  // Jedes Öffnen aus der Karte heraus beginnt halb hoch: Die Karte bleibt sichtbar.
   useEffect(() => {
-    if (open) setDetent('half');
+    if (!open) return;
+    setDetent(nextDetent.current);
+    nextDetent.current = 'half';
   }, [open]);
-  const current = activeTab(ui);
+  const active = rootAppId(ui);
+  const dock = dockApps(props.state, ui);
   const top = collectAdvice(props.state)[0];
+
+  const openFromBar = (open: () => void) => {
+    nextDetent.current = 'full';
+    setDetent('full');
+    open();
+  };
 
   const onGrab = (e: PointerEvent) => {
     const el = sheet.current;
@@ -811,7 +829,7 @@ function MapFirstPhone(props: { state: GameState; unread: number; locked: boolea
             class="mapfirst-grabber"
             onPointerDown={(e) => onGrab(e as unknown as PointerEvent)}
             onClick={() => setDetent(detent === 'half' ? 'full' : 'half')}
-            aria-label={detent === 'half' ? 'Blatt ganz öffnen' : 'Blatt halb öffnen'}
+            aria-label={detent === 'half' ? 'Handy ganz öffnen' : 'Handy halb öffnen'}
           >
             <span />
           </button>
@@ -820,25 +838,28 @@ function MapFirstPhone(props: { state: GameState; unread: number; locked: boolea
           </div>
         </section>
       )}
-      <nav class="mapfirst-tabs" aria-label="Bereiche">
-        {MAP_FIRST_TABS.map((tab) => {
-          const active = current === tab;
-          return (
-            <button
-              type="button"
-              key={tab.label}
-              class={`mapfirst-tab ${active ? 'is-active' : ''}`}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => (active && tab.match ? setDetent(detent === 'half' ? 'full' : 'half') : tab.open(api))}
-            >
-              <span class="mapfirst-tab__icon">
-                <Icon name={tab.icon} />
-                {tab.label === 'Chats' && <Badge count={props.unread} />}
-              </span>
-              <span class="mapfirst-tab__label">{tab.label}</span>
-            </button>
-          );
-        })}
+      <nav class="mapfirst-tabs" aria-label="Dock">
+        <MapFirstTabButton
+          label="Karte"
+          active={!open}
+          onClick={api.closePhone}
+          tile={{ icon: 'map', color: 'system', badge: 0, solid: false }}
+        />
+        {dock.map((app) => (
+          <MapFirstTabButton
+            key={app.id}
+            label={app.name}
+            active={active === app.id}
+            onClick={() => openFromBar(() => api.openPhone(app.id))}
+            tile={{ icon: app.icon, color: app.color, badge: app.badge, solid: true }}
+          />
+        ))}
+        <MapFirstTabButton
+          label="Start"
+          active={active === 'home'}
+          onClick={() => openFromBar(() => api.openPhone(null))}
+          tile={{ icon: 'grid', color: 'system', badge: 0, solid: false }}
+        />
       </nav>
     </>
   );

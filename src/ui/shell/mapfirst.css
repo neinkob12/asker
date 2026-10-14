@@ -5,7 +5,7 @@
  */
 
 .shell.is-mapfirst {
-  --tabbar-height: 58px;
+  --tabbar-height: 62px;
   --tabbar-space: calc(var(--tabbar-height) + var(--safe-bottom));
   /* Kartensteuerung und Anzeigen unten rücken über Tab-Leiste und Hinweis */
   --mobile-dock-height: calc(var(--tabbar-height) + 44px);
@@ -59,10 +59,6 @@
 }
 .shell.is-mapfirst .phone--sheet .phone__screen {
   border-radius: 24px 24px 0 0;
-}
-/* Im Blatt führt „‹ Start“ nirgends hin: Die Apps liegen in der Tab-Leiste, „Mehr“ zeigt alle */
-.shell.is-mapfirst .phone--sheet .phone-screen__back[data-root] {
-  visibility: hidden;
 }
 /* Großer Titel kleiner: Im halben Blatt zählt jede Zeile */
 .shell.is-mapfirst .phone--sheet.is-half .phone-screen__large {
@@ -118,42 +114,45 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-family: var(--font-hud, inherit);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
   cursor: pointer;
 }
+/* Dieselben Kacheln wie im Dock des Spiel-Handys, nur kleiner; Karte und Start als Glas-Kachel ohne Farbe */
 .mapfirst-tab__icon {
   position: relative;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 28px;
-  border-radius: 14px;
-  font-size: 22px;
-  transition: background 0.18s;
+  border-radius: 12px;
+  transition:
+    transform 0.15s,
+    box-shadow 0.18s;
 }
 .mapfirst-tab__icon .ui-badge {
   position: absolute;
-  top: -4px;
-  right: 2px;
+  top: -5px;
+  right: -7px;
+}
+.mapfirst-tab:not(.is-active) .mapfirst-tab__icon {
+  opacity: 0.82;
 }
 .mapfirst-tab.is-active {
-  color: var(--cat-brand);
+  color: var(--color-text);
 }
 .mapfirst-tab.is-active .mapfirst-tab__icon {
-  background: var(--cat-brand-soft);
+  box-shadow:
+    0 0 0 2px var(--hud-glass-strong),
+    0 0 0 3.5px var(--cat-brand);
 }
-.mapfirst-tab__label {
-  white-space: nowrap;
+.mapfirst-tab:active .mapfirst-tab__icon {
+  transform: scale(0.94);
 }
 
 /* ---------------------------------------------------------------- Nächster Schritt über der Leiste */
@@ -206,7 +205,10 @@
   --hud-glass-line: rgba(180, 120, 255, 0.2);
 }
 .shell.is-mapfirst[data-accent="neon"] .mapfirst-tab.is-active .mapfirst-tab__icon {
-  box-shadow: 0 0 16px rgba(255, 79, 163, 0.45);
+  box-shadow:
+    0 0 0 2px var(--hud-glass-strong),
+    0 0 0 3.5px var(--cat-brand),
+    0 0 16px rgba(255, 79, 163, 0.5);
 }
 .shell.is-mapfirst[data-accent="neon"] .phone--sheet .phone__device {
   box-shadow:
@@ -214,7 +216,7 @@
     0 -12px 40px rgba(60, 0, 90, 0.55);
 }
 
-/* „Mehr“: Das Dock des Startbildschirms doppelt die Tab-Leiste */
+/* Start: Das Dock liegt schon als Leiste unten */
 .shell.is-mapfirst .phone--sheet .phone__dock {
   display: none;
 }
