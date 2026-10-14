@@ -46,7 +46,7 @@ export interface ToastOptions {
   /** Im Verlauf festhalten? Standard: ja. Mit false verpufft die Meldung (seit Auftrag 46d gibt es keine Banner). */
   log?: boolean;
   /**
-   * Wichtig? Standard: 'bad' und 'warn'. Wichtige Meldungen zählen am Badge der Einstellungen als ungelesen; Routine
+   * Wichtig? Standard: 'bad' und 'warn'. Wichtige Meldungen stehen im Verlauf als ungelesen (ohne Badge); Routine
    * ('good', 'info') steht nur im Verlauf. Mit true erzwingen (z.B. "Lieferung ist da"), mit false unterdrücken.
    */
   urgent?: boolean;
@@ -62,7 +62,7 @@ export interface Alert {
   icon?: string;
   target?: LngLat;
   read: boolean;
-  /** Wichtig (zählt ungelesen am Badge der Einstellungen). */
+  /** Wichtig (im Verlauf ungelesen hervorgehoben, ohne Badge). */
   urgent: boolean;
 }
 

@@ -255,7 +255,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
   Tempo, `camera`, `overlay`, `vibration`, `alerts`, `error`, `picking`) und die `UiApi`.
   Meldungen (Auftrag 46d): `toast(text, kind, { urgent?, icon?, target?, log? })` schreibt nur in `ui.alerts` (Verlauf);
-  `urgent` (Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen, `log: false` verwirft
+  `urgent` (Standard bei `'bad'`/`'warn'`) markiert den Eintrag im Verlauf als ungelesen (ohne Badge; Badges nur an den Nachrichten), `log: false` verwirft
   ihn. Keine Banner, keine Mitteilungszentrale. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.

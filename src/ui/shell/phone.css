@@ -418,17 +418,6 @@
   letter-spacing: 0;
   text-transform: none;
 }
-.phone__notices-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: #ff453a;
-  color: #ffffff;
-  font-size: 11px;
-  line-height: 18px;
-  letter-spacing: 0;
-  text-align: center;
-}
 .phone__notices-body {
   display: flex;
   align-items: flex-start;
@@ -451,7 +440,7 @@
   -webkit-box-orient: vertical;
 }
 .phone__notices.is-empty .phone__notices-text,
-.phone__notices.is-alert:not(.has-unread) .phone__notices-text {
+.phone__notices.is-alert .phone__notices-text {
   color: var(--home-label-2);
 }
 /* Kurze Rückmeldung: leuchtet kurz auf, Fehler rot, Hinweis neutral mit Schloss. */
