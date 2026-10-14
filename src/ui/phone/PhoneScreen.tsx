@@ -110,6 +110,7 @@ export function PhoneScreen(props: PhoneScreenProps) {
         <button
           type="button"
           class="phone-screen__back"
+          data-root={page?.below?.kind === 'home' ? '' : undefined}
           onClick={back}
           aria-label={backLabel === 'Zurück' ? 'Zurück' : `Zurück zu ${backLabel}`}
         >

@@ -107,3 +107,35 @@ export function hudPlacement(item: HudItem): NonNullable<HudItem['placement']> {
   if (item.placement) return item.placement;
   return item.order >= 90 ? 'time' : 'more';
 }
+
+/*
+ * Prototyp „Karte zuerst“ (Handy-Bildschirm): Statt des Spiel-Handys im Vollbild bleibt die Karte der Grund, das Handy
+ * ist ein Blatt von unten mit Tab-Leiste. Einschalten mit `?ui=karte`, ausschalten mit `?ui=alt` (merkt sich das Gerät).
+ * Farbvariante mit `?akzent=neon` bzw. `?akzent=gold`. Nur zum Ausprobieren, noch nicht Standard.
+ */
+const PROTO_KEY = 'koeln-tycoon:ui-proto';
+const ACCENT_KEY = 'koeln-tycoon:ui-accent';
+
+function protoFlag(param: string, key: string, on: string[], off: string): string | null {
+  try {
+    const value = new URLSearchParams(window.location.search).get(param);
+    if (value === off) window.localStorage.removeItem(key);
+    else if (value && on.includes(value)) window.localStorage.setItem(key, value);
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+const MAP_FIRST = protoFlag('ui', PROTO_KEY, ['karte'], 'alt') === 'karte';
+const ACCENT = protoFlag('akzent', ACCENT_KEY, ['neon'], 'gold');
+
+/** Prototyp „Karte zuerst“ aktiv? Nur im Handy-Aufbau. */
+export function useMapFirst(): boolean {
+  return useIsMobile() && MAP_FIRST;
+}
+
+/** Farbvariante des Prototyps ('neon') oder null. */
+export function protoAccent(): string | null {
+  return MAP_FIRST ? ACCENT : null;
+}
