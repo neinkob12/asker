@@ -1,6 +1,6 @@
 // Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel mit Tutorial (nur der Neumarkt, Mission 1 mit drei
 // Verkäufen und Belohnung, dann in den Einstellungen beendet), selbst verkaufen, Läufer anheuern, Ware bestellen,
-// Shop-Platzhalter „Spot gründen“ (Auftrag 46e), speichern, laden und nach dem Neuladen der Seite den Autosave
+// Shop „Spot gründen“ vom Startbildschirm, speichern, laden und nach dem Neuladen der Seite den Autosave
 // fortsetzen. Pop-ups (Lieferant kennenlernen, Stadt-Event) klickt jeder Schritt vorher weg (dismissPopups). Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
 // wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
@@ -433,18 +433,13 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Spot gründen: der Shop-Platzhalter (Auftrag 46e), kein Kauf', async () => {
-    await page.evaluate(() => window.koeln.runtime.api.selectTab('territory'));
-    await page
-      .locator('.phone')
-      .getByRole('button', { name: /^Spot gründen/ })
-      .click();
+  await check('Spot gründen: Shop vom Startbildschirm, ohne Kauf', async () => {
+    // Seit dem 13.10.2026 ist der Shop ein Widget oben links auf dem Startbildschirm.
+    await page.evaluate(() => window.koeln.runtime.api.openPhone());
     const phone = page.locator('.phone');
-    await phone.getByText('0,99 € pro Spot').first().waitFor();
-    const soon = phone.getByRole('button', { name: 'Bald verfügbar', exact: true });
-    await soon.waitFor();
-    assert.equal(await soon.isDisabled(), true, 'noch kein Kauf');
-    assert.equal(await phone.getByText(/^Spot [123]$/).count(), 3, 'drei Plätze');
+    await phone.locator('.phone-shop').click();
+    await phone.locator('.spot-shop__tile').first().waitFor();
+    assert.ok((await phone.locator('.spot-shop__tile').count()) > 0, 'Arten zum Gründen');
     assert.deepEqual(await game(page, (s) => s.modules.spots.custom), [], 'nichts gegründet');
     await shot(page, 'spot-shop');
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
