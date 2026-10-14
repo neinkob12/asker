@@ -344,7 +344,10 @@ async function run() {
 
   await check('Läufer am Spot anheuern', async () => {
     // Seit Sicherheit am Spot angeheuert wird, gibt es zwei Knöpfe „Anheuern“: Der Läufer steht oben.
-    await page.getByRole('button', { name: /^Anheuern/ }).first().click();
+    await page
+      .getByRole('button', { name: /^Anheuern/ })
+      .first()
+      .click();
     const staff = await game(page, (s) => s.modules.staff.members.map((m) => [m.role, m.assignment?.targetId]));
     assert.deepEqual(staff, [['runner', 'zuelpicher']]);
     await shot(page, 'laeufer');
