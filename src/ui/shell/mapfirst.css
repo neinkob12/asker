@@ -14,11 +14,7 @@
   --sheet-half-top: 48dvh;
 }
 
-/* ---------------------------------------------------------------- HUD: nur eine Zeile */
-.shell.is-mapfirst .hud-tiles,
-.shell.is-mapfirst .hud__alerts {
-  display: none;
-}
+/* ---------------------------------------------------------------- HUD: Geld und Uhr flach (Kacheln wie Stadt und Events bleiben) */
 .shell.is-mapfirst .hud-capsule--money,
 .shell.is-mapfirst .hud-capsule--clock {
   min-height: 52px;

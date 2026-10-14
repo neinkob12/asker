@@ -109,9 +109,9 @@ export function hudPlacement(item: HudItem): NonNullable<HudItem['placement']> {
 }
 
 /*
- * Prototyp „Karte zuerst“ (Handy-Bildschirm): Statt des Spiel-Handys im Vollbild bleibt die Karte der Grund, das Handy
- * ist ein Blatt von unten mit Tab-Leiste. Einschalten mit `?ui=karte`, ausschalten mit `?ui=alt` (merkt sich das Gerät).
- * Farbvariante mit `?akzent=neon` bzw. `?akzent=gold`. Nur zum Ausprobieren, noch nicht Standard.
+ * „Karte zuerst“ (Handy-Bildschirm, Standard seit 14.10.2026): Statt des Spiel-Handys im Vollbild bleibt die Karte der
+ * Grund, unten liegt das Dock als feste Leiste. Zurück zum alten Aufbau mit `?ui=alt`, wieder an mit `?ui=karte`
+ * (merkt sich das Gerät). Farbvariante mit `?akzent=neon` bzw. `?akzent=gold`.
  */
 const PROTO_KEY = 'koeln-tycoon:ui-proto';
 const ACCENT_KEY = 'koeln-tycoon:ui-accent';
@@ -127,10 +127,10 @@ function protoFlag(param: string, key: string, on: string[], off: string): strin
   }
 }
 
-const MAP_FIRST = protoFlag('ui', PROTO_KEY, ['karte'], 'alt') === 'karte';
+const MAP_FIRST = protoFlag('ui', PROTO_KEY, ['karte', 'alt'], '') !== 'alt';
 const ACCENT = protoFlag('akzent', ACCENT_KEY, ['neon'], 'gold');
 
-/** Prototyp „Karte zuerst“ aktiv? Nur im Handy-Aufbau. */
+/** „Karte zuerst“ aktiv? Nur im Handy-Aufbau, außer das Gerät hat `?ui=alt` gewählt. */
 export function useMapFirst(): boolean {
   return useIsMobile() && MAP_FIRST;
 }
