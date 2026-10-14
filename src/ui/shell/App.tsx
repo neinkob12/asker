@@ -10,7 +10,6 @@ import { Hud } from './Hud';
 import { protoAccent, useIsMobile, useMapFirst } from './layout';
 import { MapControls } from './MapControls';
 import { MapView } from './MapView';
-import { CoachHighlight } from './NextStep';
 import { Palette } from './Palette';
 import { Slot } from './Slot';
 
@@ -52,9 +51,6 @@ export function App(props: { runtime: UiRuntime }) {
             </ErrorBoundary>
             <ErrorBoundary name="Rückmeldung" silent>
               <FloatingErrorNotice />
-            </ErrorBoundary>
-            <ErrorBoundary name="Hinweis" silent>
-              <CoachHighlight />
             </ErrorBoundary>
             <ErrorBoundary name="Suche" silent>
               <Palette />

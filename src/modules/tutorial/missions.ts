@@ -127,7 +127,7 @@ export const MISSIONS: readonly MissionDef[] = [
     icon: 'smile',
     title: 'Drei Kunden bedienen',
     task: 'Am Neumarkt warten Leute auf dich. Bedien drei davon selbst, dann weißt du, wie das läuft.',
-    hint: 'Tipp auf den Neumarkt, dann auf „Verkaufen“.',
+    hint: 'Wartet jemand am Neumarkt, tipp auf den Spot.',
     doneText: 'Drei Kunden, drei Scheine. Jetzt holen wir uns mehr Ecken.',
     goTo: 'spot',
     parts: [{ id: 'served', label: 'Kunden selbst bedient', target: 3 }],

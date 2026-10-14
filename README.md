@@ -8,6 +8,7 @@ Mit genug Geld heuerst du Läufer an, die einen Spot automatisch bedienen.
 Wohin sich das Spiel entwickeln soll, steht in [`docs/konzept.md`](docs/konzept.md).
 Wie der Code aufgebaut ist: [`docs/architektur.md`](docs/architektur.md), Kurzfassung in [`CLAUDE.md`](CLAUDE.md).
 Wie wir parallel mit mehreren Claude-Sessions daran bauen: [`docs/auftraege/`](docs/auftraege/README.md).
+Recherche zur echten Gang-Szene in den fünf Städten (Grundlage für Gangs und neue Veedel): [`docs/recherche/`](docs/recherche/README.md).
 
 ## Starten
 

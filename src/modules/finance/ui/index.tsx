@@ -43,7 +43,7 @@ import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { atSpot, getSpot } from '../../spots';
 import { getStaffMember, isGoodSpecialist } from '../../staff';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   ALL_FILTER,
@@ -537,11 +537,10 @@ function FinanceApp() {
   const sold = isBusinessSold(state);
   return (
     <div class="fin-app">
+      {/* Sauberes Geld nur am Handy-Bildschirm: Dort zeigt das HUD nur das Schwarzgeld, am Desktop steht beides oben. */}
       <SummaryTiles
-        items={[
-          { icon: 'moneyBag', color: 'dirty', value: formatEuro(state.wallet.dirty), label: 'Schwarz' },
-          { icon: 'coinEuro', color: 'money', value: formatEuro(state.wallet.clean), label: 'Sauber' },
-        ]}
+        compactOnly
+        items={[{ icon: 'coinEuro', color: 'money', value: formatEuro(state.wallet.clean), label: 'Sauber' }]}
       />
       <div class="fin-controls">
         <SegmentedControl wide aria-label="Zeitraum" options={[...PERIODS]} value={period} onChange={setPeriod} />
@@ -655,7 +654,8 @@ registerPhoneApp({
   component: FinanceApp,
   badge: (state) => (wageRunway(state).warn ? 1 : 0),
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => !tutorialAllows(state, 'app.finance'),
+  // Auftrag 46b: Im Tutorial steht die Kasse schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => tutorialLockText(state, 'app.finance'),
 });
 registerPanel({
   id: 'finance.category',

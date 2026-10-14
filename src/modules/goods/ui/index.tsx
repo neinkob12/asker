@@ -2,7 +2,6 @@
 // Beiträge anderer Module über den Slot 'goods.warehouse': Hafen und Umlagern aus der Logistik, Markt) und
 // Lager-Marker auf der Karte. Seit Auftrag 26 ist die Lager-Seite der eine Ort für alles rund ums Lager.
 
-import { memo } from 'preact/compat';
 import { useState } from 'preact/hooks';
 import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
 import { addHtmlMarker, el, registerMapLayer } from '../../../map';
@@ -14,29 +13,31 @@ import {
   Chips,
   Empty,
   Group,
-  HudPill,
+  Icon,
+  type IconName,
   ItemContent,
   iconElement,
   List,
   ListItem,
+  LockedWidget,
   memoState,
   ProgressBar,
   registerAdvisor,
-  registerHudItem,
   registerPanel,
   registerPhoneApp,
   registerSearch,
+  registerSlot,
   Slot,
   shallowEqual,
   useGame,
   useGameSelector,
   useUi,
+  useUiSelector,
 } from '../../../ui';
 import {
   CUT_STEPS,
   cutPreview,
   DEFAULT_PRODUCT,
-  DEFAULT_WAREHOUSE,
   formatProductAmount,
   getLots,
   getProduct,
@@ -63,7 +64,9 @@ import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
-import { tutorialAllows } from '../../tutorial';
+import { getCargo, getTrips, placeCity } from '../../logistics';
+import { shipmentItems, shipmentsInTransit } from '../../suppliers';
+import { tutorialAllows, tutorialLockText } from '../../tutorial';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -96,9 +99,6 @@ function QualityLabel(props: { quality: number }) {
   );
 }
 
-const stockText = (r: { productId: string; amount: number }) =>
-  `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
-
 /**
  * Lager der aktiven Stadt (Auftrag 30: In Hamburg zählt nur, was dort liegt), größte Posten zuerst. Einmal pro
  * Spielstand gerechnet: Pille und Aufstellung lesen dieselbe Liste, ohne Lager zweimal zu durchlaufen.
@@ -110,89 +110,162 @@ const stockView = memoState((state) => {
 });
 
 /**
- * Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), bei mehr "2,1 kg Gras +4" (am Handy
- * ist die Kachel schmal), dazu die Aufstellung zum Aufklappen.
+ * Aussehen jeder Ware in der Lager-Karte im HUD: Icon aus dem Icon-Set und Kürzel für die Sorten (ohne Namen unter dem
+ * Icon sind Gras, OG Kush und Amnesia Haze sonst kaum auseinanderzuhalten). Die Farbe steht in goods.css
+ * (data-product).
  */
-const StockHud = memo(function StockHud() {
-  const ui = useUi();
-  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen; im Tutorial (Auftrag 46b) kommt das Lager mit
-  // der ersten Lieferung.
-  const sold = useGameSelector((state) => isBusinessSold(state) || !tutorialAllows(state, 'hud.stock'));
-  // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
-  const view = useGameSelector((state) => {
-    const { cityId, rows, warehouses } = stockView(state);
-    const short =
-      rows.length === 0
-        ? 'leer'
-        : rows.length <= 2
-          ? rows.map(stockText).join(' + ')
-          : `${stockText(rows[0])} +${rows.length - 1}`;
-    return {
-      value: warehouses.length === 0 ? 'kein Lager' : short,
-      title: rows.map(stockText).join(', ') || 'Lager leer',
-      empty: rows.length === 0,
-      warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
-    };
-  }, shallowEqual);
-  if (sold) return null;
-  return (
-    <HudPill
-      data-tour="hud.stock"
-      icon="warehouse"
-      color="goods"
-      label="Lager"
-      value={view.value}
-      title={view.title}
-      tone={view.empty ? 'bad' : undefined}
-      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: view.warehouseId })}
-      detailsAction="Lager öffnen"
-      // Eine Komponente statt fertigem Inhalt: Die Aufstellung rechnet erst, wenn die Karte aufgeklappt ist.
-      details={<StockFlyout />}
-    />
-  );
+const PRODUCT_LOOK: Record<string, { icon: IconName; badge?: string }> = {
+  weed: { icon: 'cannabis' },
+  kush: { icon: 'cannabis', badge: 'OG' },
+  haze: { icon: 'cannabis', badge: 'AH' },
+  hash: { icon: 'hashish' },
+  vape: { icon: 'vape' },
+  edibles: { icon: 'cake' },
+  oil: { icon: 'oil' },
+};
+/** Feste Reihenfolge, auch leere Sorten (blass): So sieht man, was fehlt. */
+const GRID_PRODUCTS = ['weed', 'kush', 'haze', 'hash', 'vape', 'edibles'];
+/** Waren, die nur auftauchen, wenn welche da oder unterwegs ist. */
+const OPTIONAL_PRODUCTS = ['oil'];
+
+/**
+ * Fächer im Lager-Widget: mindestens 8 (zwei Reihen à 4, freie Fächer leer), bei mehr Waren 10 (zwei Reihen à 5).
+ * Neue Waren brauchen nur einen Eintrag in PRODUCT_LOOK und GRID_PRODUCTS.
+ */
+const STOCK_SLOTS = 8;
+const STOCK_SLOTS_MAX = 10;
+
+/** Menge kurz für die schmale Kachel: "40 St." statt "40 Stück". */
+const shortAmount = (productId: string, amount: number) =>
+  formatProductAmount(productId, amount).replace(/ Stück$/, ' St.');
+
+/**
+ * Ware, die für die aktive Stadt unterwegs ist: Lieferungen der Lieferanten, Ware am Kai und Abholungen vom Kai.
+ * Fahrten zwischen eigenen Lagern sind keine neue Ware und zählen nicht.
+ */
+const incomingView = memoState((state) => {
+  const cityId = activeCity(state);
+  const out: Record<string, number> = {};
+  const add = (productId: string, amount: number) => {
+    out[productId] = (out[productId] ?? 0) + amount;
+  };
+  for (const s of shipmentsInTransit(state, cityId))
+    for (const item of shipmentItems(s)) add(item.productId, item.amount);
+  for (const c of getCargo(state, cityId)) add(c.productId, c.amount);
+  for (const t of getTrips(state)) {
+    if (t.kind === 'pickup' && placeCity(state, t.toId) === cityId)
+      for (const item of t.items) add(item.productId, item.amount);
+  }
+  return out;
 });
 
-/** Aufstellung des Lagers in der aufgeklappten Karte der HUD-Kachel (zeichnet sich selbst neu, solange sie offen ist). */
-function StockFlyout() {
+/**
+ * Lager-Widget auf dem Startbildschirm des Handys unter den Apps (vorher Kachel im HUD): Fächer mit Icon und Menge je Ware,
+ * darunter klein, was unterwegs ist. Ein Tipp auf das Raster öffnet die Lieferanten (nachbestellen), „Lager-Optionen“
+ * die Lager-App (eigene Lager, Ausbau, Standorte). Die Kacheln haben eine feste Höhe, Icon und Menge stehen in der
+ * Mitte, die Zeile „+ …“ hängt darunter und verschiebt nichts.
+ */
+/** Schlüssel für ui.flash: Fach dieser Ware zeigen, weil sie fehlt. */
+const MISSING_PREFIX = 'goods.missing:';
+
+function StockWidget() {
   const ui = useUi();
-  const lines = useGameSelector(
+  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen. Im Tutorial (Auftrag 46b) steht das Lager schon
+  // da, gesperrt bis zu seiner Stufe; die Lager-Optionen (Lager-App) kommen später als das Lager selbst.
+  const hidden = useGameSelector((state) => isBusinessSold(state));
+  const locked = useGameSelector((state) => tutorialLockText(state, 'hud.stock'));
+  const optionsLocked = useGameSelector((state) => tutorialLockText(state, 'app.goods'));
+  // Klick auf einen Spot ohne passende Ware (spots/ui/map.ts): das Fach leuchtet rot und wackelt (Feedback 13.10.2026).
+  const flash = useUiSelector((u) => u.flash);
+  const missing = flash?.key.startsWith(MISSING_PREFIX) ? flash.key.slice(MISSING_PREFIX.length) : null;
+  const cells = useGameSelector(
     (state) => {
       const { rows, warehouses } = stockView(state);
-      return rows.map((r) => {
-        const inWarehouses = warehouses.filter(
-          (w) => getStock(state, { warehouseId: w.id, productId: r.productId }) > 0,
-        );
-        const where =
-          warehouses.length > 1 && inWarehouses.length > 0
-            ? ` (${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')})`
-            : '';
+      const incoming = incomingView(state);
+      // Fehlt eine Ware, die sonst kein Fach hat (z.B. Öl ohne Bestand), bekommt sie für den Fingerzeig eins: Sonst
+      // sprang das Handy auf den Startbildschirm, ohne dass etwas aufleuchtete.
+      const ids = [
+        ...GRID_PRODUCTS,
+        ...OPTIONAL_PRODUCTS.filter(
+          (id) => id === missing || rows.some((r) => r.productId === id) || (incoming[id] ?? 0) > 0,
+        ),
+      ];
+      if (missing && !ids.includes(missing) && getProduct(missing)) ids.push(missing);
+      return ids.map((productId) => {
+        const row = rows.find((r) => r.productId === productId);
+        const amount = row?.amount ?? 0;
+        const plus = incoming[productId] ?? 0;
+        const where = warehouses
+          .filter((w) => warehouses.length > 1 && getStock(state, { warehouseId: w.id, productId }) > 0)
+          .map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, ''));
+        const title = [
+          `${productName(productId)}: ${formatProductAmount(productId, amount)}`,
+          row ? `${qualityTier(row.quality).name} ${formatPercent(row.quality)}` : '',
+          where.length > 0 ? `in ${where.join(', ')}` : '',
+          plus > 0 ? `${formatProductAmount(productId, plus)} unterwegs` : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
         return {
-          productId: r.productId,
-          text: stockText(r),
-          meta: `${qualityTier(r.quality).name} ${formatPercent(r.quality)}${where}`,
+          productId,
+          amount: shortAmount(productId, amount),
+          plus: plus > 0 ? `+${shortAmount(productId, plus)}` : '',
+          empty: amount <= 0,
+          title,
         };
       });
     },
-    (a, b) => a.length === b.length && a.every((line, i) => shallowEqual(line, b[i])),
+    (a, b) => a.length === b.length && a.every((cell, i) => shallowEqual(cell, b[i])),
   );
+  if (hidden) return null;
+  if (locked) return <LockedWidget icon="warehouse" label="Lager" hint={locked} wide data-tour="hud.stock" />;
+  const slots = cells.length <= STOCK_SLOTS ? STOCK_SLOTS : STOCK_SLOTS_MAX;
   return (
-    <div class="goods-flyout">
-      {lines.length === 0 ? (
-        <p class="goods-flyout__empty">Nichts auf Lager. Zeit für Nachschub.</p>
-      ) : (
-        <ul class="goods-flyout__rows">
-          {lines.map((line) => (
-            <li key={line.productId}>
-              <strong>{line.text}</strong>
-              <span>{line.meta}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
-        Bestellen
+    <section class="phone-widget goods-widget" data-tour="hud.stock" aria-label="Lager">
+      <button
+        type="button"
+        class="goods-stock"
+        style={{ '--stock-cols': String(slots / 2) }}
+        onClick={() => ui.openPhone('suppliers.app')}
+        title="Lieferanten öffnen"
+        aria-label={`Lager: ${cells.map((c) => c.title).join('; ')}. Lieferanten öffnen`}
+      >
+        {cells.map((cell) => {
+          const look = PRODUCT_LOOK[cell.productId] ?? { icon: 'boxes' };
+          return (
+            <span
+              // Neuer Schlüssel bei jedem Fingerzeig: Die Animation startet neu, auch für dieselbe Ware.
+              key={cell.productId === missing ? `${cell.productId}#${flash?.id}` : cell.productId}
+              class={`goods-stock__cell${cell.empty ? ' is-empty' : ''}${cell.productId === missing ? ' is-missing' : ''}`}
+              data-product={cell.productId}
+              title={cell.title}
+            >
+              <span class="goods-stock__main">
+                <span class={`goods-stock__icon${look.badge ? ' has-badge' : ''}`}>
+                  <Icon name={look.icon} size={22} />
+                  {look.badge && <span class="goods-stock__badge">{look.badge}</span>}
+                </span>
+                <strong>{cell.amount}</strong>
+                {cell.plus && <span class="goods-stock__plus">{cell.plus}</span>}
+              </span>
+            </span>
+          );
+        })}
+        {Array.from({ length: slots - cells.length }, (_, i) => (
+          <span key={`free-${i}`} class="goods-stock__cell is-free" aria-hidden="true" />
+        ))}
       </button>
-    </div>
+      <button
+        type="button"
+        class={`goods-widget__options ${optionsLocked ? 'is-locked' : ''}`}
+        aria-disabled={optionsLocked ? 'true' : undefined}
+        onClick={() => (optionsLocked ? ui.notice(`Lager-Optionen: ${optionsLocked}`) : ui.openPhone('goods.app'))}
+      >
+        <Icon name="warehouse" size={20} />
+        <span>Lager-Optionen</span>
+        <Icon name={optionsLocked ? 'lock' : 'chevronRight'} size={16} />
+      </button>
+    </section>
   );
 }
 
@@ -604,8 +677,12 @@ registerPhoneApp({
   // Nach dem Verkauf liegt die Ware in den Häfen (Handel › Hafen, Auftrag 43). Am Anfang kommt sie mit Peters Quest.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.goods'),
+  // Nur über „Lager-Optionen“ im Lager-Widget (und openPhone von anderen Stellen), nicht als Kachel im Raster.
+  hidden: true,
 });
-registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
+// Lager als Widget oben auf dem Startbildschirm (vorher Kachel im HUD); die Lager-App steht nicht mehr im Raster,
+// sie öffnet sich über „Lager-Optionen“ im Widget.
+registerSlot('phone.homeBottom', { id: 'goods.stock', order: 10, component: StockWidget });
 registerPanel({
   id: 'goods.warehouse',
   title: (props, state) => getWarehouse(state, props.warehouseId)?.name ?? 'Lager',
@@ -616,7 +693,7 @@ registerMapLayer({
   id: 'goods.warehouses',
   order: 30,
   mount(ctx) {
-    // Eigene Lager: runde Kachel (Ort, blau) und Glas-Pille mit Name und Bestand, z.B. "Lager Ehrenfeld · 640 g".
+    // Eigene Lager: runde Kachel (Ort, blau) und Glas-Pille mit dem Bestand, z.B. "640 g"; der Name steht im Tooltip.
     const shown = new Map<string, { name: HTMLElement; text: string }>();
     const draw = () => {
       const state = ctx.getState();
@@ -646,7 +723,9 @@ registerMapLayer({
         const grams = rows.filter((r) => getProduct(r.productId)?.unit === 'g').reduce((sum, r) => sum + r.amount, 0);
         // Ware ohne Gramm (Stück, ml, Pens) als Zahl der Sorten, nicht als Summe ohne Einheit („+1416“, N10).
         const other = rows.filter((r) => r.amount > 0 && getProduct(r.productId)?.unit !== 'g').length;
-        const text = `${w.name} · ${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` + ${other} weitere` : ''}`;
+        // Nur der Bestand: Das Symbol sagt schon „Lager“, der Name steht im Tooltip. Mit Namen verdeckte die Pille die
+        // Spots daneben (Ehrenfeld, Feedback 12.10.2026).
+        const text = `${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other} ${other === 1 ? 'Sorte' : 'Sorten'}` : ''}`;
         if (text !== entry.text) {
           entry.text = text;
           entry.name.textContent = text;

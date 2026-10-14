@@ -1,12 +1,13 @@
 // Die Grundkarte: MapLibre im gedämpften Look, vier Tageszeit-Paletten nach der Spieluhr, Stimmung der Module
-// (z.B. Wetter), Regen und Schnee, Überwachungs-Overlay (Standard aus), Kamera 3D/2D, Köln/Europa und die
-// angemeldeten Layer der Module.
+// (z.B. Wetter), Regen und Schnee, Überwachungs-Overlay (Standard aus), Köln/Europa und die angemeldeten Layer der
+// Module. Seit dem 13.10.2026 nur noch 2D von oben (keine Neigung, keine Drehung, flache Gebäude): schneller und
+// sparsamer mit dem Grafikspeicher.
 
 import { type GeoJSONSource, Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { clock, type GameState, type LngLat } from '../core';
-import type { CameraMode, MapCamera, MapController, UiApi, UiState } from '../ui/runtime';
+import type { MapCamera, MapController, UiApi, UiState } from '../ui/runtime';
 import { setMotionSpeed } from './animation';
 import { currentMood } from './atmosphere';
 import { EUROPA_VIEW, FAR_ZOOM, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
@@ -22,9 +23,6 @@ import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
 
 setWorkerUrl(workerUrl);
 
-/** Schräge Kamera in der Stadt (Köln; andere Städte bringen eigene Werte über ihre Kamera mit). */
-const KOELN_PITCH = 50;
-const KOELN_BEARING = -20;
 /** Straßennetz, Wasserwege und Autobahn-Zufahrten kommen aus Overture Maps (abgeleitet von OpenStreetMap, ODbL). */
 export const ATTRIBUTION = '©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation';
 const MAX_PIXEL_RATIO = 1.5;
@@ -42,9 +40,7 @@ export class GameMap implements MapController {
   private readonly applied = new Map<string, PaintValue>();
   private landmarkNight = -1;
   private lastLight = '';
-  private lastSky = '';
-  private cameraMode: CameraMode = '3d';
-  /** Ansicht: 'city:<id>' (schräg, Stadt), 'deutschland' oder 'europa' (Draufsicht). */
+  /** Ansicht: 'city:<id>' (Stadt), 'deutschland' oder 'europa'. */
   private view = 'city:koeln';
   private viewLabel = 'CAM 01 · KÖLN';
   /** Zählt Befehle und neue Spiele (invalidate), damit update() erkennt, ob sich etwas geändert hat. */
@@ -63,9 +59,13 @@ export class GameMap implements MapController {
       style: baseStyle,
       center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
       zoom: koelnZoom(),
-      pitch: KOELN_PITCH,
-      bearing: KOELN_BEARING,
-      maxPitch: 75,
+      pitch: 0,
+      bearing: 0,
+      maxPitch: 0,
+      // 2D von oben: weder kippen noch drehen (Maus, Finger, Tastatur).
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
       // Quellenangabe unten rechts: Kacheln aus dem Stil, dazu Straßen, Flüsse und Wege aus Overture (Auftrag 31).
       attributionControl: { compact: true, customAttribution: ATTRIBUTION },
       fadeDuration: 200,
@@ -73,6 +73,9 @@ export class GameMap implements MapController {
       // lädt die Seite neu, wenn er ausgeht (weißer Bildschirm).
       pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
     });
+    this.map.touchZoomRotate.disableRotation();
+    this.map.keyboard.disableRotation();
+    container.classList.add('is-2d');
     this.map.on('webglcontextlost', () => ui.toast('Die Karte wird neu aufgebaut …', 'info'));
     this.overlay = new SurveillanceOverlay(this.map);
     this.precipitation = new PrecipitationLayer(this.map.getCanvasContainer(), this.overlay.element);
@@ -159,7 +162,6 @@ export class GameMap implements MapController {
     // Stil ist jetzt da: Look neu setzen (vorher gesetzte Werte gelten für den Stil vor dem Laden).
     this.applied.clear();
     this.lastLight = '';
-    this.lastSky = '';
     this.landmarkNight = -1;
     if (this.lastUi) this.overlay.setEnabled(this.lastUi.overlay, true);
     const state = this.getState();
@@ -179,10 +181,10 @@ export class GameMap implements MapController {
 
   /**
    * Nach jedem Neuzeichnen der UI. Die Layer bekommen update() nur, wenn sich etwas geändert hat: Spielzeit, ein
-   * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Kamera, Overlay oder Verkehr.
+   * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Overlay oder Verkehr.
    */
   update(state: GameState, ui: UiState): void {
-    const key = `${state.time}|${this.revision}|${this.view}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
+    const key = `${state.time}|${this.revision}|${this.view}|${ui.phone.open}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
     if (key === this.lastKey && state === this.lastState && ui.panel === this.lastPanel) {
       this.precipitation.sync();
       return;
@@ -193,7 +195,6 @@ export class GameMap implements MapController {
     const phoneChanged = this.lastUi?.phone.open !== ui.phone.open;
     this.lastUi = ui;
     if (phoneChanged || this.padRight < 0) this.applyPadding(this.padRight >= 0);
-    if (ui.camera !== this.cameraMode) this.setCameraMode(ui.camera);
     this.overlay.setEnabled(ui.overlay);
     this.overlay.setClock(
       `${clock.weekdayName(state.time, true).toUpperCase()} ${clock.formatTime(state.time)} · TAG ${clock.day(state.time)}`,
@@ -241,10 +242,10 @@ export class GameMap implements MapController {
       this.paint(id, 'fill-opacity', look.shadowOpacity);
     }
     L.buildings.forEach((id, i) => {
-      this.paint(id, 'fill-extrusion-color', look.buildings[i]);
+      this.paint(id, 'fill-color', look.buildings[i]);
     });
     this.applyLandmarks(look);
-    this.applyLightAndSky(look);
+    this.applyLight(look);
     setEffectsLook(look);
   }
 
@@ -293,30 +294,17 @@ export class GameMap implements MapController {
     });
   }
 
-  private applyLightAndSky(look: MapLook): void {
+  /** Licht nur noch für die Fahrzeuge (die einzigen Klötze auf der Karte). Einen Himmel gibt es ohne Neigung nicht. */
+  private applyLight(look: MapLook): void {
     const light = `${look.light}|${look.lightIntensity}`;
-    if (light !== this.lastLight) {
-      this.map.setLight({
-        anchor: 'map',
-        color: look.light,
-        intensity: look.lightIntensity,
-        position: [1.15, 210, 35],
-      });
-      this.lastLight = light;
-    }
-    const sky = `${look.sky}|${look.horizon}|${look.fog}|${look.fogBlend}`;
-    if (sky !== this.lastSky) {
-      this.map.setSky({
-        'sky-color': look.sky,
-        'horizon-color': look.horizon,
-        'fog-color': look.fog,
-        'fog-ground-blend': look.fogBlend,
-        'horizon-fog-blend': 0.6,
-        'sky-horizon-blend': 0.7,
-        'atmosphere-blend': 0,
-      });
-      this.lastSky = sky;
-    }
+    if (light === this.lastLight) return;
+    this.map.setLight({
+      anchor: 'map',
+      color: look.light,
+      intensity: look.lightIntensity,
+      position: [1.15, 210, 35],
+    });
+    this.lastLight = light;
   }
 
   // HUD und Handy liegen über der Karte, also soll die Kamera auf den freien Bereich zentrieren.
@@ -343,36 +331,14 @@ export class GameMap implements MapController {
     else this.map.setPadding(padding);
   }
 
-  /** Neigung und Drehung der aktuellen Stadt (flyToCamera merkt sie sich), für 3D zurück aus der Draufsicht. */
-  private tilt = { pitch: KOELN_PITCH, bearing: KOELN_BEARING };
-
-  private koelnCamera() {
-    return this.cameraMode === '2d' ? { pitch: 0, bearing: 0 } : { ...this.tilt };
-  }
-
-  setCameraMode(mode: CameraMode): void {
-    this.cameraMode = mode;
-    const handlers = [this.map.dragRotate, this.map.touchPitch, this.map.keyboard];
-    if (mode === '2d') {
-      for (const h of handlers) h.disable();
-      this.map.touchZoomRotate.disableRotation();
-      this.map.easeTo({ pitch: 0, bearing: 0, duration: 900 });
-    } else {
-      for (const h of handlers) h.enable();
-      this.map.touchZoomRotate.enableRotation();
-      if (this.view.startsWith('city:')) this.map.easeTo({ ...this.tilt, duration: 900 });
-    }
-    this.container.classList.toggle('is-2d', mode === '2d');
-  }
-
   flyToKoeln(): void {
     this.view = 'city:koeln';
-    this.tilt = { pitch: KOELN_PITCH, bearing: KOELN_BEARING };
     this.viewLabel = 'CAM 01 · KÖLN';
     this.map.flyTo({
       center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
       zoom: koelnZoom(),
-      ...this.koelnCamera(),
+      pitch: 0,
+      bearing: 0,
       duration: 2500,
     });
   }
@@ -393,7 +359,6 @@ export class GameMap implements MapController {
   flyToCamera(camera: MapCamera): void {
     this.view = camera.view;
     this.viewLabel = camera.label;
-    if (camera.tilt) this.tilt = { pitch: camera.pitch ?? KOELN_PITCH, bearing: camera.bearing ?? KOELN_BEARING };
     if (camera.bounds) {
       // Rahmen ganz zeigen, mit Platz für die Stadt-Karten (über dem Punkt, halb so breit wie eine Karte) und am Handy
       // für die Karten unter Geld und Heat (Quest, Stadt wartet; Auftrag 36: bis zu fünf Städte im Rahmen).
@@ -424,18 +389,17 @@ export class GameMap implements MapController {
     this.map.flyTo({
       center: [camera.center.lng, camera.center.lat],
       zoom: isMobile() ? camera.mobileZoom : camera.zoom,
-      ...(camera.tilt ? this.koelnCamera() : { pitch: 0, bearing: 0 }),
+      pitch: 0,
+      bearing: 0,
       duration: 2500,
     });
   }
 
-  settleView(view: string, label: string, tilt: { pitch: number; bearing: number } | null): void {
+  settleView(view: string, label: string): void {
     if (view === this.view) return;
     this.view = view;
     this.viewLabel = label;
-    if (tilt) this.tilt = { ...tilt };
     this.overlay.setLabel(label);
-    this.map.easeTo({ ...(tilt ? this.koelnCamera() : { pitch: 0, bearing: 0 }), duration: 900 });
   }
 
   currentView(): string {
@@ -452,10 +416,6 @@ export class GameMap implements MapController {
 
   zoomOut(): void {
     this.map.zoomOut({ duration: 300 });
-  }
-
-  resetNorth(): void {
-    this.map.easeTo({ bearing: 0, duration: 500 });
   }
 
   pickLocation(): Promise<LngLat | null> {

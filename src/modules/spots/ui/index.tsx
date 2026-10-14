@@ -3,16 +3,15 @@
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
 import { clock, formatEuro, formatPercent } from '../../../core';
-import { mapEffects, registerMapLayer } from '../../../map';
+import { isMobile, mapEffects, registerMapLayer } from '../../../map';
 import {
-  Button,
-  Card,
-  ContextMenu,
   Disclosure,
   Group,
+  Icon,
   ItemContent,
   List,
   ListItem,
+  LockedWidget,
   onGameEvent,
   registerAdvisor,
   registerPanel,
@@ -24,11 +23,13 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold } from '../../city';
-import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
+import { getSalesStats, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount, getWarehouses } from '../../goods';
 import { activeRunnerAt } from '../../staff';
+import { tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
+  customSpots,
   getSpot,
   getSpots,
   isKneipe,
@@ -36,12 +37,12 @@ import {
   isSpotOpen,
   KNEIPE,
   lockedSpots,
-  SHOP_SPOT_MAX,
-  SHOP_SPOT_PRICE_CENTS,
+  MAX_CUSTOM_SPOTS,
+  SPOT_TYPES,
+  type SpotType,
   spotCity,
   spotHoursLabel,
   spotOpensAt,
-  spotType,
   unlockCostOf,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
@@ -90,13 +91,14 @@ function SpotPanel(props: { spotId: string }) {
       <SummaryTiles
         items={[
           { icon: 'smile', color: waiting > 0 ? 'warn' : 'money', value: waiting, label: 'warten' },
-          { icon: 'tag', color: 'money', value: formatPercent(spot.priceMultiplier), label: 'Preise' },
+          // „Kaufkraft“ statt „Preise“: Weiter unten steht die Gruppe „Preise“ mit deinen eigenen Preisen.
+          { icon: 'tag', color: 'money', value: formatPercent(spot.priceMultiplier), label: 'Kaufkraft' },
           { icon: 'users', color: 'people', value: formatPercent(spot.demand), label: 'Andrang' },
         ]}
       />
       {/* J15: „Preise 90 %“ stand ohne Erklärung da. */}
-      <Disclosure label="Was heißen Preise und Andrang?">
-        Preise {formatPercent(spot.priceMultiplier)}: was die Kunden hier zahlen, gemessen am Richtpreis des Veedels
+      <Disclosure label="Was heißen Kaufkraft und Andrang?">
+        Kaufkraft {formatPercent(spot.priceMultiplier)}: was die Kunden hier zahlen, gemessen am Richtpreis des Veedels
         (100 %){spot.priceMultiplier > 1 ? ', hier also mehr' : spot.priceMultiplier < 1 ? ', hier also weniger' : ''}.
         Andrang {formatPercent(spot.demand)}: wie viele Kunden kommen, gemessen an einem gewöhnlichen Spot (100 %).
       </Disclosure>
@@ -109,7 +111,6 @@ function SpotPanel(props: { spotId: string }) {
             meta="Veedel"
             tags={[
               spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' },
-              !isKneipe(spot) && { label: spotType(spot).name, icon: spotType(spot).icon, color: 'place' },
               // Öffnungszeiten auch für feste Spots mit Wochenzeiten (Berliner Clubs, Auftrag 43, L1).
               !isKneipe(spot) &&
                 (!!spot.custom || !!spot.weekHours) &&
@@ -162,110 +163,82 @@ function SpotPanel(props: { spotId: string }) {
   );
 }
 
-function SpotsSection() {
-  const { state, dispatch } = useGame();
-  const ui = useUi();
-  const spots = getSpots(state, activeCity(state));
-  const locked = lockedSpots(state).filter((s) => spotCity(s) === activeCity(state));
-  const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
-  const mine = playerSpot(state);
-  return (
-    <Card
-      title="Spots"
-      icon="pin"
-      color="place"
-      status={waiting > 0 ? 'warn' : 'good'}
-      summary={waiting > 0 ? `${waiting} warten` : `${spots.length} aktiv`}
-    >
-      <Group
-        title="Deine Spots"
-        icon="pin"
-        color="place"
-        count={spots.length}
-        note={
-          locked.length > 0
-            ? `${locked.length} weitere Spots kannst du freischalten (grau auf der Karte, ab ${formatEuro(Math.min(...locked.map((s) => unlockCostOf(state, s))))}).`
-            : undefined
-        }
-      >
-        <List>
-          {spots.map((s) => {
-            const count = waitingAt(state, s.id).length;
-            return (
-              <ContextMenu
-                key={s.id}
-                label={`Aktionen für ${s.name}`}
-                actions={[
-                  { label: 'Öffnen', icon: 'pin', onSelect: () => ui.openPanel('spots.spot', { spotId: s.id }) },
-                  {
-                    label: mine === s.id ? 'Weggehen' : 'Hier hinstellen',
-                    icon: 'runner',
-                    onSelect: () =>
-                      dispatch({ type: 'customers.standAt', payload: { spotId: mine === s.id ? null : s.id } }),
-                  },
-                  {
-                    label: 'Auf der Karte zeigen',
-                    icon: 'target',
-                    onSelect: () => ui.flyTo({ lng: s.lng, lat: s.lat }, 16),
-                  },
-                ]}
-              >
-                <ListItem onClick={() => ui.openPanel('spots.spot', { spotId: s.id })} value={`${count} warten`}>
-                  <ItemContent
-                    icon={mine === s.id ? 'runner' : 'pin'}
-                    color={mine === s.id ? 'brand' : count > 0 ? 'warn' : 'place'}
-                    title={s.name}
-                    meta={veedelName(s.veedelId)}
-                    tags={[mine === s.id && { label: 'du stehst hier', icon: 'runner', color: 'brand' }]}
-                  />
-                </ListItem>
-              </ContextMenu>
-            );
-          })}
-        </List>
-      </Group>
-      {/* Auftrag 46e: Spot gründen kommt als Shop (Platzhalter), der alte Weg über die Karte ist weg. */}
-      <List>
-        <ListItem action value={shopPrice()} onClick={() => ui.openPanel('spots.shop', {})}>
-          <ItemContent icon="pinPlus" color="brand" title="Spot gründen" meta={`Im Shop, höchstens ${SHOP_SPOT_MAX}`} />
-        </ListItem>
-      </List>
-    </Card>
-  );
-}
-
-/** „0,99 €“ aus den Cent der Konfiguration. */
-function shopPrice(): string {
-  return `${(SHOP_SPOT_PRICE_CENTS / 100).toFixed(2).replace('.', ',')} €`;
-}
-
 /**
- * Shop-Platzhalter (Auftrag 46e): Spot gründen wird ein Kauf mit echtem Geld. Hier nur die Seite mit Preis, drei
- * Plätzen und einem gesperrten Knopf; kein Kauf, keine Bezahlung, kein Netz (Bezahlung ist ein eigener Auftrag).
+ * Shop (Feedback 13.10.2026): Spot gründen gegen Schwarzgeld. Eine Kachel je Art, die man selbst gründen kann; ein Tipp
+ * fragt auf der Karte nach dem Ort und gründet dort. Die Spots selbst stehen in den Veedel-Seiten der Reviere.
  */
 function ShopPanel() {
-  const slots = Array.from({ length: SHOP_SPOT_MAX }, (_, i) => i + 1);
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const used = customSpots(state).length;
+  const full = used >= MAX_CUSTOM_SPOTS;
+  const locked = tutorialLockText(state, 'spots.found');
+  const kinds = (Object.values(SPOT_TYPES) as SpotType[]).filter((t) => t.foundable);
+  const found = async (type: SpotType) => {
+    const pos = await ui.pickLocation(`Wo soll ${type.name} hin? (${formatEuro(type.foundCost)})`);
+    if (!pos) return;
+    dispatch({ type: 'spots.found', payload: { lng: pos.lng, lat: pos.lat, kind: type.id } });
+  };
   return (
     <div class="spot-shop">
       <Group
         title="Spot gründen"
         icon="pinPlus"
-        color="brand"
-        value={`${shopPrice()} pro Spot`}
-        note={`Bald kannst du dir bis zu ${SHOP_SPOT_MAX} eigene Spots kaufen und auf der Karte setzen, wo du willst.`}
+        color="place"
+        value={`${used} von ${MAX_CUSTOM_SPOTS}`}
+        note={
+          locked ??
+          (full
+            ? `Mehr als ${MAX_CUSTOM_SPOTS} eigene Spots kannst du nicht halten.`
+            : 'Tipp auf eine Art, dann auf die Stelle in einem Veedel.')
+        }
       >
-        <div class="spot-shop__slots">
-          {slots.map((n) => (
-            <Card key={n} class="spot-shop__slot" icon="pin" color="brand" title={`Spot ${n}`}>
-              <p class="ui-hint">{shopPrice()} · frei</p>
-            </Card>
+        <div class="spot-shop__tiles">
+          {kinds.map((type) => (
+            <button
+              key={type.id}
+              type="button"
+              class="spot-shop__tile"
+              disabled={!!locked || full || state.wallet.dirty < type.foundCost}
+              onClick={() => found(type)}
+            >
+              <span class="spot-shop__icon">
+                <Icon name={type.icon} size={22} />
+              </span>
+              <strong>{type.name}</strong>
+              <span class="spot-shop__text">{type.description}</span>
+              <span class="spot-shop__price">{formatEuro(type.foundCost)}</span>
+            </button>
           ))}
         </div>
-        <Button wide variant="primary" icon="lock" disabled>
-          Bald verfügbar
-        </Button>
       </Group>
     </div>
+  );
+}
+
+/** Shop als kleines Widget oben links auf dem Startbildschirm (wo vorher der Rang stand). */
+function ShopWidget() {
+  const { state } = useGame();
+  const ui = useUi();
+  if (isBusinessSold(state)) return null;
+  const locked = tutorialLockText(state, 'spots.found');
+  if (locked) return <LockedWidget icon="bag" label="Shop" hint={locked} />;
+  return (
+    <button
+      type="button"
+      class="phone-widget phone-stat phone-shop"
+      style={{ '--stat-accent': 'var(--home-place)' }}
+      onClick={() => ui.openPanel('spots.shop', {})}
+      title="Shop: eigene Spots gründen"
+    >
+      <span class="phone-widget__label">
+        <Icon name="bag" size={12} /> Shop
+      </span>
+      <span class="phone-shop__icon" aria-hidden="true">
+        <Icon name="pinPlus" size={26} />
+      </span>
+      <span class="phone-stat__sub">Spot gründen</span>
+    </button>
   );
 }
 
@@ -274,8 +247,8 @@ registerPanel({
   title: (props, state) => getSpot(state, props.spotId)?.name ?? 'Spot',
   component: SpotPanel,
 });
-registerPanel({ id: 'spots.shop', title: () => 'Spot gründen', component: ShopPanel });
-registerSlot('tab:territory', { id: 'spots.list', title: 'Spots', order: 10, component: SpotsSection });
+registerPanel({ id: 'spots.shop', title: () => 'Shop', component: ShopPanel });
+registerSlot('phone.home', { id: 'spots.shop', order: 5, component: ShopWidget });
 registerMapLayer(spotsLayer);
 registerMapLayer(peopleLayer);
 
@@ -350,37 +323,21 @@ registerAdvisor({
     }
     if (busiest) {
       const spot = busiest;
-      // Ort zuerst: Im schmalen Banner („Dringend“) bleibt so der Ort stehen, auch wenn der Rest gekürzt wird (J5).
+      // Ort zuerst: In den Mitteilungen bleibt so der Ort stehen, auch wenn der Rest gekürzt wird (J5).
       const title = `${spot.name}: ${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'}`;
-      // Stehst du noch nirgends: hinstellen, dann verkaufst du dort automatisch. Sonst sofort alle bedienen.
-      if (!mine && !isPlayerAway(state)) {
-        return {
-          id: 'spots.waiting',
-          priority: 85,
-          icon: 'smile',
-          title,
-          text: 'Stell dich hin, dann verkaufst du dort automatisch, bis du weggehst.',
-          actionLabel: 'Hinstellen',
-          highlight: '.spot-marker',
-          target: { lng: spot.lng, lat: spot.lat },
-          action: (ui) => {
-            ui.dispatch({ type: 'customers.standAt', payload: { spotId: spot.id } });
-            ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
-          },
-        };
-      }
+      // Feedback 13.10.2026: Bedient wird nur mit einem Tipp auf den Spot, der Rat führt nur hin.
       return {
         id: 'spots.waiting',
         priority: 85,
         icon: 'smile',
         title,
-        text: 'Einmal kurz rüber und alle bedienen, oder einen Läufer hinstellen.',
-        actionLabel: 'Verkaufen',
+        text: 'Tipp auf den Spot, dann bedienst du den Nächsten. Oder stell einen Läufer hin.',
+        actionLabel: 'Zum Spot',
         highlight: '.spot-marker',
         target: { lng: spot.lng, lat: spot.lat },
         action: (ui) => {
-          const result = ui.dispatch({ type: 'customers.serveAll', payload: { spotId: spot.id } });
-          if (!result.ok) ui.openPanel('spots.spot', { spotId: spot.id });
+          if (isMobile()) ui.closePhone();
+          ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
         },
       };
     }

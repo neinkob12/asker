@@ -14,6 +14,8 @@ export const RUNNER_HIRE_COST_MAX = 900;
 export const RUNNER_DAILY_WAGE = 80;
 /** Fahrer von der Straße (für Abholungen am Hafen und Fahrten zwischen Lagern). */
 export const DRIVER_HIRE_COST = 450;
+/** Sicherheit von der Straße, direkt am Spot (Personal-App neu: Läufer und Sicherheit gibt es nur noch am Spot). */
+export const SECURITY_HIRE_COST = 600;
 /** So lange braucht ein Läufer mit Tempo 50 auf Level 1 für einen Kunden. */
 export const RUNNER_SERVE_TIME = 20;
 /** Schneller als das geht es auch mit Top-Werten nicht. */

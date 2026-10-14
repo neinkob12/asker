@@ -1,6 +1,6 @@
-// Oberfläche der Gangs: Tab "Gangs" mit deiner Stärke als Zahl und jeder Gang als Balken im Vergleich (Auftrag 27),
-// darunter die Gangs als Liste mit Haltung als Chip; Seite je Gang mit Lage, Beziehung und Diplomatie-Aktionen,
-// Dialoge für Überfall und Bündnis, Hinweise auf der Karte und Toasts, wenn die Gangs etwas tun.
+// Oberfläche der Gangs: Tab "Gangs" mit deiner Stärke oben (Teile und „Sicherheit anheuern“), darunter die Gangs als
+// Kacheln, zwei pro Reihe (Name mit Status als Wort, Stärke und Veedel, Knöpfe Angriff, Bündnis, Schutzgeld);
+// Seite je Gang mit Lage, Beziehung und Diplomatie, Dialoge für Überfall und Bündnis, Hinweise auf der Karte.
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
@@ -12,10 +12,10 @@ import {
   Button,
   type CategoryColor,
   Chips,
-  ContextMenu,
   Dialog,
   Group,
   Hint,
+  Icon,
   ItemContent,
   List,
   ListItem,
@@ -27,15 +27,18 @@ import {
   registerSearch,
   registerTab,
   Sheet,
+  type SheetAction,
   SummaryTiles,
   soundOnEvent,
   Tag,
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
+import { activeCity, isBusinessSold } from '../../city';
 import { canSnitch } from '../../police';
-import { tutorialAllows } from '../../tutorial';
+import { getSpots } from '../../spots';
+import { SECURITY_HIRE_COST, securityAt } from '../../staff';
+import { tutorialAllowsRole, tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   activeWars,
@@ -59,9 +62,10 @@ import {
   MEMORIES,
   memoryPriceFactor,
   openIncidents,
-  pastWars,
+  type PlayerPowerParts,
   paysTribute,
   playerPower,
+  playerPowerParts,
   protectionAmount,
   raidCrew,
   raidTargets,
@@ -165,117 +169,245 @@ function StageTag(props: { gang: Gang }) {
   );
 }
 
-/** Zeile einer Gang in der Übersicht. Langer Druck: Öffnen, Überfall planen. */
-function GangRow(props: { gang: Gang }) {
+/**
+ * Status als kurzes Wort in der Farbe der Stufe (Feedback 13.10.2026: das Symbol allein verstand man nicht). Ein
+ * Bündnis zählt vor der Stufe, eine zerschlagene Gang steht als „Erledigt“ da.
+ */
+const STAGE_WORDS: Record<number, string> = { 0: 'Ruhig', 1: 'Warnt', 2: 'Droht', 3: 'Angriff' };
+
+function StageBadge(props: { gang: Gang }) {
   const { state } = useGame();
-  const ui = useUi();
-  const { gang } = props;
-  const turf = gangVeedel(state, gang.id);
-  const open = () => ui.openPanel('gangs.gang', { gangId: gang.id });
+  const s = getGangStatus(state, props.gang.id);
+  if (!s) return null;
+  const broken = isGangBroken(state, props.gang.id);
+  const allied = !broken && isAllied(state, props.gang.id);
+  const color: CategoryColor = broken || allied ? 'money' : STAGE_COLOR[s.stage];
+  const word = broken ? 'Erledigt' : allied ? 'Verbündet' : STAGE_WORDS[s.stage];
+  const title = broken ? 'zerschlagen' : allied ? 'verbündet' : STAGE_NAMES[s.stage];
   return (
-    <ContextMenu
-      label={`Aktionen für ${gang.name}`}
-      actions={[
-        { label: 'Öffnen', icon: 'skull', onSelect: open },
-        {
-          label: 'Spot überfallen …',
-          icon: 'swords',
-          disabled: raidTargets(state, gang.id).length === 0,
-          onSelect: () => ui.openDialog('gangs.attack', { gangId: gang.id }),
-        },
-      ]}
+    <span
+      class="gangs-table__stage"
+      style={{ '--stage': `var(--cat-${color})` } as JSX.CSSProperties}
+      title={`${props.gang.name} ${title}`}
     >
-      <ListItem onClick={open} value={<StageTag gang={gang} />}>
-        <span class="ui-item">
-          <Emblem gang={gang} size="sm" />
-          <span class="ui-item__main">
-            <span class="ui-item__title">{gang.name}</span>
-            <Chips
-              class="ui-item__tags"
-              items={[
-                { label: `Stärke ${Math.round(gangPower(state, gang.id))}`, icon: 'fist', color: 'danger' },
-                { label: `${turf.length} Veedel`, icon: 'flag', color: 'place' },
-              ]}
-            />
-          </span>
-        </span>
-      </ListItem>
-    </ContextMenu>
+      {word}
+    </span>
   );
 }
 
+/** Teile deiner Stärke mit Farbe (Bedeutungsfarben wie überall: Leute, Ort, Schwarzgeld, Ware). */
+const POWER_PARTS: { key: keyof PlayerPowerParts; label: string; color: CategoryColor }[] = [
+  { key: 'people', label: 'Leute', color: 'people' },
+  { key: 'veedel', label: 'Veedel', color: 'place' },
+  { key: 'money', label: 'Schwarzgeld', color: 'dirty' },
+  { key: 'goods', label: 'Ware', color: 'goods' },
+];
+
 /**
- * Kopf des Gangs-Tabs: deine Stärke als Zahl, darunter jede Gang mit ihrer Stärke als Balken auf derselben Skala;
- * die Marke im Balken ist deine Stärke, so sieht man auf einen Blick, wer stärker ist als du.
+ * Deine Stärke (Feedback 13.10.2026): neutraler Kasten statt Gold, darunter kurz, woraus sie besteht (Balken in vier
+ * Farben und die Teile), und gleich „Sicherheit anheuern“ am belebtesten Spot ohne Sicherheit.
  */
 function PowerHeader() {
-  const { state } = useGame();
-  const gangs = getGangs(state, activeCity(state));
-  const mine = playerPower(state);
-  const max = Math.max(1, mine, ...gangs.map((g) => gangPower(state, g.id)));
-  const stronger = gangs.filter((g) => gangPower(state, g.id) > mine).length;
+  const { state, dispatch } = useGame();
+  const city = activeCity(state);
+  const parts = playerPowerParts(state, city);
+  const total = POWER_PARTS.reduce((sum, p) => sum + parts[p.key], 0);
+  const spot = tutorialAllowsRole(state, 'security')
+    ? getSpots(state, city)
+        .filter((sp) => securityAt(state, { spotId: sp.id }).length === 0)
+        .sort((x, y) => y.demand - x.demand)[0]
+    : undefined;
   return (
-    <section class="gangs-power" aria-label="Stärke im Vergleich">
-      <div class="gangs-power__you">
+    <section class="gangs-power" aria-label="Deine Stärke">
+      <div class="gangs-power__head">
         <span class="gangs-power__label">Deine Stärke</span>
-        <strong class="gangs-power__number">{Math.round(mine)}</strong>
-        <span class="gangs-power__hint">
-          {stronger === 0
-            ? 'Keine Gang ist insgesamt stärker. Einzelne Veedel kann man dir trotzdem abnehmen.'
-            : stronger === 1
-              ? 'Eine Gang ist stärker als du.'
-              : `${stronger} Gangs sind stärker als du.`}
-        </span>
+        <strong class="gangs-power__number">{Math.round(total)}</strong>
       </div>
-      <ul class="gangs-power__rows">
-        {gangs.map((g) => {
-          const power = gangPower(state, g.id);
-          const style = {
-            '--gang-color': g.color,
-            '--gang-on': readableOn(g.color),
-            '--power': `${Math.round((power / max) * 100)}%`,
-            '--yours': `${Math.round((mine / max) * 100)}%`,
-          } as JSX.CSSProperties;
-          return (
-            <li key={g.id} class={`gangs-power__row ${power > mine ? 'is-stronger' : ''}`} style={style}>
-              <Emblem gang={g} size="sm" />
-              <span class="gangs-power__name">{g.name}</span>
-              <span class="gangs-power__bar" aria-hidden="true">
-                <span class="gangs-power__fill" />
-                <span class="gangs-power__mark" title="deine Stärke" />
-              </span>
-              <strong class="gangs-power__value">{Math.round(power)}</strong>
-            </li>
-          );
-        })}
+      <span class="gangs-power__mix" aria-hidden="true">
+        {POWER_PARTS.map((p) => (
+          <span
+            key={p.key}
+            style={
+              { '--part': `var(--cat-${p.color})`, flexGrow: String(Math.max(0, parts[p.key])) } as JSX.CSSProperties
+            }
+          />
+        ))}
+      </span>
+      <ul class="gangs-power__parts">
+        {POWER_PARTS.map((p) => (
+          <li key={p.key} style={{ '--part': `var(--cat-${p.color})` } as JSX.CSSProperties}>
+            <span class="gangs-power__dot" aria-hidden="true" />
+            {p.label}
+            <strong>{Math.round(parts[p.key])}</strong>
+          </li>
+        ))}
       </ul>
+      {spot && (
+        <Button
+          wide
+          small
+          icon="shield"
+          disabled={state.wallet.dirty < SECURITY_HIRE_COST}
+          onClick={() => dispatch({ type: 'staff.hireSecurity', payload: { spotId: spot.id } })}
+        >
+          {`Sicherheit an ${spot.name} (${formatEuro(SECURITY_HIRE_COST)})`}
+        </Button>
+      )}
     </section>
   );
 }
 
-/** Tab "Gangs": deine Stärke im Vergleich und die Gangs als Liste; Details als eigene Seite. */
+/** Tab "Gangs": deine Stärke und die Gangs als Kacheln, zwei pro Reihe; Details als eigene Seite. */
 function GangsTab() {
   const { state } = useGame();
   const gangs = getGangs(state, activeCity(state));
   return (
     <div class="gangs-tab">
       <PowerHeader />
-      <Group
-        title="Gangs"
-        icon="skull"
-        color="danger"
-        count={gangs.length}
-        note="Verkaufen im Revier einer Gang macht sie wütend."
-        more={`Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware. ${relationFactor(activeCity(state)) > 1 ? 'In Köln hilft der Klüngel: Deals und Waffenstillstand bringen mehr Beziehung.' : `In ${cityName(activeCity(state))} bringen Deals und Waffenstillstand weniger Beziehung.`}`}
-      >
-        <List>
-          {gangs.map((g) => (
-            <GangRow key={g.id} gang={g} />
-          ))}
-        </List>
-      </Group>
-      <GangWars />
+      <div class="gangs-tiles">
+        {gangs.map((g) => (
+          <GangTile key={g.id} gang={g} />
+        ))}
+      </div>
     </div>
+  );
+}
+
+/** Eine Gang als Kachel: Name (öffnet die Seite) mit Status, Stärke und Veedel, unten Angriff, Bündnis, Schutzgeld. */
+function GangTile(props: { gang: Gang }) {
+  const { state } = useGame();
+  const ui = useUi();
+  const [allying, setAllying] = useState(false);
+  const [protection, setProtection] = useState(false);
+  const { gang } = props;
+  const broken = isGangBroken(state, gang.id);
+  const power = gangPower(state, gang.id);
+  const noTargets = raidTargets(state, gang.id).length === 0;
+  return (
+    <div class="gangs-tile" style={{ '--gang-color': gang.color } as JSX.CSSProperties}>
+      <button type="button" class="gangs-tile__open" onClick={() => ui.openPanel('gangs.gang', { gangId: gang.id })}>
+        <span class="gangs-tile__name">
+          <span class="gangs-table__dot" aria-hidden="true" />
+          <span>{gang.name}</span>
+        </span>
+        <StageBadge gang={gang} />
+        <span class="gangs-tile__facts">
+          <span class={power > playerPower(state) ? 'is-stronger' : undefined}>
+            <strong>{Math.round(power)}</strong> Stärke
+          </span>
+          <span>
+            <strong>{gangVeedel(state, gang.id).length}</strong> Veedel
+          </span>
+        </span>
+      </button>
+      <span class="gangs-tile__actions">
+        <ActionIcon
+          icon="swordsCrossed"
+          kind="attack"
+          label={`${gang.name} angreifen`}
+          title={noTargets ? 'Kein Spot, den du erreichen kannst' : 'Spot überfallen'}
+          disabled={broken || noTargets}
+          onClick={() => ui.openDialog('gangs.attack', { gangId: gang.id })}
+        />
+        <ActionIcon
+          icon="handshake"
+          kind="ally"
+          label={`Bündnis mit ${gang.name}`}
+          title={isAllied(state, gang.id) ? 'Schon verbündet' : 'Bündnis'}
+          disabled={broken || isAllied(state, gang.id)}
+          onClick={() => setAllying(true)}
+        />
+        <ActionIcon
+          icon="coins"
+          kind="money"
+          label={`Schutzgeld mit ${gang.name}`}
+          title="Schutzgeld"
+          disabled={broken}
+          onClick={() => setProtection(true)}
+        />
+      </span>
+      <AllySheet gang={gang} open={allying} onClose={() => setAllying(false)} />
+      <ProtectionSheet gang={gang} open={protection} onClose={() => setProtection(false)} />
+    </div>
+  );
+}
+
+/** Kleiner Knopf mit Symbol in der Tabelle (Angriff, Bündnis, Schutzgeld). */
+function ActionIcon(props: {
+  icon: string;
+  kind: 'attack' | 'ally' | 'money';
+  label: string;
+  title: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      class={`gangs-table__action is-${props.kind}`}
+      aria-label={props.label}
+      title={props.title}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      <Icon name={props.icon} />
+    </button>
+  );
+}
+
+/** Menü Schutzgeld einer Gang: zahlen, kassieren, eintreiben oder verzichten, je nach Lage. */
+function ProtectionSheet(props: { gang: Gang; open: boolean; onClose: () => void }) {
+  const { state, dispatch } = useGame();
+  const { gang } = props;
+  const s = getGangStatus(state, gang.id);
+  if (!s) return null;
+  const gangId = gang.id;
+  const power = gangPower(state, gangId);
+  const actions: SheetAction[] = [];
+  if (s.hostility >= WARN_AT && !paysTribute(state, gangId)) {
+    actions.push({
+      label: `Zahlen: ${formatEuro(tributeAmount(state, gangId))} für eine Woche Ruhe`,
+      icon: 'coins',
+      onSelect: () => dispatch({ type: 'gangs.payTribute', payload: { gangId } }),
+    });
+  }
+  if (s.protection) {
+    actions.push(
+      s.protection.overdue
+        ? {
+            label: `Eintreiben (${formatEuro(s.protection.amount)} im Rückstand)`,
+            icon: 'fist',
+            destructive: true,
+            onSelect: () => dispatch({ type: 'gangs.collect', payload: { gangId } }),
+          }
+        : {
+            label: 'Auf Schutzgeld verzichten',
+            icon: 'unlock',
+            onSelect: () => dispatch({ type: 'gangs.releaseProtection', payload: { gangId } }),
+          },
+    );
+  } else {
+    const strong = playerPower(state) >= power;
+    actions.push({
+      label: strong
+        ? `Kassieren: ${formatEuro(protectionAmount(state, gangId))} pro Woche`
+        : `Kassieren erst ab Stärke ${Math.ceil(power)}`,
+      icon: 'moneyBag',
+      disabled: !strong,
+      onSelect: () => dispatch({ type: 'gangs.demandProtection', payload: { gangId } }),
+    });
+  }
+  const lines = statusLines(state, gang)
+    .filter((line) => /Schutzgeld|pro Woche/.test(line.title))
+    .map((line) => (line.meta ? `${line.title}, ${line.meta}` : line.title));
+  return (
+    <ActionSheet
+      open={props.open}
+      onClose={props.onClose}
+      title={`Schutzgeld: ${gang.name}`}
+      message={lines.length > 0 ? lines.join('. ') : undefined}
+      actions={actions}
+    />
   );
 }
 
@@ -352,60 +484,6 @@ function GangRivals(props: { gang: Gang }) {
             </ListItem>
           );
         })}
-      </List>
-    </Group>
-  );
-}
-
-/** Auftrag 34: laufende Gang-Kriege in der Stadt und die letzten Ausgänge. */
-function GangWars() {
-  const { state } = useGame();
-  const city = activeCity(state);
-  const wars = activeWars(state, city);
-  const past = pastWars(state)
-    .filter((w) => getGang(state, w.attacker)?.cityId === city)
-    .slice(0, 3);
-  if (wars.length === 0 && past.length === 0) return null;
-  const name = (id: string) => getGang(state, id)?.name ?? id;
-  return (
-    <Group
-      title="Gang-Kriege"
-      icon="swords"
-      color="danger"
-      count={wars.length}
-      note="Wer einer Seite hilft, hat dort einen Freund und drüben einen Feind."
-    >
-      <List>
-        {wars.map((w) => (
-          <ListItem key={w.id}>
-            <ItemContent
-              icon="swords"
-              color="danger"
-              title={`${name(w.attacker)} gegen ${name(w.defender)}`}
-              tags={[
-                { label: veedelName(w.veedelId), icon: 'pin', color: 'place' },
-                w.support && { label: `du hilfst ${name(w.support.side)}`, icon: 'handshake', color: 'money' },
-              ]}
-            />
-          </ListItem>
-        ))}
-        {past.map((w) => (
-          <ListItem key={`${w.attacker}-${w.endedAt}`}>
-            <ItemContent
-              icon="flag"
-              color="system"
-              title={`${name(w.winner)} gewinnt`}
-              tags={[
-                { label: veedelName(w.veedelId), icon: 'pin', color: 'place' },
-                { label: clock.format(w.endedAt), icon: 'clock' },
-                !!w.supported && {
-                  label: w.supported === w.winner ? 'mit deiner Hilfe' : 'trotz deiner Hilfe',
-                  color: w.supported === w.winner ? 'money' : 'danger',
-                },
-              ]}
-            />
-          </ListItem>
-        ))}
       </List>
     </Group>
   );
@@ -849,7 +927,9 @@ registerTab({
   // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43). Am Anfang
   // kommt die App mit Peters Quest.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.gangs'),
+  hiddenWhen: (state) => isBusinessSold(state),
+  // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => tutorialLockText(state, 'app.gangs'),
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });

@@ -85,7 +85,8 @@ describe('Gedächtnis der Gangs', () => {
   it('Nachrichten beziehen sich auf die stärkste Erinnerung', () => {
     const sim = createTestGame();
     remember(sim.ctx('gangs'), 'ost', 'snitched');
-    const id = say(sim.ctx('gangs'), gang('ost'), 'warning', { veedel: 'Kalk' });
+    // Mit Antwort, damit es ein Chat ist (ohne steht es seit dem 13.10.2026 nur im Journal).
+    const id = say(sim.ctx('gangs'), gang('ost'), 'warning', { veedel: 'Kalk' }, [{ id: 'ok', label: 'Ok' }]);
     const text = sim.state.messages.list.find((m) => m.id === id)?.text ?? '';
     expect(MEMORY_TEXTS.snitched.some((line) => text.endsWith(line))).toBe(true);
   });

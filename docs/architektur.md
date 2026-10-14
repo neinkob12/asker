@@ -228,7 +228,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   (`--hud-*`, `--spot-*`, `--font-hud*`). Sie halten sich an `--map-right` und folgen dem Ein- und Ausklappen des
   Handys mit derselben Feder (`--dock-*`), die Kamera der Karte auch (Padding in `GameMap`).
 - **Shell** (`shell/`): Karte vollflächig. Darüber das HUD in drei Glas-Gruppen (Geld mit Heat, Uhr mit Wetter, Tempo
-  und Menü, Kennzahl-Kacheln; `Hud.tsx`), die Kartensteuerung (Zoom/Norden, 3D, Ebenen, Köln) und die
+  und Menü, Kennzahl-Kacheln; `Hud.tsx`), die Kartensteuerung (Zoom, Stadt, Übersicht) und die
   Überlagerungen der Module (Slot `map.overlay`). **Alles andere läuft über das Spiel-Handy**
   (`phone/PhoneFrame.tsx`): Tabs der Module sind Apps (`tab:<id>`), Panels erscheinen als Seite im Handy, dazu die
   Handy-Apps, der Verlauf (`core.history`) und ein dringender Rat auf dem Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
@@ -255,7 +255,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
   Tempo, `camera`, `overlay`, `vibration`, `alerts`, `error`, `picking`) und die `UiApi`.
   Meldungen (Auftrag 46d): `toast(text, kind, { urgent?, icon?, target?, log? })` schreibt nur in `ui.alerts` (Verlauf);
-  `urgent` (Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen, `log: false` verwirft
+  `urgent` (Standard bei `'bad'`/`'warn'`) markiert den Eintrag im Verlauf als ungelesen (ohne Badge; Badges nur an den Nachrichten), `log: false` verwirft
   ihn. Keine Banner, keine Mitteilungszentrale. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.
@@ -263,13 +263,13 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   `toast(text, kind, options)` (nur Verlauf), `dismissError`, `openPhone(appId?, params?)/closePhone`, `selectTab`
   (öffnet den Tab als App im Handy), `openSection(id)`, `togglePalette`, `setPopover`,
   `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
-  `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
-  `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
+  `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setOverlay`,
+  `setVibration`, `zoomIn`, `zoomOut`.
 - **Registries** (`registry.ts`, alle über `src/ui/index.ts`):
 
 | Funktion | Wofür | Einträge |
 | --- | --- | --- |
-| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte (am Handy-Bildschirm flach unter Geld und Uhr), `time` in der Uhr-Kapsel, `alert` als Warnung im HUD, `below` als Karte unter Geld und Heat). `HudPill` mit `details` klappt beim Drüberfahren eine Glas-Karte auf | Geld (10, Klick öffnet die Geldwäsche), Lager (20, mit Aufstellung und „Bestellen“), Heat (30), Ruf · Reviere (40, Leiste 0–100 mit Stufen und Revierzahl), Missions-Karte des Tutorials und Wochenvertrag (`below`), offenes Minispiel (`alert`) |
+| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte (am Handy-Bildschirm flach unter Geld und Uhr), `time` in der Uhr-Kapsel, `alert` als Warnung im HUD, `below` als Karte unter Geld und Heat). `HudPill` mit `details` klappt beim Drüberfahren eine Glas-Karte auf | Geld (10, Klick öffnet die Geldwäsche), Lager (20, mit Aufstellung und „Bestellen“), Heat (30), Ruf (40, Leiste 0–100 mit Stufen), Reviere (41, Revierzahl), Missions-Karte des Tutorials und Wochenvertrag (`below`), offenes Minispiel (`alert`) |
 | `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge?, hidden? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile; `hidden` hält ihn vom Startbildschirm fern | Reviere (20, mit Slot `tab:territory` für Spots, Ruf, Polizei), Personal (30, mit Slot `tab:staff` für „Leute finden“), Gangs |
 | `registerSlot(name, { id, order, component, title?, icon?, color? })` | Abschnitt in einem Slot | `map.overlay` (über der freien Kartenfläche: Razzia-Banner, Tracking-Karte der Lieferung), `tab:territory` (Spots, Ruf, Polizei), `tab:staff` (Leute finden), `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `goods.warehouse` (Lager-Seite: Hafen, Umlagern, Lager kaufen, Markt), `goods.app` (Lager-App: Fahrzeuge), `suppliers.top` (Schiffs-Tracker), `finance.app` (unten in der Kasse: Kundschaft), `phone.home` (Widgets), `core.settings` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`: Wetter, Anfragen) |
 | `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse` (mit Platz und Ausbau), `goods.flow` (Warenfluss), `logistics.port` (Hafen, mit Liegeplatz-Ausbau), `staff.profile`, `hierarchy.lieutenant`, `hierarchy.rightHand`, `market.overview`, `finance.category` |

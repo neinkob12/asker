@@ -29,7 +29,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
-import { tutorialAllows } from '../../tutorial';
+
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -49,8 +49,6 @@ import {
   OPEN_RIGHT_HAND,
   offerFrom,
   offerStatus,
-  PLAYER_RANKS,
-  playerRank,
   presentCity,
   travelMinutesBetween,
 } from '../index';
@@ -404,40 +402,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------------------------
 // Ränge des Spielers (Auftrag 36): Titel im HUD (Mehr-Menü) mit der Leiter, Banner und Ton beim Aufstieg.
 
-function RankHud() {
-  const { state } = useGame();
-  // Auftrag 46b: Im Tutorial erscheint der Rang mit dem ersten Aufstieg.
-  if (!tutorialAllows(state, 'hud.rank')) return null;
-  const rank = playerRank(state);
-  const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
-  return (
-    <HudPill
-      data-tour="hud.rank"
-      icon="crown"
-      color="brand"
-      label="Rang"
-      value={rank.title}
-      title={`Dein Rang: ${rank.title}`}
-      details={
-        <div class="city-ranks">
-          <span class="hud-label is-brand">Dein Weg</span>
-          <ol class="city-ranks__list">
-            {PLAYER_RANKS.map((r, i) => (
-              <li key={r.id} class={i < reachedAt ? 'is-done' : i === reachedAt ? 'is-now' : ''}>
-                <Icon name={i <= reachedAt ? 'checkCircle' : 'plusCircle'} />
-                <span class="city-ranks__title">{i === reachedAt ? rank.title : r.title.replace('{city}', '…')}</span>
-                {i === reachedAt + 1 && <span class="city-ranks__hint">{r.hint}</span>}
-              </li>
-            ))}
-          </ol>
-        </div>
-      }
-    />
-  );
-}
-
-registerHudItem({ id: 'city.rank', order: 4, placement: 'more', icon: 'crown', component: RankHud });
-
+// Der Rang hat kein Widget mehr (Feedback 13.10.2026: er wirkt nicht, oben links steht jetzt der Shop). Er wird weiter
+// berechnet (Bestenliste, späteres Level-System); beim Aufstieg gibt es Verlauf und Ton.
 onGameEvent('player.rankUp', 'city.rankUp', (payload, ui) =>
   ui.toast(`Neuer Rang: ${payload.title}`, 'good', { urgent: true, icon: 'crown' }),
 );

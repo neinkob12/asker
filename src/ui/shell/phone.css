@@ -190,6 +190,25 @@
 .phone__nav-button:hover .phone__home-indicator {
   opacity: 1;
 }
+/* Sichtbarer Home-Knopf in jeder App (Desktop): kleine Glas-Pille im Platz des Home-Balkens */
+.phone__nav > .phone__home-button {
+  place-items: center;
+  align-self: center;
+  width: 72px;
+  height: 32px;
+  margin-bottom: 4px;
+  padding: 0;
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--phone-label) 14%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--phone-label) 14%, transparent);
+  color: var(--phone-label);
+  transition: background var(--duration-fast);
+}
+.phone__nav > .phone__home-button:hover {
+  background: color-mix(in srgb, var(--phone-label) 24%, transparent);
+}
 /* Handy weglegen (Desktop): runde Taste links neben dem Gerät, so liegt sie nie über dem Inhalt */
 .phone__close {
   position: absolute;
@@ -245,7 +264,7 @@
   border: 0;
   border-radius: var(--radius-round);
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: var(--type-subhead);
   font-weight: var(--font-weight-bold);
   touch-action: none;
@@ -341,7 +360,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--hw-black);
+  background: var(--home-bg);
   color: var(--home-label);
   overflow: hidden;
 }
@@ -352,94 +371,289 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: calc(var(--phone-status-height) + 2px) var(--phone-gutter) 12px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  overscroll-behavior: contain;
+  padding: calc(var(--phone-status-height) + 8px) var(--phone-gutter) 12px;
+  /* Feedback 13.10.2026: Der Startbildschirm scrollt nicht, er steht. Auf kleinen Bildschirmen rückt alles enger
+     (Container-Abfrage auf die Höhe unten), damit Mitteilungen, Widgets, Apps und Lager ganz hineinpassen. */
+  overflow: hidden;
+  container: home / size;
 }
 .phone__home-scroll > * {
   flex-shrink: 0;
 }
-/* Dringender Rat: eine Zeile ganz oben, nach links wischen oder × blendet sie aus */
-.phone__urgent {
-  display: flex;
-  align-items: stretch;
-  background: var(--phone-group);
-  border-radius: var(--radius-group);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-brand) 40%, transparent);
-  overflow: hidden;
-}
-.phone__urgent-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 60px;
-  padding: 8px 4px 8px 12px;
-  border: 0;
-  background: none;
-  color: var(--phone-label);
-  text-align: left;
-  cursor: pointer;
-}
-.phone__urgent-main:hover {
-  background: var(--phone-group-2);
-}
-.phone__urgent-text {
-  flex: 1;
-  min-width: 0;
+/* Mitteilungen ganz oben (HomeNotices): Kopfzeile und eine Meldung. Kurze Rückmeldungen (Fehler, Hinweis beim Tipp auf
+   Gesperrtes) stehen hier statt schwebend; sonst die neueste Meldung aus dem Verlauf. Feste Höhe, damit nichts springt. */
+.phone__notices {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
+  /* Platz für Kopf und zwei Zeilen: Kommt eine längere Meldung, rutscht darunter nichts. */
+  min-height: 78px;
+  padding: 9px 12px 10px;
+  border: 0;
+  border-radius: var(--radius-group);
+  background: var(--home-card);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
+  color: var(--home-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast);
 }
-.phone__urgent-kicker {
+.phone__notices:hover {
+  background: var(--home-card-hover);
+}
+.phone__notices-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--type-caption-2);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
-  color: var(--cat-brand);
+  color: var(--home-label-2);
 }
-/* Bis zu drei Zeilen (J5: einzeilig fiel der Ort weg, „2 Kunden warten am E…“; N9: im kleinen Handy fiel bei zwei
-   Zeilen „wartet“ weg), umbrochen nur zwischen Wörtern. */
-.phone__urgent-title {
+.phone__notices-head time {
+  margin-left: auto;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.phone__notices-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.phone__notices-icon {
+  flex: none;
+  margin-top: 1px;
+  font-size: 17px;
+  color: var(--home-label-2);
+}
+/* Bis zwei Zeilen, umbrochen nur zwischen Wörtern. */
+.phone__notices-text {
   display: -webkit-box;
   overflow: hidden;
-  font-size: var(--type-subhead);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--type-subhead-lh);
+  font-size: var(--type-footnote);
+  line-height: 1.3;
   overflow-wrap: normal;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.phone__urgent-action {
-  flex: none;
-  padding: 6px 12px;
-  border-radius: var(--radius-round);
-  /* Helles Gold in beiden Schemata (N11: im Hell-Modus war --cat-brand dunkel, die dunkle Schrift kam auf 3:1). */
-  background: var(--cat-brand-a);
-  color: var(--cat-brand-on);
-  font-size: var(--type-footnote);
+.phone__notices.is-empty .phone__notices-text,
+.phone__notices.is-alert .phone__notices-text {
+  color: var(--home-label-2);
+}
+/* Kurze Rückmeldung: leuchtet kurz auf, Fehler rot, Hinweis neutral mit Schloss. */
+.phone__notices.is-error,
+.phone__notices.is-hint {
+  animation: phone-notice-in 260ms var(--ease-out);
+}
+.phone__notices.is-error {
+  box-shadow: inset 0 0 0 1px rgba(255, 123, 115, 0.45);
+}
+.phone__notices.is-error .phone__notices-icon {
+  color: var(--home-danger);
+}
+.phone__notices.is-hint {
+  box-shadow: inset 0 0 0 1px var(--home-card-ring);
+}
+.phone__notices.is-hint .phone__notices-icon {
+  color: var(--home-label);
+}
+@keyframes phone-notice-in {
+  from {
+    background: var(--home-flash);
+  }
+}
+/* Dringender Rat (Chat mit Frist, Kunden warten …): steht in den Mitteilungen, kräftig in der Schrift. */
+.phone__notices.is-urgent {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--home-alert) 55%, transparent);
+}
+.phone__notices.is-urgent .phone__notices-icon {
+  color: var(--home-alert);
+}
+.phone__notices.is-urgent .phone__notices-text {
   font-weight: var(--font-weight-bold);
 }
-.phone__urgent-close {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  border: 0;
-  background: none;
-  color: var(--phone-label-2);
-  font-size: 18px;
-  cursor: pointer;
+/* Wenig Höhe (iPhone SE, kleine Desktops; Höhe ohne Ränder): Abstände, Mitteilungen, Widgets und Lager-Fächer schrumpfen. */
+@container home (max-height: 600px) {
+  .phone__home-scroll {
+    gap: 8px;
+  }
+  .phone__notices {
+    min-height: 60px;
+    padding-block: 7px 8px;
+    gap: 2px;
+  }
+  .phone__notices-text {
+    -webkit-line-clamp: 1;
+  }
+  .phone-stat {
+    min-height: 96px;
+  }
+  .phone__apps {
+    padding-top: 0;
+  }
 }
-.phone__urgent-close:hover {
-  color: var(--phone-label);
+@container home (max-height: 500px) {
+  .phone__home-scroll {
+    gap: 6px;
+  }
+  .phone__notices {
+    min-height: 54px;
+  }
+  .phone-stat {
+    min-height: 76px;
+  }
+  .phone-stat__value {
+    font-size: 24px;
+  }
 }
+/* Widgets oben auf dem Startbildschirm: Raster aus drei Spalten, breite Widgets über zwei (Lager), kleine über eine
+   (Ruf oben rechts). Module setzen .phone-widget und eine Breite, das Raster gehört dem Handy. */
 .phone__widgets {
+  display: grid;
+  /* Schmal links der Shop, daneben breiter Ruf und Reviere (Feedback 13.10.2026). */
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.14fr) minmax(0, 1.14fr);
+  gap: 10px;
+}
+.phone-widget {
+  grid-column: span 3;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: var(--radius-xl);
+  /* Der Startbildschirm ist in beiden Schemata schwarz: Widgets als helles Glas darauf, Schrift wie die App-Namen. */
+  background: var(--home-card);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
+  color: var(--home-label);
+}
+.phone-widget--wide {
+  grid-column: span 2;
+}
+.phone-widget--small {
+  grid-column: span 1;
+}
+.phone-widget__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px 2px;
+  font-size: var(--type-caption-2);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+}
+/* Kleines Kennzahl-Widget (Rang, Ruf, Reviere oben nebeneinander): Kopf in der Farbe des Widgets (--stat-accent,
+   hell für dunklen Grund), große Zahl oder Titel, Unterzeile, Leiste, Fußzeile. Als Knopf tippbar. */
+.phone-stat {
+  --stat-accent: var(--home-label);
+  grid-column: span 1;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 112px;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+button.phone-stat {
+  cursor: pointer;
+}
+/* Shop oben links: Symbol statt Zahl */
+.phone-shop {
+  align-items: center;
+  text-align: center;
+}
+.phone-shop .phone-widget__label {
+  align-self: flex-start;
+}
+.phone-shop__icon {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--stat-accent);
+}
+button.phone-stat:hover {
+  background: var(--home-card-hover);
+}
+.phone-stat .phone-widget__label {
+  margin: 0 0 2px;
+  color: var(--stat-accent);
+}
+.phone-stat__value {
+  font-family: var(--font-hud-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Titel statt Zahl (Rang): zwei Zeilen, nie im Wort umbrochen. */
+.phone-stat__title {
+  font-family: var(--font-hud-display);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.05;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.phone-stat__sub {
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.phone-stat__bar {
+  width: 100%;
+  height: 5px;
+  margin: auto 0 4px;
+  border-radius: 3px;
+  background: var(--home-track);
+  overflow: hidden;
+}
+.phone-stat__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--stat-accent);
+}
+.phone-stat__foot {
+  margin-top: auto;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--home-label-2);
+}
+.phone-stat__bar + .phone-stat__foot {
+  margin-top: 0;
+}
+/* Gesperrtes Widget (Tutorial, LockedWidget): ausgegraut, Schloss in der Mitte, darunter, wann es kommt. */
+.phone-widget--locked {
+  align-items: flex-start;
+  gap: 4px;
+  border: 0;
+  background: var(--home-card-dim);
+  color: var(--home-label-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.phone-widget--locked .phone-widget__label {
+  color: var(--home-label-2);
+}
+.phone-widget__lock {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--home-card);
+  color: var(--home-label);
+}
+.phone-widget--locked:not(.phone-stat) {
+  min-height: 120px;
 }
 .phone__widgets:empty {
   display: none;
@@ -482,14 +696,16 @@
   transition-duration: 90ms;
 }
 .phone__app-name {
-  max-width: 100%;
+  /* Darf ein paar Pixel in die Lücke zur Nachbarspalte ragen (mittig, nach beiden Seiten): Im schmalen Handy (320 px)
+     fehlten „Einstellungen“ sonst die letzten Buchstaben. */
+  max-width: calc(100% + 10px);
   overflow: hidden;
   /* Kleines Handy (Fenster 1280 × 720): „Einstellungen“ passt mit 11 px ganz hinein statt „Einstellun…“ (N9). */
   font-size: clamp(11px, 3.4cqw, var(--type-caption));
   letter-spacing: -0.01em;
   font-weight: var(--font-weight-medium);
   line-height: 16px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--home-name-shadow);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -499,7 +715,27 @@
   left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
   min-width: 22px;
   height: 22px;
-  box-shadow: 0 0 0 2px var(--hw-black);
+  box-shadow: 0 0 0 2px var(--home-bg);
+}
+/* Gesperrte App (Tutorial): steht schon da, ausgegraut, mit Schloss oben rechts wie ein Zähler. */
+.phone__app.is-locked .phone__tile {
+  filter: grayscale(1) brightness(0.5);
+}
+.phone__app.is-locked .phone__app-name {
+  color: var(--home-label-2);
+}
+.phone__app-lock {
+  position: absolute;
+  top: -6px;
+  left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--home-lock);
+  box-shadow: 0 0 0 2px var(--home-bg);
+  color: var(--home-label);
 }
 /* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
 .phone__app-preview {
@@ -511,20 +747,21 @@
   font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
-/* Dock: Glas über dem Wallpaper (schwebende Ebene), vier Apps ohne Beschriftung */
+/* Dock: Glas über dem Wallpaper (schwebende Ebene), vier Apps mit Namen wie im Raster */
 .phone__dock {
   position: relative;
   display: flex;
   justify-content: space-around;
   flex-shrink: 0;
   margin: 0 12px var(--phone-home-inset);
-  padding: 12px 10px;
+  padding: 10px 6px 8px;
   background: var(--home-glass);
   backdrop-filter: var(--phone-blur);
   border-radius: 32px;
   box-shadow: inset 0 0 0 0.5px var(--home-glass-edge);
 }
 .phone__app.is-dock {
+  flex: 1 1 0;
   min-height: 64px;
 }
 
@@ -677,7 +914,7 @@ html.is-dragging {
   padding: 0 8px 0 0;
   border: 0;
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: var(--type-body);
   cursor: pointer;
 }
@@ -745,7 +982,7 @@ html.is-dragging {
   min-height: var(--phone-nav-height);
 }
 .phone-screen__actions .ui-button--subtle {
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 /* Aktionen aus Abschnitten (Portal in die Leiste): Text in der Markenfarbe wie bei iOS, die Hauptaktion bleibt Gold */
 .phone-screen__actions .ui-portal {
@@ -754,7 +991,7 @@ html.is-dragging {
 .phone-screen__actions .ui-button:not(.ui-button--primary, .ui-button--danger) {
   --btn-bg: transparent;
   --btn-hover: var(--phone-fill);
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 .phone-screen__search-button {
   display: grid;
@@ -765,7 +1002,7 @@ html.is-dragging {
   border: 0;
   border-radius: var(--radius-round);
   background: transparent;
-  color: var(--cat-brand);
+  color: var(--phone-tint);
   font-size: 21px;
   cursor: pointer;
 }
@@ -938,9 +1175,9 @@ html.is-dragging {
   font-size: var(--type-body);
 }
 .phone .ui-button--primary {
-  --btn-bg: var(--color-primary);
-  --btn-hover: var(--color-primary-hover);
-  --btn-fg: var(--color-on-primary);
+  --btn-bg: var(--phone-tint-fill);
+  --btn-hover: var(--phone-tint-fill-hover);
+  --btn-fg: var(--phone-on-tint);
 }
 .phone .ui-button--success {
   --btn-bg: var(--money);
@@ -955,7 +1192,7 @@ html.is-dragging {
 .phone .ui-button--subtle {
   --btn-bg: transparent;
   --btn-hover: var(--phone-fill);
-  --btn-fg: var(--cat-brand);
+  --btn-fg: var(--phone-tint);
 }
 .phone .ui-button--link {
   --btn-fg: var(--cat-place);
@@ -1266,7 +1503,7 @@ html.is-dragging {
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-caps);
-  color: var(--cat-brand);
+  color: var(--phone-tint);
 }
 .mobile-dock__title {
   overflow: hidden;
@@ -1284,8 +1521,8 @@ html.is-dragging {
   justify-content: center;
   gap: 2px;
   width: 72px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--phone-tint-fill);
+  color: var(--phone-on-tint);
   border: 0;
   border-radius: var(--radius-group);
   box-shadow: var(--shadow-float);
@@ -1319,13 +1556,15 @@ html.is-dragging {
     --chip-size: min(56px, calc(100cqw * 0.14));
   }
   .phone__dock {
-    padding: 8px 10px;
+    padding: 8px 6px 6px;
   }
 }
 
 @media (max-width: 760px) {
+  /* Am Handy-Bildschirm ist das offene Handy Vollbild wie ein echtes Handy: Es liegt über der HUD-Reihe (Geld, Uhr,
+     Wetter, Tempo; --z-phone über --z-hud), die Uhrzeit steht oben im Handy (Feedback 13.10.2026). */
   .phone {
-    top: calc(var(--top) + var(--hud-height) + var(--space-2));
+    top: var(--safe-top, 0px);
     left: 0;
     right: 0;
     bottom: 0;

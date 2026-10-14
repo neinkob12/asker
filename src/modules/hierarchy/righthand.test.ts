@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, type Simulation } from '../../core';
+import { clock, journal, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import {
   enlist,
@@ -98,10 +98,13 @@ describe('Rechte Hand', () => {
     const reports = eventsOfType(events, 'hierarchy.dailyReport');
     expect(reports).toHaveLength(1);
     expect(reports[0].payload.day).toBe(1);
-    const message = sim.state.messages.list.find(
-      (m) => m.contactId === `staff:${boss.id}` && m.text.includes('Tagesbericht'),
-    );
-    expect(message?.options?.map((o) => o.id)).toContain('openFinance');
+    // Feedback 13.10.2026: Der Bericht kommt nicht mehr als Chat, er steht im Journal und auf ihrer Seite.
+    expect(
+      sim.state.messages.list.some((m) => m.contactId === `staff:${boss.id}` && m.text.includes('Tagesbericht')),
+    ).toBe(false);
+    expect(
+      journal.entries(sim.state).some((e) => e.text.startsWith(`${boss.name}:`) && e.text.includes('Tagesbericht')),
+    ).toBe(true);
     expect(getRightHand(sim.state)?.lastReport?.day).toBe(1);
     // Am selben Tag kein zweiter Bericht.
     sim.advance(120);

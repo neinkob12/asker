@@ -11,6 +11,7 @@ import {
   Disclosure,
   Group,
   Hint,
+  Icon,
   ItemContent,
   KeyValue,
   List,
@@ -25,7 +26,6 @@ import {
   Slot,
   Stepper,
   soundOnEvent,
-  Tag,
   useGame,
   useUi,
 } from '../../../ui';
@@ -45,7 +45,7 @@ import {
 import { cargoAmount, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
 import { specialistFactor } from '../../staff';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialLockText } from '../../tutorial';
 import {
   activeDeal,
   assortment,
@@ -92,7 +92,8 @@ import './suppliers.css';
 
 const APP_ID = 'suppliers.app';
 
-const KIND_NAME: Record<Supplier['kind'], string> = { port: 'Hafen', city: 'Großstadt' };
+/** Wie die Ware kommt (das Wort „Großstadt“ stand bei fast allen gleich und sagte nichts). */
+const KIND_NAME: Record<Supplier['kind'], string> = { port: 'per Schiff', city: 'per Transporter' };
 
 function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier?: boolean }) {
   const { state, shipment: s } = props;
@@ -220,9 +221,32 @@ function PackageChips(props: {
   );
 }
 
-/** Eine Zeile der Liste: Kachel (Schiff oder Transporter, gesperrt mit Schloss), Name, Stand, Etikett. */
-function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void }) {
-  const { state } = useGame();
+/**
+ * Symbol je Lieferant (Feedback 13.10.2026): die Herkunft statt nur Schiff oder Transporter. Neue Lieferanten ohne
+ * Eintrag bekommen das Symbol ihrer Lieferart.
+ */
+const SUPPLIER_ICONS: Record<string, string> = {
+  rotterdam: 'windmill',
+  frankfurt: 'towers',
+  berlin: 'tvTower',
+  hamburg: 'lighthouse',
+  amsterdam: 'canalHouse',
+  flughafen: 'plane',
+  italien: 'arena',
+  koeln: 'dom',
+};
+
+const supplierIcon = (s: Supplier) => SUPPLIER_ICONS[s.id] ?? (s.kind === 'port' ? 'ship' : 'truck');
+
+/** Stufen der Beziehung auf dem Balken (Fremder, Bekannt, Geschäftspartner, Vertraut, Familie). */
+const TRUST_STEPS = 5;
+
+/**
+ * Kachel eines Lieferanten (Feedback 13.10.2026): Symbol mit Lieferart, Name, Lieferzeit und Beziehung als Balken von
+ * „Fremder“ bis „Familie“. Gesperrte zeigen ein Schloss und, sobald alles erfüllt ist, gleich „Freischalten“.
+ */
+function SupplierTile(props: { supplier: Supplier; onSelect: (id: string) => void }) {
+  const { state, dispatch } = useGame();
   const s = props.supplier;
   const rel = getRelation(state, s.id);
   const underway = shipmentsInTransit(state, activeCity(state)).filter((x) => x.supplierId === s.id).length;
@@ -230,101 +254,91 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
   const ready = !unlocked && canUnlock(state, s.id).ok;
   const missing = unlockRequirements(state, s.id).find((r) => !r.done);
   const blocked = isBlocked(state, s.id);
-  const meta = unlocked
-    ? undefined
-    : ready
-      ? `Bereit: ${s.unlock && s.unlock.fee > 0 ? `${formatEuro(s.unlock.fee)} Vermittlung` : 'ohne Gebühr'}`
-      : `Fehlt: ${missing?.label ?? '…'}`;
-  const tags = [
-    { label: s.name, icon: 'pin', color: 'place' as const },
-    ...(unlocked
-      ? [
-          { label: KIND_NAME[s.kind], icon: s.kind === 'port' ? 'ship' : 'truck', color: 'goods' as const },
-          { label: clock.formatDuration(s.deliveryTime), icon: 'clock' },
-          { label: trustLabel(rel.trust), icon: 'handshake', color: 'money' as const },
-        ]
-      : []),
-    unlocked &&
-      getDeals(state, activeCity(state)).some((d) => d.supplierId === s.id) && {
-        label: 'Aktion',
-        icon: 'percent',
-        color: 'money' as const,
-      },
-  ];
-  const tag = blocked ? (
-    <Tag category="danger" icon="alert">
-      Schulden
-    </Tag>
-  ) : rel.debt > 0 ? (
-    <Tag category="warn" icon="coinEuro">
-      {formatEuro(rel.debt)}
-    </Tag>
-  ) : underway > 0 ? (
-    <Tag category="goods" icon="truck">
-      {underway} unterwegs
-    </Tag>
-  ) : ready ? (
-    <Tag category="money" icon="unlock">
-      bereit
-    </Tag>
-  ) : null;
+  const deal = unlocked && getDeals(state, activeCity(state)).some((d) => d.supplierId === s.id);
+  const fee = s.unlock?.fee ?? 0;
+  const badge = blocked
+    ? { text: 'Schulden', tone: 'danger' }
+    : rel.debt > 0
+      ? { text: formatEuro(rel.debt), tone: 'warn' }
+      : underway > 0
+        ? { text: `${underway} unterwegs`, tone: 'goods' }
+        : deal
+          ? { text: 'Aktion', tone: 'money' }
+          : null;
+  const filled = Math.max(1, Math.min(TRUST_STEPS, Math.floor(rel.trust / (100 / TRUST_STEPS)) + 1));
   return (
-    <ListItem onClick={() => props.onSelect(s.id)} aside={tag ?? undefined}>
-      <ItemContent
-        icon={unlocked ? (s.kind === 'port' ? 'ship' : 'truck') : ready ? 'unlock' : 'lock'}
-        color={unlocked ? 'goods' : ready ? 'money' : 'system'}
-        title={s.contactName}
-        meta={meta}
-        tags={tags}
-      />
-    </ListItem>
+    <div class={`sup-tile${unlocked ? '' : ' is-locked'}`}>
+      <button type="button" class="sup-tile__open" onClick={() => props.onSelect(s.id)}>
+        <span class="sup-tile__top">
+          <span class="sup-tile__icon">
+            <Icon name={supplierIcon(s)} size={24} />
+            <span class="sup-tile__kind" title={KIND_NAME[s.kind]}>
+              <Icon name={unlocked ? (s.kind === 'port' ? 'ship' : 'truck') : 'lock'} size={12} />
+            </span>
+          </span>
+          {badge && <span class={`sup-tile__badge is-${badge.tone}`}>{badge.text}</span>}
+        </span>
+        <span class="sup-tile__name">{s.contactName}</span>
+        <span class="sup-tile__place">{s.name}</span>
+        {unlocked ? (
+          <>
+            <span class="sup-tile__time">
+              <Icon name="clock" size={13} />
+              {clock.formatDuration(s.deliveryTime)}
+            </span>
+            <span class="sup-tile__trust" title={`Beziehung: ${trustLabel(rel.trust)}`}>
+              <span class="sup-tile__steps" aria-hidden="true">
+                {Array.from({ length: TRUST_STEPS }, (_, i) => (
+                  <span key={i} class={i < filled ? 'is-on' : undefined} />
+                ))}
+              </span>
+              <span class="sup-tile__trustLabel">{trustLabel(rel.trust)}</span>
+            </span>
+          </>
+        ) : (
+          !ready && <span class="sup-tile__missing">{missing ? `Fehlt: ${missing.label}` : 'Noch gesperrt'}</span>
+        )}
+      </button>
+      {ready && (
+        <Button
+          small
+          variant="primary"
+          icon="unlock"
+          class="sup-tile__unlock"
+          disabled={state.wallet.dirty < fee}
+          onClick={() => dispatch({ type: 'suppliers.unlock', payload: { supplierId: s.id } })}
+        >
+          {fee > 0 ? formatEuro(fee) : 'Freischalten'}
+        </Button>
+      )}
+    </div>
   );
 }
 
+/**
+ * Liste der Lieferanten als Kacheln, zwei pro Reihe (freigeschaltete zuerst), darunter Lieferungen unterwegs und die
+ * Logistik (Slot 'suppliers.list').
+ */
 function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
-  const open = getSuppliers(state, activeCity(state)).filter((s) => isUnlocked(state, s.id));
-  const locked = getSuppliers(state, activeCity(state)).filter((s) => !isUnlocked(state, s.id));
-  // Schiffe an den eigenen Kai stehen im Tracker oben (Slot 'suppliers.top', Logistik), hier nur der Rest. Nur die
+  const all = getSuppliers(state, activeCity(state));
+  const tiles = [...all.filter((s) => isUnlocked(state, s.id)), ...all.filter((s) => !isUnlocked(state, s.id))];
+  // Schiffe an den eigenen Kai stehen im Tracker (Slot 'suppliers.top', Logistik), hier nur der Rest. Nur die
   // Stadt, in der du spielst: Was der Statthalter einer anderen Stadt bestellt hat, geht dich hier nichts an.
   const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => !s.toPort);
-  const debts = getSuppliers(state, activeCity(state)).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
+      <div class="sup-tiles">
+        {tiles.map((s) => (
+          <SupplierTile key={s.id} supplier={s} onSelect={props.onSelect} />
+        ))}
+      </div>
       <Slot name="suppliers.top" props={{}} />
       {shipments.length > 0 && (
         <Group data-tour="suppliers.shipments" icon="route" color="goods" title="Unterwegs" count={shipments.length}>
           {shipments.map((s) => (
             <ShipmentRow key={s.id} state={state} shipment={s} showSupplier />
           ))}
-        </Group>
-      )}
-      {debts.map((s) => (
-        <p key={s.id} class={isBlocked(state, s.id) ? 'sup-debt is-overdue' : 'sup-debt'}>
-          Schulden bei {s.name}: {formatEuro(getRelation(state, s.id).debt)}
-        </p>
-      ))}
-      <Group icon="truck" color="goods" title="Liefern an dich" count={open.length}>
-        <List>
-          {open.map((s) => (
-            <SupplierRow key={s.id} supplier={s} onSelect={props.onSelect} />
-          ))}
-        </List>
-      </Group>
-      {locked.length > 0 && (
-        <Group
-          icon="lock"
-          color="system"
-          title="Noch kein Geschäft"
-          count={locked.length}
-          note="Mit mehr Umsatz, eigenen Veedeln und einem Liegeplatz melden sie sich per Handy."
-          more="Großstädte liefern schnell kleine Mengen, der Hafen günstig große. Jeder Lieferant hat eigene Bedingungen; was fehlt, steht in der Zeile."
-        >
-          <List>
-            {locked.map((s) => (
-              <SupplierRow key={s.id} supplier={s} onSelect={props.onSelect} />
-            ))}
-          </List>
         </Group>
       )}
       <Slot name="suppliers.list" props={{}} />
@@ -354,8 +368,8 @@ function LockedSupplier(props: { supplierId: string }) {
     <Group
       icon={ready ? 'unlock' : 'lock'}
       color={ready ? 'money' : 'system'}
-      title="Noch kein Geschäft"
-      note={`${supplier.contactName} macht erst Geschäfte mit dir, wenn alles erfüllt ist. Dann meldet er sich per Handy.`}
+      title="Freischalten"
+      note={ready ? undefined : `${supplier.contactName} macht erst Geschäfte mit dir, wenn alles erfüllt ist.`}
     >
       <List>
         {rows.map((r) => (
@@ -699,7 +713,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
     return (
       <div class="sup-app">
         <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
-        <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
+        <KeyValue label="Lieferung" value={KIND_NAME[supplier.kind]} />
         <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
         <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
         <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />
@@ -719,7 +733,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
   return (
     <div class="sup-app">
       <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
-      <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
+      <KeyValue label="Lieferung" value={KIND_NAME[supplier.kind]} />
       <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
       <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
       <KeyValue label="Zuverlässigkeit" value={formatPercent(supplier.reliability)} />
@@ -892,7 +906,9 @@ registerPhoneApp({
   component: SuppliersApp,
   // Nach dem Verkauf kauft man in der App Handel ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
-  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.suppliers'),
+  hiddenWhen: (state) => isBusinessSold(state),
+  // Auftrag 46b: Im Tutorial steht die App schon da, gesperrt bis zu ihrer Stufe.
+  lockedWhen: (state) => tutorialLockText(state, 'app.suppliers'),
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(

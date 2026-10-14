@@ -1,5 +1,7 @@
 .map-place--warehouse {
   --map-place-color: var(--color-info-strong);
+  /* Über den Spot-Markern daneben, sonst lag ein Schloss mitten auf dem Bestand. */
+  z-index: 2;
   pointer-events: auto;
   background: none;
   border: 0;
@@ -48,38 +50,249 @@
   gap: 28px;
 }
 
-/* Aufklappbare Aufstellung der Lager-Kachel im HUD */
-.goods-flyout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* Lager-Widget auf dem Startbildschirm des Handys: 8 Fächer (2 × 4, bei mehr Waren 10), freie leer, darunter
+   „Lager-Optionen“. Die Farben gehören zur Ware selbst, deshalb hier und nicht als Bedeutungsfarbe in den Tokens: hell
+   für den schwarzen Startbildschirm, dunkler im White Mode des Handys (unten). */
+.goods-widget {
+  gap: 6px;
 }
-.goods-flyout__rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.goods-stock {
+  display: grid;
+  grid-template-columns: repeat(var(--stock-cols, 4), minmax(0, 1fr));
+  gap: 4px;
   margin: 0;
   padding: 0;
-  list-style: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
 }
-.goods-flyout__rows li {
+.goods-stock__cell {
+  --product: var(--home-label);
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 72px;
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--home-cell);
+  transition: background var(--duration-fast);
+}
+.goods-stock:hover .goods-stock__cell {
+  background: var(--home-card-hover);
+}
+.goods-stock__cell[data-product="weed"] {
+  --product: #4ade80;
+}
+.goods-stock__cell[data-product="kush"] {
+  --product: #a7f3d0;
+}
+.goods-stock__cell[data-product="haze"] {
+  --product: #e3f26b;
+}
+.goods-stock__cell[data-product="hash"] {
+  --product: #d39b5f;
+}
+.goods-stock__cell[data-product="vape"] {
+  --product: #5ee1f0;
+}
+.goods-stock__cell[data-product="edibles"] {
+  --product: #f4a6cb;
+}
+.goods-stock__cell[data-product="oil"] {
+  --product: #f5b84a;
+}
+/* Icon über der Menge, beides genau in der Mitte der Kachel (das Widget ist schmaler als die alte HUD-Karte). */
+.goods-stock__main {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  font-size: 13px;
+  align-items: center;
+  gap: 3px;
 }
-.goods-flyout__rows strong {
+.goods-stock__icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--product);
+}
+/* Nur Umriss, scharf: ein enger, schwacher Schein in der Farbe der Ware. */
+.goods-stock__icon svg {
+  overflow: visible;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--product) 55%, transparent));
+}
+.goods-stock__badge {
+  position: absolute;
+  right: -9px;
+  bottom: -3px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: var(--home-bg, #000);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--product) 45%, transparent);
+  color: var(--product);
+  font: 700 8px / 1 var(--font-hud);
+  letter-spacing: 0.03em;
+}
+.goods-stock__main strong {
   font-family: var(--font-hud-display);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.goods-flyout__rows span,
-.goods-flyout__empty {
-  margin: 0;
-  color: var(--hud-ink-2);
+/* Unterwegs: eigene Zeile unter der Menge, mit Luft (Feedback 13.10.2026: klebte vorher an der Menge). Die Gruppe aus
+   Icon, Menge und „+ unterwegs“ steht zusammen in der Mitte der Kachel. */
+.goods-stock__plus {
+  margin-top: 2px;
+  color: var(--home-money);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.goods-stock__cell.is-free {
+  background: var(--home-cell-dim);
+  box-shadow: inset 0 0 0 1px var(--home-card-edge);
+}
+.goods-stock__cell.is-empty .goods-stock__icon {
+  opacity: 0.35;
+}
+.goods-stock__cell.is-empty .goods-stock__icon svg {
+  filter: none;
+}
+.goods-stock__cell.is-empty strong {
+  color: var(--home-label-2);
+}
+.goods-widget__options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Größer (Feedback 13.10.2026): hier geht es auch zu den Fahrern. */
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--home-cell);
+  color: var(--home-label);
+  font-size: 15px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+.goods-widget__options:hover {
+  background: var(--home-card-hover);
+}
+.goods-widget__options span {
+  flex: 1;
+  text-align: left;
+}
+.goods-widget__options .ui-icon:first-child {
+  color: var(--cat-goods);
+}
+.goods-widget__options.is-locked {
+  color: var(--home-label-2);
+  cursor: default;
+}
+.goods-widget__options.is-locked .ui-icon:first-child {
+  color: inherit;
 }
 
 /* Füllstand des Lagers (Auftrag 33). */
 .goods-capacity {
   padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* Wenig Höhe auf dem Startbildschirm (Container home in phone.css): flachere Fächer, damit nichts scrollt. Icon und
+   Lager-Optionen werden dafür kleiner, die Fächer behalten oben und unten Luft (Feedback 13.10.2026). */
+@container home (max-height: 600px) {
+  .goods-stock__cell {
+    height: 62px;
+  }
+  .goods-stock__icon svg {
+    width: 19px;
+    height: 19px;
+  }
+  .goods-widget__options {
+    min-height: 38px;
+  }
+}
+@container home (max-height: 500px) {
+  .goods-stock__cell {
+    height: 57px;
+  }
+  .goods-stock__main {
+    gap: 2px;
+  }
+  .goods-stock__plus {
+    margin-top: 1px;
+  }
+  .goods-widget {
+    gap: 4px;
+  }
+}
+
+/* White Mode des Handys: Farben der Waren dunkler, damit sie auf Creme lesbar bleiben. */
+.phone[data-appearance="light"] .goods-stock__cell[data-product="weed"] {
+  --product: #2f8f4e;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="kush"] {
+  --product: #1f7a5c;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="haze"] {
+  --product: #7a7a0f;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="hash"] {
+  --product: #8f5626;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="vape"] {
+  --product: #137a8e;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="edibles"] {
+  --product: #b23c72;
+}
+.phone[data-appearance="light"] .goods-stock__cell[data-product="oil"] {
+  --product: #9a6512;
+}
+
+/* Fehlende Ware (Klick auf einen Spot ohne passende Ware, ui.flash): rot umrandet, wackelt kurz, der Rand bleibt etwas
+   stehen und blendet dann aus. */
+.goods-stock__cell.is-missing {
+  animation:
+    goods-missing-shake 480ms var(--ease-out) 2,
+    goods-missing-ring 2.6s ease-out forwards;
+}
+@keyframes goods-missing-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px) rotate(-2deg);
+  }
+  40% {
+    transform: translateX(4px) rotate(2deg);
+  }
+  60% {
+    transform: translateX(-3px) rotate(-1deg);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes goods-missing-ring {
+  0%,
+  70% {
+    box-shadow: inset 0 0 0 2px var(--home-danger);
+    background: color-mix(in srgb, var(--home-danger) 16%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goods-stock__cell.is-missing {
+    animation: goods-missing-ring 2.6s ease-out forwards;
+  }
 }

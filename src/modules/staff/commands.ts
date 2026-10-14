@@ -12,6 +12,7 @@ import {
   MAX_SECURITY_PER_WAREHOUSE,
   ROLE_INFO,
   RUNNER_DAILY_WAGE,
+  SECURITY_HIRE_COST,
   WAGE_MAX_FACTOR,
   WAGE_MIN_FACTOR,
   XP_PER_BAIL,
@@ -67,6 +68,32 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
     assignment: { kind: 'spot', targetId: spotId },
     note: `Von der Straße, ${atSpot(spot)}.`,
     journalText: `Läufer ${profile.name} ${atSpot(spot)} angeheuert.`,
+  });
+  return { ok: true, data: { staffId: member.id } };
+}
+
+/**
+ * Sicherheit von der Straße anheuern und direkt an einen Spot stellen. Seit dem Umbau der Personal-App gibt es
+ * Läufer und Sicherheit nicht mehr unter den Bewerbern, sondern nur noch hier am Spot.
+ */
+export function hireSecurity(ctx: Ctx, spotId: string): CommandResult {
+  if (!tutorialAllowsRole(ctx.state, 'security')) return { ok: false, reason: 'Dazu kommst du später.' };
+  const spot = getSpot(ctx.state, spotId);
+  if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  if (!isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' };
+  if (securityAt(ctx.state, { spotId }).length > 0) return { ok: false, reason: 'Hier passt schon jemand auf.' };
+  if (!wallet.pay(ctx, SECURITY_HIRE_COST, 'dirty', 'Sicherheit angeheuert', { category: 'hiring', spotId }))
+    return { ok: false, reason: `Nicht genug Geld (${formatEuro(SECURITY_HIRE_COST)}).` };
+  const profile = generateProfile(ctx, 'security');
+  const cityId = veedelCity(spot.veedelId);
+  profile.wage = Math.round(ROLE_INFO.security.wage * cityWageFactor(cityId));
+  const member = enlist(ctx, profile, {
+    origin: 'street',
+    cityId,
+    knownStats: ['strength'],
+    assignment: { kind: 'spot', targetId: spotId },
+    note: `Von der Straße, ${atSpot(spot)}.`,
+    journalText: `Sicherheit ${profile.name} ${atSpot(spot)} angeheuert.`,
   });
   return { ok: true, data: { staffId: member.id } };
 }

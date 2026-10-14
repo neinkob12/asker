@@ -3,7 +3,7 @@
 // Hause, Geldwäsche mit höherer Obergrenze, Messe und Museumsuferfest.
 
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, MINUTES_PER_DAY, messages, type Simulation } from '../../core';
+import { journal, loadSimulation, MINUTES_PER_DAY, messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { DEALERS } from '../customers';
 import { CITY_EVENTS, eventFactor, isEventActive } from '../events';
@@ -129,8 +129,11 @@ describe('Frankfurt (Auftrag 39)', () => {
     expect(messages.thread(sim.state, 'supplier:flughafen')).toEqual([]);
     sim.ctx('city').emit('city.arrived', { cityId: 'frankfurt', first: true });
     sim.advance(1);
-    expect(messages.thread(sim.state, 'supplier:flughafen').some((m) => m.text.includes('Cargo City'))).toBe(true);
-    expect(messages.thread(sim.state, 'supplier:frankfurt').some((m) => m.text.includes('zu Hause'))).toBe(true);
+    // Feedback 13.10.2026: Was Lieferanten ohne Frage sagen, steht im Journal statt im Chat.
+    const said = journal.entries(sim.state).map((e) => e.text);
+    expect(said.some((t) => t.startsWith('Kofi:') && t.includes('Cargo City'))).toBe(true);
+    expect(said.some((t) => t.startsWith('Toni:') && t.includes('zu Hause'))).toBe(true);
+    expect(messages.thread(sim.state, 'supplier:flughafen')).toEqual([]);
     expect(getSuppliers(sim.state, 'frankfurt').map((s) => s.id)).toContain('flughafen');
     const toni = supplierIn(getSupplier(sim.state, 'frankfurt') ?? kofi, 'frankfurt');
     expect(kofi.deliveryTime).toBeLessThan(60);

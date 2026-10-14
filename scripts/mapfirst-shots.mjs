@@ -14,8 +14,8 @@ const scenes = [
   },
   { name: 'nachrichten', js: tab(1) },
   { name: 'lieferanten', js: tab(2) },
-  { name: 'kasse', js: tab(4) },
-  { name: 'start', js: tab(5) },
+  { name: 'personal', js: tab(3) },
+  { name: 'start', js: tab(4) },
 ];
 const { server, base } = await startServer();
 const browser = await launchBrowser();

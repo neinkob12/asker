@@ -393,15 +393,24 @@ export interface SummaryTile {
   label: string;
 }
 
-/** Drei (oder zwei) Kennzahlen als Kacheln oben auf einer Handy-Seite, z.B. Team, Lohn, Ausfälle. */
-export function SummaryTiles(props: { items: readonly SummaryTile[] }) {
+/**
+ * Drei (oder zwei) Kennzahlen als Kacheln oben auf einer Handy-Seite, z.B. Team, Lohn, Ausfälle. compactOnly: nur am
+ * Handy-Bildschirm, wo das HUD kompakt ist (z.B. sauberes Geld, das dort nicht im HUD steht).
+ */
+export function SummaryTiles(props: { items: readonly SummaryTile[]; compactOnly?: boolean }) {
   return (
-    <div class="ui-summary" style={{ '--summary-cols': props.items.length } as JSX.CSSProperties}>
+    <div
+      class={`ui-summary ${props.compactOnly ? 'ui-summary--compact-only' : ''}`}
+      style={{ '--summary-cols': props.items.length } as JSX.CSSProperties}
+    >
       {props.items.map((item) => (
         <div key={item.label} class="ui-summary__item">
           <IconChip icon={item.icon} color={item.color ?? 'system'} size="sm" />
-          <strong>{item.value}</strong>
-          <span>{item.label}</span>
+          {/* Lange Werte und Namen etwas kleiner statt abgeschnitten („1.071.1…“, „Rotterd…“ bei drei Kacheln am Handy). */}
+          <strong class={typeof item.value === 'string' && item.value.length > 8 ? 'is-long' : undefined}>
+            {item.value}
+          </strong>
+          <span class={item.label.length > 8 ? 'is-long' : undefined}>{item.label}</span>
         </div>
       ))}
     </div>

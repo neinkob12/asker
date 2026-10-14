@@ -1,7 +1,7 @@
 // Vollmacht der Rechten Hand (Auftrag 30): Voraussetzungen, Anteil am Tagesgewinn, Widerruf, Aufgaben mit Vollmacht.
 
 import { describe, expect, it } from 'vitest';
-import { messages, type Simulation, wallet } from '../../core';
+import { journal, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { dayReport } from '../finance';
 import { getGangs } from '../gangs';
@@ -127,7 +127,7 @@ describe('Vollmacht der Rechten Hand (Auftrag 30)', () => {
 
     // Bericht um acht: "Bericht aus Köln".
     sim.advance(9 * 60);
-    const report = messages.thread(sim.state, `staff:${boss.id}`).find((m) => m.text.startsWith('Bericht aus Köln'));
+    const report = journal.entries(sim.state).find((e) => e.text.startsWith(`${boss.name}: Bericht aus Köln`));
     expect(report).toBeDefined();
     // Ihr Anteil vom Vortag zählt im Bericht nicht als Kosten (Auftrag 43, M4).
     const lossDay = dayReport(sim.state, 1);

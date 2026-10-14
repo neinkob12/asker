@@ -59,7 +59,7 @@ function collect(runtime: UiRuntime): Entry[] {
     }
   }
   for (const tab of sidebarTabs.list()) {
-    if (tab.hidden || (state && tab.hiddenWhen?.(state))) continue;
+    if (tab.hidden || (state && (tab.hiddenWhen?.(state) || tab.lockedWhen?.(state)))) continue;
     add({
       id: `tab:${tab.id}`,
       group: 'Bereiche',
@@ -69,7 +69,7 @@ function collect(runtime: UiRuntime): Entry[] {
     });
   }
   for (const app of phoneApps.list()) {
-    if (app.hidden || (state && app.hiddenWhen?.(state))) continue;
+    if (app.hidden || (state && (app.hiddenWhen?.(state) || app.lockedWhen?.(state)))) continue;
     add({
       id: `app:${app.id}`,
       group: 'Handy',
@@ -101,15 +101,8 @@ function collect(runtime: UiRuntime): Entry[] {
     group: 'Befehle',
     title: 'Einstellungen',
     icon: 'gear',
-    keywords: 'ton musik lautstärke anzeige kamera vibration',
+    keywords: 'ton musik lautstärke anzeige vibration',
     run: () => api.openPhone('core.settings'),
-  });
-  add({
-    id: 'cmd:camera',
-    group: 'Befehle',
-    title: runtime.ui.camera === '3d' ? 'Kamera: 2D-Draufsicht' : 'Kamera: 3D schräg',
-    icon: 'cube',
-    run: api.toggleCamera,
   });
   add({ id: 'cmd:koeln', group: 'Befehle', title: 'Zurück zur Stadt', icon: 'pin', run: api.flyHome });
   return entries;

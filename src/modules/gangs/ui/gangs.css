@@ -1,4 +1,4 @@
-/* Gangs: Übersicht (Liste), Seite einer Gang, Dialoge und Karten-Marker. Nur Design-Tokens; die Gang-Farbe kommt als --gang-color. */
+/* Gangs: Übersicht (Tabelle), Seite einer Gang, Dialoge und Karten-Marker. Nur Design-Tokens; die Gang-Farbe kommt als --gang-color. */
 
 .gangs-tab,
 .gang-page {
@@ -128,132 +128,196 @@
 .shell-map.zoomed-out .gang-hq__name {
   display: none;
 }
-.gang-push {
-  pointer-events: none;
-}
-.gang-push__ring {
-  display: block;
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-round);
-  border: 2px solid var(--gang-color);
-  background: color-mix(in srgb, var(--gang-color) 12%, transparent);
-  animation: gang-push 1.8s ease-out infinite;
-}
-@keyframes gang-push {
-  0% {
-    transform: scale(0.4);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
-}
-
-/* Kopf des Gangs-Tabs (Auftrag 27): deine Stärke als Zahl, jede Gang als Balken auf derselben Skala */
+/* Deine Stärke (Feedback 13.10.2026): neutraler Kasten, Teile als Balken in Bedeutungsfarben und als kleine Liste */
 .gangs-power {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--phone-group, var(--color-panel-raised));
-  border: 1px solid var(--phone-separator, var(--color-line));
+  padding: var(--space-3) var(--space-4) var(--space-4);
   border-radius: var(--radius-group);
+  background: var(--phone-group, var(--color-panel-raised));
 }
-.gangs-power__you {
+.gangs-power__head {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  text-align: center;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
-.gangs-power__label,
-.gangs-power__hint {
+.gangs-power__label {
+  font-size: var(--type-footnote, 13px);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--phone-label-2, var(--color-muted));
+}
+.gangs-power__number {
+  font-size: var(--type-title-2, 22px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-text);
+}
+.gangs-power__mix {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  background: var(--phone-fill, var(--color-surface));
+}
+.gangs-power__mix > span {
+  flex-basis: 0;
+  background: var(--part);
+}
+.gangs-power__parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   font-size: var(--type-footnote, 13px);
   color: var(--phone-label-2, var(--color-muted));
 }
-.gangs-power__label {
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-caps);
-  text-transform: uppercase;
-  color: var(--cat-brand);
-}
-.gangs-power__number {
-  font-size: var(--type-large-title, 34px);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  color: var(--phone-label, var(--color-text));
-}
-.gangs-power__rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.gangs-power__parts li {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.gangs-power__parts strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+.gangs-power__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--part);
+}
+
+/* Gangs als Kacheln, zwei pro Reihe (Feedback 13.10.2026) */
+.gangs-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
-.gangs-power__row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "emblem name value"
-    "emblem bar value";
-  align-items: center;
-  column-gap: var(--space-3);
-  row-gap: 4px;
+.gangs-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-2) var(--space-1) var(--space-3);
+  border-radius: var(--radius-group);
+  background: var(--phone-group, var(--color-panel-raised));
 }
-.gangs-power__row .ui-avatar {
-  grid-area: emblem;
+.gangs-tile__open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.gangs-power__name {
-  grid-area: name;
-  overflow: hidden;
+.gangs-tile__name {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   font-size: var(--type-subhead, 15px);
-  font-weight: var(--font-weight-medium);
-  text-overflow: ellipsis;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+}
+.gangs-tile__name .gangs-table__dot {
+  margin-top: 5px;
+}
+.gangs-tile__name > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  hyphens: none;
+  overflow-wrap: normal;
+}
+.gangs-tile__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--type-caption, 12px);
+  color: var(--color-muted);
   white-space: nowrap;
-  color: var(--phone-label, var(--color-text));
 }
-.gangs-power__bar {
-  grid-area: bar;
-  position: relative;
-  display: block;
-  height: 8px;
-  border-radius: var(--radius-round);
-  background: var(--phone-fill, var(--color-surface-active));
-}
-.gangs-power__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--power, 0%);
-  border-radius: var(--radius-round);
-  background: var(--gang-color, var(--cat-danger));
-}
-/* Marke: deine Stärke auf derselben Skala */
-.gangs-power__mark {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  left: var(--yours, 0%);
-  width: 2px;
-  margin-left: -1px;
-  background: var(--cat-brand);
-  border-radius: 1px;
-}
-/* Die Zahl steht rechts neben Name und Balken (eigene Spalte; absolut positioniert lag sie neben der Karte). */
-.gangs-power__value {
-  grid-area: value;
-  align-self: center;
-  min-width: 2.5ch;
-  text-align: right;
+.gangs-tile__facts strong {
   font-size: var(--type-subhead, 15px);
   font-variant-numeric: tabular-nums;
-  color: var(--phone-label-2, var(--color-muted));
+  color: var(--color-text);
 }
-.gangs-power__row.is-stronger .gangs-power__value {
+.gangs-tile__facts .is-stronger strong {
   color: var(--cat-danger);
+}
+.gangs-tile__actions {
+  display: flex;
+  justify-content: space-between;
+  margin-left: calc(-1 * var(--space-2));
+  border-top: 0.5px solid var(--phone-separator, var(--color-line));
+}
+.gangs-tile__actions .gangs-table__action {
+  flex: 1;
+}
+.gangs-table__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gang-color);
+}
+.gangs-table__stage {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--stage) 18%, transparent);
+  color: var(--stage);
+  font-size: var(--type-caption, 12px);
   font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+.gangs-table__action {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+}
+.gangs-table__action:hover:not(:disabled),
+.gangs-table__action:focus-visible {
+  background: var(--phone-fill-hover);
+}
+.gangs-table__action:disabled {
+  color: var(--color-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+.gangs-table__action.is-attack:not(:disabled) {
+  color: var(--cat-danger);
+}
+.gangs-table__action.is-ally:not(:disabled) {
+  color: var(--cat-money);
+}
+.gangs-table__action.is-money:not(:disabled) {
+  color: var(--cat-dirty);
 }
 
 /* Auftrag 23: Antworten auf offene Vorfälle unter der Zeile. */

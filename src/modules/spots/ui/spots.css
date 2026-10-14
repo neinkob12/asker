@@ -19,9 +19,11 @@
   --state-on: var(--spot-idle-on);
   --state-glow: var(--spot-idle-glow);
   --state-edge: var(--spot-idle-edge);
-  --bubble: 26px;
+  /* Weit draußen kleiner (Feedback 12.10.2026: über ganz Köln überlappten die Spots): 60 % bis 100 % mit --spot-lift */
+  --scale: calc(0.6 + 0.4 * var(--spot-lift, 1));
+  --bubble: calc(26px * var(--scale));
   --stem: 13px;
-  --ring-width: 3px;
+  --ring-width: calc(2px + 1px * var(--spot-lift, 1));
   --ring-gap: 2px;
   --lift: var(--spot-lift, 1);
   /* Unterkante der Blase über dem Spot: am Stiel (lift 1) bis mittig auf dem Spot (lift 0) */
@@ -56,14 +58,29 @@
   --state-edge: var(--spot-raid-edge);
 }
 
-/* 2D-Ansicht: Blase immer ohne Stiel mitten auf dem Spot */
+/* 2D-Ansicht (seit dem 13.10.2026 immer): Blase ohne Stiel mitten auf dem Spot, und der Kasten des Markers ist genau
+   die Blase. Vorher ragte sie unten aus dem Kasten (36 px breit, mit Platz für den Stiel), der Rahmen einer Tour um
+   den Spot lag dann zu groß und zu hoch. translate verschiebt zusätzlich zu MapLibres transform (Anker unten). */
 .shell-map.is-2d .spot-marker {
   --lift: 0;
+  --sign-bottom: 0px;
+  width: var(--bubble);
+  height: var(--bubble);
+  translate: 0 50%;
+}
+.shell-map.is-2d .spot-sign {
+  transform-origin: 50% 50%;
+}
+.shell-map.is-2d .spot-plate {
+  top: calc(var(--bubble) / 2 + var(--label-offset, 0px));
+}
+.shell-map.is-2d .spot-foot,
+.shell-map.is-2d .spot-stem {
+  display: none;
 }
 
 /* Ring und Puls liegen mit der Mitte auf der Blase (folgen --sign-bottom) */
-.spot-ring,
-.spot-pulse {
+.spot-ring {
   position: absolute;
   left: 50%;
   bottom: calc(var(--sign-bottom) + var(--bubble) / 2);
@@ -141,32 +158,27 @@
 .spot-badge {
   position: relative;
   font-family: var(--font-hud-display);
-  font-size: 16px;
+  font-size: max(11px, calc(16px * var(--scale)));
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* Ziffern genau mittig (Feedback 13.10.2026: die 0 saß etwas tief): Zeilenkasten auf Versal- und Grundlinie kürzen. */
+  text-box: trim-both cap alphabetic;
   color: var(--state-on);
+}
+/* Größerer Klickrand, wenn Kunden warten und kein Läufer da ist (--spot-hit aus map.ts: nie bis zum nächsten Spot). */
+.spot-marker.is-wide-hit::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sign-bottom) + var(--bubble) / 2);
+  width: calc(var(--bubble) + 2 * var(--spot-hit, 0px));
+  height: calc(var(--bubble) + 2 * var(--spot-hit, 0px));
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
 }
 .spot-lock {
   display: none;
-}
-/* Kneipe: kleines Bierglas oben rechts an der Blase (Look Glas) */
-.spot-kind {
-  position: absolute;
-  right: -6px;
-  top: -6px;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass);
-  border: 1px solid var(--hud-glass-edge);
-  color: var(--hud-gold);
-}
-.spot-kind svg {
-  width: 11px;
-  height: 11px;
 }
 .spot-marker:hover .spot-sign,
 .spot-marker:focus-visible .spot-sign,
@@ -186,37 +198,6 @@
 }
 .spot-marker.is-custom .spot-foot {
   background: var(--hud-gold);
-}
-
-/* Pulsierender Ring am Boden bei dringend und Razzia */
-.spot-pulse {
-  width: var(--ring-size);
-  height: var(--ring-size);
-  border: 2px solid var(--state-edge);
-  opacity: 0;
-}
-.spot-marker[data-urgency="urgent"] .spot-pulse,
-.spot-marker[data-urgency="raid"] .spot-pulse {
-  animation: spot-pulse 1.4s var(--ease-out) infinite;
-}
-@keyframes spot-pulse {
-  0% {
-    opacity: 0.8;
-    transform: translate(-50%, 50%) scale(0.95);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, 50%) scale(1.6);
-  }
-}
-
-/* Hinweis aus "Nächster Schritt": goldener Ring am Boden statt eines Rahmens um den ganzen Marker */
-.spot-marker.is-coach {
-  animation: none;
-}
-.spot-marker.is-coach .spot-pulse {
-  border-color: var(--hud-gold);
-  animation: spot-pulse 1.6s var(--ease-out) infinite;
 }
 
 /* Plakette: nur Symbole auf kleinem Glas, Kante in der Zustandsfarbe. Läufer (grün) / du (gold), Leutnant (blau). */
@@ -276,7 +257,7 @@
 
 /* Gesperrt: kleine dunkle Blase mit Schloss, ohne Ring und ohne Plakette */
 .spot-marker.is-locked {
-  --bubble: 20px;
+  --bubble: calc(20px * var(--scale));
   --stem: 9px;
 }
 .spot-marker.is-locked .spot-bubble {
@@ -288,8 +269,7 @@
 }
 .spot-marker.is-locked .spot-badge,
 .spot-marker.is-locked .spot-plate,
-.spot-marker.is-locked .spot-ring,
-.spot-marker.is-locked .spot-pulse {
+.spot-marker.is-locked .spot-ring {
   display: none;
 }
 .spot-marker.is-locked .spot-lock {
@@ -312,84 +292,81 @@
 }
 
 /* Hover-Karte (nur Maus): Glas über der Blase */
+/* Name beim Drüberfahren (nur Maus): reiner Text direkt über der Blase (Feedback 12.10.2026). Der Abstand rechnet die
+   Lage der Blase wie .spot-marker nach (Größe mit --scale, Stiel mit --spot-lift, in 2D ohne Stiel), damit der Name
+   nah und weit draußen gleich knapp über dem Ring sitzt. */
 .spot-hover {
+  --lift: var(--spot-lift, 1);
+  --scale: calc(0.6 + 0.4 * var(--spot-lift, 1));
+  --bubble: calc(26px * var(--scale));
+  --stem: 13px;
   pointer-events: none;
   z-index: 3;
 }
+.spot-hover.is-locked {
+  --bubble: calc(20px * var(--scale));
+  --stem: 9px;
+}
+.shell-map.is-2d .spot-hover {
+  --lift: 0;
+}
 .spot-hover__card {
-  width: 230px;
-  margin-bottom: 60px;
-  padding: 14px 16px 12px;
-  border-radius: var(--hud-radius-tile);
-  background: var(--hud-glass-strong);
-  -webkit-backdrop-filter: var(--hud-blur);
-  backdrop-filter: var(--hud-blur);
-  border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--hud-shadow);
+  /* Oberkante der Blase über dem Spot (beim Drüberfahren 12 % größer), dazu Ring und etwas Luft */
+  margin-bottom: calc(
+    (var(--stem) + 4px) *
+    var(--lift) -
+    var(--bubble) /
+    2 *
+    (1 - var(--lift)) +
+    var(--bubble) *
+    1.12 +
+    6px
+  );
   color: var(--hud-ink);
   font-family: var(--font-hud);
-  animation: spot-hover-in var(--duration) var(--ease-out);
-}
-.spot-hover.is-locked .spot-hover__card {
-  margin-bottom: 40px;
-}
-.spot-hover__title {
-  font-family: var(--font-hud-display);
-  font-size: 20px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.1;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  /* Ohne Pille: ein dunkler Saum hält den Text auf jeder Karte lesbar */
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.75),
+    0 1px 2px rgba(0, 0, 0, 0.9);
+  animation: spot-hover-in var(--duration) var(--ease-out);
 }
-.spot-hover__sub {
-  margin-top: 2px;
-  font-size: 13px;
-  color: var(--hud-ink-2);
-}
-.spot-hover__rows {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 10px 0 0;
-  padding: 10px 0 0;
-  border-top: 1px solid var(--hud-glass-line);
-  font-size: 13px;
-}
-.spot-hover__label {
-  color: var(--hud-ink-2);
-}
-.spot-hover__value {
-  margin: 0;
-  font-weight: 700;
-  text-align: right;
-}
-.spot-hover__foot {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hud-glass-line);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--hud-gold);
+/* Solange ein Spot-Fenster offen ist, stört das Schild des Veedels darunter nicht (zwei Fenster auf einmal). */
+.maplibregl-map:has(.spot-hover:not([hidden])) .veedel-label {
+  visibility: hidden;
 }
 @keyframes spot-hover-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(3px);
   }
 }
 
 /* Handy-Bildschirm: Blase und Ring etwas kleiner, die Plakette sitzt über der Blase statt daneben */
 @media (max-width: 760px) {
   .spot-marker {
-    --bubble: 24px;
+    --bubble: calc(24px * var(--scale));
     --stem: 12px;
   }
   .spot-marker.is-locked {
-    --bubble: 18px;
+    --bubble: calc(18px * var(--scale));
+    --stem: 8px;
+  }
+  .spot-hover {
+    --bubble: calc(24px * var(--scale));
+    --stem: 12px;
+  }
+  .spot-hover.is-locked {
+    --bubble: calc(18px * var(--scale));
     --stem: 8px;
   }
   .spot-badge {
-    font-size: 15px;
+    font-size: max(11px, calc(15px * var(--scale)));
   }
   .spot-marker.is-right .spot-plate,
   .spot-marker.is-left .spot-plate {
@@ -399,21 +376,31 @@
     right: auto;
     transform: translate(-50%, -100%);
   }
+  /* 2D: Der Kasten ist die Blase, die Plakette sitzt knapp über dem Ring. */
+  .shell-map.is-2d .spot-marker.is-right .spot-plate,
+  .shell-map.is-2d .spot-marker.is-left .spot-plate {
+    top: calc(-1 * (var(--ring-gap) + var(--ring-width) + 3px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spot-marker.is-coach .spot-pulse,
-  .spot-pulse,
-  .spot-marker[data-urgency="urgent"] .spot-pulse,
-  .spot-marker[data-urgency="raid"] .spot-pulse {
-    animation: none;
-  }
   .spot-ring {
     transition: none;
   }
   .spot-hover__card {
     animation: none;
   }
+}
+
+/* Weit draußen (spots-far, unter NAMES_ZOOM in map.ts): keine Art-Symbole und Plaketten, gesperrte Spots nur als
+   kleiner Punkt ohne Schloss. Sonst drängelten sich über ganz Köln Schlösser, Symbole und Blasen. */
+.spots-far .spot-marker .spot-plate,
+.spots-far .spot-marker.is-locked .spot-lock {
+  display: none;
+}
+.spots-far .spot-marker.is-locked,
+.spots-far .spot-hover.is-locked {
+  --bubble: 10px;
 }
 
 .spot-panel {
@@ -437,19 +424,60 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.spot-shop__slots {
+
+/* Shop (Feedback 13.10.2026): eine Kachel je Spot-Art, zwei pro Reihe */
+.spot-shop__tiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
 }
-.spot-shop__slot {
-  text-align: center;
-}
-.spot-shop__slot .ui-hint {
+.spot-shop__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
   margin: 0;
-  white-space: nowrap;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: 10px;
+  background: var(--phone-group-2, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.spot-shop__slot .ui-card__title {
-  white-space: nowrap;
+.spot-shop__tile:hover:not(:disabled) {
+  background: var(--phone-fill-hover);
+}
+.spot-shop__tile:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.spot-shop__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--space-1);
+  border-radius: 10px;
+  background: var(--cat-place-soft);
+  color: var(--cat-place);
+}
+.spot-shop__tile strong {
+  font-size: var(--type-subhead, 15px);
+  line-height: 1.2;
+}
+.spot-shop__text {
+  font-size: var(--type-caption, 12px);
+  line-height: 1.3;
+  color: var(--color-muted);
+}
+.spot-shop__price {
+  margin-top: auto;
+  padding-top: var(--space-1);
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }

@@ -12,7 +12,7 @@ import { setHapticsEnabled } from './haptics';
 import { closeAllOverlays } from './overlays';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
-import { type CameraMode, loadPrefs, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
+import { loadPrefs, type PhoneTheme, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
 import {
   type DialogId,
   type DialogRegistry,
@@ -33,7 +33,10 @@ import type { TourApi } from './tour/types';
 /** good/info: Routine (grau im Verlauf), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
-export type { CameraMode, TrafficLevel } from './prefs';
+export type { PhoneTheme, TrafficLevel } from './prefs';
+
+/** So lange gilt ein Fingerzeig (api.flash), etwas länger als seine Animation. */
+const FLASH_MS = 3000;
 
 export interface ToastOptions {
   /** Ort des Geschehens: Der Verlauf bietet dann "Hinzoomen" an. */
@@ -43,7 +46,7 @@ export interface ToastOptions {
   /** Im Verlauf festhalten? Standard: ja. Mit false verpufft die Meldung (seit Auftrag 46d gibt es keine Banner). */
   log?: boolean;
   /**
-   * Wichtig? Standard: 'bad' und 'warn'. Wichtige Meldungen zählen am Badge der Einstellungen als ungelesen; Routine
+   * Wichtig? Standard: 'bad' und 'warn'. Wichtige Meldungen stehen im Verlauf als ungelesen (ohne Badge); Routine
    * ('good', 'info') steht nur im Verlauf. Mit true erzwingen (z.B. "Lieferung ist da"), mit false unterdrücken.
    */
   urgent?: boolean;
@@ -59,7 +62,7 @@ export interface Alert {
   icon?: string;
   target?: LngLat;
   read: boolean;
-  /** Wichtig (zählt ungelesen am Badge der Einstellungen). */
+  /** Wichtig (im Verlauf ungelesen hervorgehoben, ohne Badge). */
   urgent: boolean;
 }
 
@@ -67,6 +70,8 @@ export interface Alert {
 export interface UiError {
   id: number;
   text: string;
+  /** Hinweis statt Fehler (ui.notice): Schloss statt Warnzeichen. */
+  hint?: boolean;
 }
 
 export type { NavEntry, NavKind } from './phone/navModel';
@@ -98,20 +103,25 @@ export interface UiState {
   alerts: Alert[];
   /** Fehlgeschlagener Befehl des Spielers: kurz sichtbar im Handy (Auftrag 46d: das einzige Banner). */
   error: UiError | null;
+  /**
+   * Kurzer Fingerzeig auf etwas im Handy (api.flash), z.B. 'goods.missing:weed': Das Fach der fehlenden Ware leuchtet
+   * rot und wackelt. id zählt hoch, damit derselbe Schlüssel die Animation neu startet.
+   */
+  flash: { key: string; id: number } | null;
   /** Suche (⌘K / Strg+K) offen? */
   palette: boolean;
   /** Offenes Popover im HUD (z.B. 'more', 'alerts', 'menu'). */
   popover: string | null;
   /** Wartet die Karte gerade auf einen Klick (pickLocation)? */
   picking: { prompt: string } | null;
-  /** Kamera: 3D schräg (Standard) oder 2D-Draufsicht. Pro Gerät gemerkt. */
-  camera: CameraMode;
   /** Überwachungs-Overlay auf der Karte an? Pro Gerät gemerkt. */
   overlay: boolean;
   /** Verkehr als Kulisse auf der Karte: aus, wenig, normal. Pro Gerät gemerkt. */
   traffic: TrafficLevel;
   /** Leise Klicks bei Schaltern und Gesten. Pro Gerät gemerkt. */
   vibration: boolean;
+  /** Farbe des Handys: dunkel oder White Mode. Pro Gerät gemerkt. */
+  phoneTheme: PhoneTheme;
   /**
    * Laufendes Gespräch im Handy (Auftrag 30): Nachricht des angenommenen Anrufs. Das Handy zeigt dann das Gespräch
    * bildschirmfüllend, bis aufgelegt wird. Ein klingelnder Anruf braucht das nicht (der steht im Spielzustand).
@@ -128,11 +138,6 @@ export interface MapCamera {
   center: LngLat;
   zoom: number;
   mobileZoom: number;
-  /** Schräge Kamera (3D) wie in der Stadt; sonst Draufsicht. */
-  tilt: boolean;
-  /** Neigung und Drehung der schrägen Kamera in Grad (Standard wie Köln). */
-  pitch?: number;
-  bearing?: number;
   /** Rahmen [West, Süd, Ost, Nord], der ganz zu sehen sein soll (statt center und zoom, Deutschland-Ansicht). */
   bounds?: readonly [number, number, number, number];
 }
@@ -142,20 +147,15 @@ export interface MapController {
   flyToKoeln(): void;
   flyToEuropa(): void;
   flyToCamera(camera: MapCamera): void;
-  /**
-   * Ansicht wechseln, ohne hinzufliegen (Auftrag 31, beim Zoomen): Ausschnitt bleibt, Neigung und Drehung gleiten zur
-   * Ansicht (tilt null = Draufsicht).
-   */
-  settleView(view: string, label: string, tilt: { pitch: number; bearing: number } | null): void;
+  /** Ansicht wechseln, ohne hinzufliegen (Auftrag 31, beim Zoomen): Der Ausschnitt bleibt. */
+  settleView(view: string, label: string): void;
   /** Aktuelle Ansicht: 'city:<id>', 'deutschland' oder 'europa'. */
   currentView(): string;
   flyTo(target: LngLat, zoom?: number): void;
   pickLocation(): Promise<LngLat | null>;
   cancelPick(): void;
-  setCameraMode(mode: CameraMode): void;
   zoomIn(): void;
   zoomOut(): void;
-  resetNorth(): void;
 }
 
 /** Was Oberflächen-Code tun darf. Den Spielzustand ändert er nur über dispatch. */
@@ -170,6 +170,13 @@ export interface UiApi {
   toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
   /** Die Rückmeldung zu einem fehlgeschlagenen Befehl ausblenden. */
   dismissError(): void;
+  /**
+   * Kurze Einblendung wie bei einem fehlgeschlagenen Befehl, ohne Befehl: beim Tipp auf etwas Gesperrtes, womit es frei
+   * wird. Die nächste ersetzt die vorige.
+   */
+  notice(text: string): void;
+  /** Fingerzeig ohne Text (siehe UiState.flash); das Modul, das den Schlüssel kennt, zeichnet ihn. */
+  flash(key: string): void;
   /** Verlauf: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
@@ -216,16 +223,14 @@ export interface UiApi {
   enterView(view: string): void;
   /** Aktuelle Ansicht der Karte ('city:<id>', 'deutschland', 'europa'). */
   mapView(): string;
-  setCameraMode(mode: CameraMode): void;
-  /** Zwischen 3D schräg und 2D-Draufsicht wechseln. */
-  toggleCamera(): void;
   setOverlay(enabled: boolean): void;
   /** Verkehr auf der Karte: 'off', 'low' oder 'normal'. */
   setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
+  /** Handy dunkel oder im White Mode. */
+  setPhoneTheme(theme: PhoneTheme): void;
   zoomIn(): void;
   zoomOut(): void;
-  resetNorth(): void;
   /**
    * Tour (Auftrag 46a): Spotlight-Erklärungen über dem Spiel, Schritt für Schritt mit „Weiter“. `start(def)` reiht ein,
    * wenn schon eine läuft; `active()` nennt die laufende; `skip()` beendet sie. Reine Oberfläche, nichts im Spielstand.
@@ -291,13 +296,14 @@ export class UiRuntime {
       section: null,
       alerts: [],
       error: null,
+      flash: null,
       palette: false,
       popover: null,
       picking: null,
-      camera: prefs.camera,
       overlay: prefs.overlay,
       traffic: prefs.traffic,
       vibration: prefs.vibration,
+      phoneTheme: prefs.phoneTheme,
       call: null,
     };
     setHapticsEnabled(prefs.vibration);
@@ -404,8 +410,8 @@ export class UiRuntime {
   }
 
   /** Rückmeldung zu einem fehlgeschlagenen Befehl: kurz im Handy, die nächste ersetzt die vorige. */
-  private showError(text: string): void {
-    this.ui.error = { id: ++this.errorId, text };
+  private showError(text: string, hint = false): void {
+    this.ui.error = hint ? { id: ++this.errorId, text, hint } : { id: ++this.errorId, text };
     if (this.errorTimer) clearTimeout(this.errorTimer);
     this.errorTimer = setTimeout(() => {
       this.errorTimer = null;
@@ -480,9 +486,9 @@ export class UiRuntime {
   private savePrefs(): void {
     const prefs: UiPrefs = {
       overlay: this.ui.overlay,
-      camera: this.ui.camera,
       traffic: this.ui.traffic,
       vibration: this.ui.vibration,
+      phoneTheme: this.ui.phoneTheme,
     };
     savePrefs(this.storage, prefs);
   }
@@ -551,6 +557,20 @@ export class UiRuntime {
           if (options.target) alert.target = options.target;
           ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
         }),
+      notice: (text) => update(() => this.showError(text, true)),
+      flash: (key) => {
+        const id = (ui.flash?.id ?? 0) + 1;
+        update(() => {
+          ui.flash = { key, id };
+        });
+        // Nach der Animation verfallen, sonst wackelt das Fach beim nächsten Öffnen des Startbildschirms wieder.
+        setTimeout(() => {
+          if (ui.flash?.id !== id) return;
+          update(() => {
+            ui.flash = null;
+          });
+        }, FLASH_MS);
+      },
       dismissError: () =>
         update(() => {
           if (this.errorTimer) clearTimeout(this.errorTimer);
@@ -679,9 +699,6 @@ export class UiRuntime {
           center: camera.center,
           zoom: camera.zoom,
           mobileZoom: camera.mobileZoom,
-          tilt: true,
-          pitch: camera.pitch,
-          bearing: camera.bearing,
         });
       },
       flyHome: () => {
@@ -700,30 +717,19 @@ export class UiRuntime {
           center: views.deutschland.center,
           zoom: views.deutschland.zoom,
           mobileZoom: views.deutschland.zoom - 0.9,
-          tilt: false,
           bounds: state ? views.deutschlandBounds?.(state) : undefined,
         });
       },
       enterView: (view) => {
         if (view === 'deutschland') {
-          this.map?.settleView(view, 'SAT 01 · DEUTSCHLAND', null);
+          this.map?.settleView(view, 'SAT 01 · DEUTSCHLAND');
           return;
         }
         const camera = getCityViews()?.cameras.find((c) => `city:${c.id}` === view);
         if (!camera) return;
-        this.map?.settleView(view, `CAM 01 · ${camera.name.toUpperCase()}`, {
-          pitch: camera.pitch ?? 50,
-          bearing: camera.bearing ?? -20,
-        });
+        this.map?.settleView(view, `CAM 01 · ${camera.name.toUpperCase()}`);
       },
       mapView: () => this.map?.currentView() ?? 'city:koeln',
-      setCameraMode: (mode) =>
-        update(() => {
-          ui.camera = mode;
-          this.map?.setCameraMode(mode);
-          this.savePrefs();
-        }),
-      toggleCamera: () => api.setCameraMode(ui.camera === '3d' ? '2d' : '3d'),
       setOverlay: (enabled) =>
         update(() => {
           ui.overlay = enabled;
@@ -740,9 +746,13 @@ export class UiRuntime {
           setHapticsEnabled(enabled);
           this.savePrefs();
         }),
+      setPhoneTheme: (theme) =>
+        update(() => {
+          ui.phoneTheme = theme;
+          this.savePrefs();
+        }),
       zoomIn: () => this.map?.zoomIn(),
       zoomOut: () => this.map?.zoomOut(),
-      resetNorth: () => this.map?.resetNorth(),
       tour: {
         start: (def) => this.tours.start(def),
         active: () => this.tours.active(),

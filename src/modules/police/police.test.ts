@@ -530,10 +530,10 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
       { from: 0, to: 1, cityId: 'koeln' },
       { from: 1, to: 2, cityId: 'koeln' },
     ]);
-    // Aufs Handy höchstens eine Polizei-Nachricht am Tag (Auftrag 46d): die zur ersten Stufe; die zweite steht im Verlauf.
+    // Feedback 13.10.2026: Die Stufen stehen nur noch im Journal, nicht mehr im Chat.
     const police = sim.state.messages.list.filter((m) => m.text.includes('Polizei') || m.text.includes('Kripo'));
-    expect(police).toHaveLength(1);
-    expect(police[0].text).toContain('Händler');
+    expect(police).toHaveLength(0);
+    expect(eventsOfType(events, 'journal.added').some((e) => e.payload.entry.text.includes('Händler'))).toBe(true);
     expect(eventsOfType(events, 'journal.added').some((e) => e.payload.entry.text.includes('Ermittlungsgruppe'))).toBe(
       true,
     );

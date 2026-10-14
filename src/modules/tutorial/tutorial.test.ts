@@ -400,17 +400,12 @@ describe('tutorial: Freischalten', () => {
     return tutorialAllows(sim.state, feature);
   };
 
-  it('HUD: sauberes Geld ab 8, Lager ab 5, Ruf und Rang über Ereignisse', () => {
+  it('HUD: sauberes Geld ab 8, Lager ab 5, Ruf und Rang von Anfang an', () => {
     expect(allowedAt(7, 'hud.cleanMoney')).toBe(false);
     expect(allowedAt(8, 'hud.cleanMoney')).toBe(true);
     expect(allowedAt(4, 'hud.stock')).toBe(false);
     expect(allowedAt(5, 'hud.stock')).toBe(true);
     const sim = start();
-    expect(tutorialAllows(sim.state, 'hud.reputation')).toBe(false);
-    expect(tutorialAllows(sim.state, 'hud.rank')).toBe(false);
-    sim.ctx('customers').emit('customer.regularGained', { regularId: 'r1', spotId: 'neumarkt' });
-    sim.ctx('city').emit('player.rankUp', { rankId: 'dealer', title: 'Dealer', score: 1 });
-    sim.advance(1);
     expect(tutorialAllows(sim.state, 'hud.reputation')).toBe(true);
     expect(tutorialAllows(sim.state, 'hud.rank')).toBe(true);
   });

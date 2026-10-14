@@ -8,7 +8,7 @@ import { mapEffects } from '../../../map';
 import { Button, Chips, Icon, MapDialog, onGameEvent, registerDialog, soundOnEvent, useGame, useUi } from '../../../ui';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
-import { getVeedel, veedelName } from '../../veedel';
+import { veedelName } from '../../veedel';
 import { ENCOUNTER_KINDS, type Encounter, type EncounterResultPart, getEncounter, type StakeId } from '../index';
 import './encounters.css';
 
@@ -53,23 +53,46 @@ function costChips(state: GameState, encounter: Encounter) {
   const r = encounter.result;
   if (!r) return [];
   const chips: { label: string; icon: string; color: 'danger' | 'warn' | 'money' | 'people' | 'law' }[] = [];
-  if (r.money < 0) chips.push({ label: `${formatEuro(r.money)}`, icon: 'moneyBag', color: 'danger' });
-  if (r.money > 0) chips.push({ label: `+${formatEuro(r.money)}`, icon: 'moneyBag', color: 'money' });
+  // Was als Einsatz darunter steht (Ware, Kasse, Leute, Heat), zeigt die Liste der Einsätze schon: nicht doppelt.
+  const staked = new Set((r.parts ?? []).map((p) => p.stake));
+  if (r.money < 0 && !staked.has('cash'))
+    chips.push({ label: `${formatEuro(r.money)}`, icon: 'moneyBag', color: 'danger' });
+  if (r.money > 0 && !staked.has('cash'))
+    chips.push({ label: `+${formatEuro(r.money)}`, icon: 'moneyBag', color: 'money' });
   // Taxi der Crew: kein Verlust an die Gegenseite (nicht in money), gekostet hat es trotzdem.
   if (r.travel && r.travel > 0) chips.push({ label: `Taxi ${formatEuro(-r.travel)}`, icon: 'car', color: 'danger' });
-  if (r.goods < 0) chips.push({ label: `${formatAmount(r.goods)}`, icon: 'bag', color: 'danger' });
-  if (r.goods > 0) chips.push({ label: `+${formatAmount(r.goods)}`, icon: 'bag', color: 'money' });
+  if (r.goods < 0 && !staked.has('goods'))
+    chips.push({ label: `${formatAmount(r.goods)}`, icon: 'bag', color: 'danger' });
+  if (r.goods > 0 && !staked.has('goods'))
+    chips.push({ label: `+${formatAmount(r.goods)}`, icon: 'bag', color: 'money' });
   const name = (id: string) => getStaffMember(state, id)?.name ?? 'Jemand';
-  for (const id of r.staffKilled) chips.push({ label: `${name(id)} tot`, icon: 'skull', color: 'danger' });
-  for (const id of r.staffInjured) chips.push({ label: `${name(id)} verletzt`, icon: 'bandage', color: 'warn' });
-  for (const id of r.staffArrested) chips.push({ label: `${name(id)} festgenommen`, icon: 'siren', color: 'law' });
-  if (r.playerInjured && !encounter.playerKilled)
+  // Tote, Verletzte und Festgenommene zeigt der Einsatz „Leute“ schon, wenn er dasteht.
+  const people = staked.has('people');
+  for (const id of people ? [] : r.staffKilled)
+    chips.push({ label: `${name(id)} tot`, icon: 'skull', color: 'danger' });
+  for (const id of people ? [] : r.staffInjured)
+    chips.push({ label: `${name(id)} verletzt`, icon: 'bandage', color: 'warn' });
+  for (const id of people ? [] : r.staffArrested)
+    chips.push({ label: `${name(id)} festgenommen`, icon: 'siren', color: 'law' });
+  if (r.playerInjured && !encounter.playerKilled && !people)
     chips.push({ label: 'Du bist verletzt', icon: 'bandage', color: 'warn' });
-  if (r.heat > 0) chips.push({ label: `+${Math.round(r.heat)} Heat`, icon: 'flame', color: 'warn' });
+  if (r.heat > 0 && !staked.has('noise')) {
+    chips.push({ label: `+${Math.round(r.heat)} Heat`, icon: 'flame', color: 'warn' });
+  }
   if (r.opponentLosses > 0) {
     chips.push({ label: `${r.opponentLosses} von ihnen am Boden`, icon: 'users', color: 'people' });
   }
   return chips;
+}
+
+/**
+ * Satz zum Ausgang ohne das, was die Karte schon zeigt: Die Einzelheiten in Klammern stehen als Chips darunter, und
+ * der Standardsatz („Verloren auf der A1.“) sagt nur Stempel und Ort aus der Kopfzeile noch einmal.
+ */
+function resultHeadline(text: string | undefined): string | null {
+  if (!text) return null;
+  const headline = text.replace(/\s*\([^()]*\)\s*$/, '');
+  return /^(Geschafft|Verloren|Rückzug)\b/.test(headline) ? null : headline;
 }
 
 function ResultDialog(props: { encounterId: number }) {
@@ -81,9 +104,12 @@ function ResultDialog(props: { encounterId: number }) {
   const kind = ENCOUNTER_KINDS[encounter.kind];
   const stamp = stampOf(encounter);
   const parts = encounter.result?.parts ?? [];
+  const headline = resultHeadline(encounter.result?.text);
   return (
     <MapDialog
       label={`${kind?.name ?? 'Konfrontation'}: ${stamp.label}`}
+      // Art, Ort und Stempel stehen schon auf der Karte; als Titel des Blatts stand alles doppelt.
+      sheetTitle={false}
       onClose={close}
       class="enc-result"
       detent="medium"
@@ -97,7 +123,7 @@ function ResultDialog(props: { encounterId: number }) {
           {stamp.label}
         </span>
       </div>
-      <p class="enc-result__text">{encounter.result?.text}</p>
+      {headline && <p class="enc-result__text">{headline}</p>}
       <Chips items={costChips(state, encounter)} />
       {parts.length > 0 && (
         <ul class="enc-parts" aria-label="Was auf dem Spiel stand">
@@ -132,11 +158,8 @@ onGameEvent('encounter.resolved', 'encounters.result', (payload, ui, state) => {
   if (state.outcome.gameOver || payload.playerKilled) return;
   ui.openDialog('encounters.result', { encounterId: payload.encounterId });
 });
-// Konfrontation: Warnton und ein kurzer Blitz über der Karte, bei Gewalt ein Ping am Ort.
+// Konfrontation: Warnton und ein kurzer Blitz über der Karte (kein Ping-Ring mehr am Ort, Feedback 13.10.2026).
 soundOnEvent('encounter.started', 'alert');
-onGameEvent('encounter.started', 'encounters.fx', (payload, _ui, state) => {
+onGameEvent('encounter.started', 'encounters.fx', () => {
   mapEffects.flash({ strength: 0.3, color: '#ff5a4a' });
-  const spot = payload.request.spotId ? getSpot(state, payload.request.spotId) : undefined;
-  const where = spot ?? (payload.request.veedelId ? getVeedel(payload.request.veedelId)?.center : undefined);
-  if (where) mapEffects.ping(where, { tone: 'bad' });
 });

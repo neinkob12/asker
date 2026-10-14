@@ -99,7 +99,7 @@ export function tabShortcuts(state?: GameState | null): Map<string, string> {
       result.set(tab.id, letter);
     }
   }
-  if (state) for (const tab of tabs) if (tab.hiddenWhen?.(state)) result.delete(tab.id);
+  if (state) for (const tab of tabs) if (tab.hiddenWhen?.(state) || tab.lockedWhen?.(state)) result.delete(tab.id);
   return result;
 }
 

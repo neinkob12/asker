@@ -2,6 +2,10 @@
 
 Browserspiel (Vite + TypeScript + Preact + MapLibre). Was das Spiel werden soll: `docs/konzept.md`.
 Ausführliche Architektur mit allen Modulen, APIs, Befehlen und Ereignissen: `docs/architektur.md`.
+Recherche zur echten Gang-Szene (je Stadt 12 Veedel, Vorschläge mit Stufen ECHT/NAH/HEIKEL, Kölner Randbezirke):
+`docs/recherche/README.md`. Wer an Gangs (`gangs/data.ts`, `gangs/texts*.ts`) oder neuen Veedeln arbeitet, liest das zuerst;
+HEIKEL (echte Personen, Familien, Clubs, Labels) kommt nie ins Spiel.
+**Liste für morgen:** offene Punkte aus dem Probespielen in `docs/todo.md`.
 **Parallele Sessions:** Regeln, Phasen und wer welche Ordner besitzt stehen in `docs/auftraege/README.md`. Lies das zuerst.
 Phase 0 (Fundament), Phase 1 (Aufträge 10–14) und Phase 2 (Integration, Auftrag 20) sind erledigt; alle Systeme
 sind verbunden. Dazu Auftrag 21: echtes Straßennetz (`roads`), Logistik mit Hafen, Fahrern und mehreren Lagern
@@ -206,7 +210,7 @@ Spot gründen geht nicht mehr über die Karte (Platzhalter im Shop mit 46e). **D
 über `registerStatusCounter({ id, order, icon, count(state), label(count), open?(ui) })` aus `src/ui` anmelden; der
 einzige ist „n Lieferungen unterwegs“ (`suppliers/ui/island.ts`, Tipp öffnet die Lieferanten-App), sichtbar nur bei n > 0;
 liegt das Handy weg, schwebt sie über der Karte. **Keine Push-Banner:** `ui.toast(text, kind, options)` schreibt nur noch
-in den Verlauf (Einstellungen › Verlauf, Badge an den Einstellungen), `urgent` markiert den Eintrag nur als ungelesen;
+in den Verlauf (Einstellungen › Verlauf, ohne Badge; ein Badge gibt es nur an den Nachrichten), `urgent` markiert den Eintrag nur als ungelesen;
 `PhoneNotification`, `ui.notify`, `holdBanner`, die Mitteilungszentrale (`NotificationCenter`), `soundOnEvent`-Banner und
 die Einstellungen dazu sind weg. Einzige Einblendung: die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des
 Spielers (`ui.error`, `ErrorNotice.tsx`, oben im Handy bzw. über der Karte). Neue Nachricht: nur Badge an der
@@ -285,6 +289,83 @@ Die eigentliche Ursache des Verrutschens: `.spot-marker { position: relative }` 
 als im Dev-Server) MapLibres `position: absolute`, die Marker lagen im Seitenfluss untereinander. `src/map/map.css`
 erzwingt deshalb `.maplibregl-map .maplibregl-marker { position: absolute }`; Marker-Klassen setzen nie selbst `position`.
 Ein Klick auf einen Marker schaltet den Doppelklick-Zoom kurz ab (`holdDoubleClickZoom` in `src/map/markers.ts`).
+Aufräumen vom 12.10.2026 (doppelte Infos): HUD hat getrennte Kacheln Rang, Ruf (`people`) und Reviere (`place`, Anker
+`hud.territory`); jede Handy-App steht nur einmal da (Kasse und Personal nur im Dock, Dock mit Namen); sauberes Geld in
+Kasse und Geldwäsche nur am Handy-Bildschirm (`SummaryTiles compactOnly`); Filter nach Rolle im Personal erst ab fünf
+Leuten; Lager-Marker zeigen nur den Bestand; Konfrontations-Karte ohne doppelte Chips (was als Einsatz dasteht, fehlt
+oben) und ohne Blatt-Titel (`MapDialog sheetTitle={false}`).
+Danach: Spot-Hover zeigt nur den Namen; Spots werden beim Herauszoomen kleiner (`--scale` aus `--spot-lift`), unter
+`NAMES_ZOOM` ohne Plaketten, gesperrte nur als Punkt; die Art eines Spots (Club, Park, Kneipe …) hat kein Symbol und
+keinen Chip mehr (`SPOT_TYPES` bleibt als Daten, wirkt nur noch über `spotModifiers`).
+Lager im Handy (13.10.2026): Rang, Ruf und Reviere sind kein HUD mehr, sondern kleine Widgets oben auf dem
+Startbildschirm (Slot `'phone.home'`, Klassen `phone-widget phone-stat` mit `--stat-accent`); darunter die Apps, darunter
+das Lager-Widget (Slot `'phone.homeBottom'`): 8 Fächer (bei mehr Waren 10) mit Icon und Menge, grün, was unterwegs ist
+(Lieferungen, Kai, Abholungen); Tipp öffnet die Lieferanten, „Lager-Optionen“ die Lager-App (`goods.app` ist `hidden`).
+Icons `cannabis`, `hashish`, `vape`, `cake`, `oil` im Icon-Set, Aussehen je Ware in `PRODUCT_LOOK` (`goods/ui`), Farben
+per `data-product` in `goods.css`.
+Die Reviere haben keine Kachel mehr (`NOT_ON_HOME` in `PhoneFrame.tsx`, das Widget öffnet sie), die Kasse steht im
+Raster statt im Dock.
+Gesperrt statt versteckt (13.10.2026): Was im Tutorial noch nicht frei ist, steht schon da, ausgegraut mit Schloss
+(`lockedWhen: (state) => tutorialLockText(state, …)` an Tab bzw. App, Widgets mit `<LockedWidget hint>` aus `src/ui`);
+ein Tipp zeigt kurz „Schaltest du frei mit ‚<Stufe>‘“ (`ui.notice(text)`, Einblendung mit Schloss statt Warnzeichen),
+gesperrte Tabs fehlen in Suche und Tastenkürzeln. `hiddenWhen` bleibt für das, was es wirklich nicht gibt (nach dem
+Verkauf). Rang und Ruf sind im Tutorial von Anfang an frei. Die Widgets haben keine Fußzeile („ab …“) mehr: Ruf und
+Reviere öffnen per Tipp die Reviere, der Rang zeigt den nächsten Rang kurz an. Am Handy-Bildschirm ist das offene Handy
+Vollbild über der HUD-Reihe. Reihenfolge im Raster: Gangs, Geldwäsche, Kasse, Einstellungen.
+Ganz oben auf dem Startbildschirm steht der Streifen „Mitteilungen“ (`src/ui/phone/HomeNotices.tsx`): Eine kurze
+Rückmeldung (`ui.error`, `ui.notice`) steht dort statt schwebend, sonst die neueste Meldung aus dem Verlauf (ungelesene mit
+Zähler); ein Tipp schließt die Rückmeldung bzw. öffnet den Verlauf. In den Apps schwebt die Rückmeldung wie bisher.
+In jeder App am Desktop ein sichtbarer Home-Knopf (`.phone__home-button`). Tour-Anker `hud.stock`, `hud.reputation`,
+`hud.rank`, `hud.territory` sitzen jetzt an den Widgets.
+Feedback 13.10.2026 (2D und Handy): Die Karte ist nur noch 2D von oben (kein Kippen/Drehen, Gebäude und Wahrzeichen
+als flache `fill`-Flächen, kein Himmel; Kamera-Schalter, Norden-Knopf und Menü Ebenen sind weg). Minispiele mit three.js
+laden erst beim Start (`lazyView` in `minigames/ui/kit/lazyView.tsx`). Dringende Ratschläge stehen im Streifen
+„Mitteilungen“ (`urgentAdvice` in `HomeNotices.tsx`), nicht mehr als eigene Zeile; im Spot-Fenster gibt es keinen
+Verkaufen-Knopf mehr, bedient wird nur mit einem Tipp auf den Spot. Wartet dort jemand ohne Läufer, ist der Klickrand
+größer (`spotHitExtra`, `--spot-hit`, nie bis zum nächsten Spot). Revier-Namen erscheinen beim Klick ins Veedel, ein
+Doppelklick öffnet die Reviere mit dem Veedel. Spielfarben über der Karte statt Gold: `--hud-pause`, `--hud-mission`,
+`--hud-go`, `--hud-meter`, `--hud-alert`. Schleier offener HUD-Popover liegt per Portal in der Shell (kein Abschalten
+des backdrop-filter mehr, das ließ den Bildschirm beim Schließen kurz schwarz werden).
+Danach (13.10.2026): Der Startbildschirm des Handys scrollt nicht mehr (`overflow: hidden`, Container `home` mit
+Höhenabfragen in `phone.css` und `goods.css`, die auf kleinen Bildschirmen Abstände und Fächer verkleinern). White Mode
+des Handys: Einstellungen › Anzeige › Handy Dunkel | Hell (`ui.phoneTheme`, `api.setPhoneTheme`, pro Gerät gemerkt),
+setzt `data-appearance="light"` am Handy; Creme-Werte unter `.phone[data-appearance="light"]` in `tokens.css`. Der
+Startbildschirm nimmt seine Flächen und Akzente aus `--home-*` (`--home-bg`, `--home-card`, `--home-cell`,
+`--home-brand` …), nie feste Weißwerte; Widgets setzen `--stat-accent` auf ein `--home-*`-Token.
+Danach (13.10.2026, Karte ruhiger): Keine Kreise mehr auf der Karte (Hotspots der Spots, Puls-Ring bei dringend und
+Razzia, goldener Hinweis-Ring `is-coach` samt `CoachHighlight`, Ping bei Konfrontationen, Ring in Gang-Farbe bei einem
+Vorstoß einer Gang). Klick auf einen Spot, dessen
+Ware fehlt: keine Meldung, sondern der Startbildschirm des Handys und das Fach dieser Ware leuchtet rot und wackelt
+(`ui.flash('goods.missing:<ware>')`, `UiState.flash`, `useUiSelector` aus `src/ui`; verfällt nach `FLASH_MS`). Im
+Lager-Widget steht „+ unterwegs“ in der Gruppe unter der Menge. Aachener Weiher liegt an der Aachener Straße.
+Personal-App neu (13.10.2026): Startseite mit Tabelle „Dein Team“ (Gruppe, Leute, Lohn pro Tag aus `wageDue`, Summe;
+Gruppen `STAFF_GROUPS` in `staff/ui/index.tsx`, Führung = Rechte Hand, Capos, Leutnants), ein Tipp öffnet die Seite der
+Gruppe (Panel `staff.role` mit `{ group }`, bei `'lead'` der Aufbau aus Slot `staff.tree`, bei Fahrern „Anheuern“).
+Darunter bis zu acht Problemfälle als Kacheln (Level, Loyalität als „8/100“, erklärt vom i im Kopf; Haft zuerst mit Gitter und Freikaufen, dann
+niedrigste bekannte Loyalität, jede mit Feuern) und „Bewerber“: bis zu neun Kacheln, drei pro Reihe (recruiting). Läufer und Sicherheit gibt es nur noch am
+Spot (`staff.hireSecurity`, `SECURITY_HIRE_COST`; Gewicht 0 im Pool), das Rumfragen ist aus der Oberfläche raus.
+Gangs-App neu (13.10.2026): oben „Deine Stärke“ neutral mit Teilen (`playerPowerParts`: Leute, Veedel, Schwarzgeld,
+Ware) und „Sicherheit an <Spot>“ (`staff.hireSecurity` am belebtesten Spot ohne Sicherheit), darunter die Gangs als
+Kacheln, zwei pro Reihe (Name, Status als Wort: Ruhig, Warnt, Droht, Angriff, Verbündet, Erledigt; Stärke, Veedel;
+Knöpfe Angriff `swordsCrossed`, Bündnis `handshake`, Schutzgeld als Menü `ProtectionSheet`). Kein Gang-Kriege-Abschnitt.
+Akzent im Handy ist iOS-Blau (`--phone-tint`, Flächen `--phone-tint-fill` mit `--phone-on-tint`), nicht mehr Gold.
+Lieferanten-App neu (13.10.2026): Lieferanten als Kacheln, zwei pro Reihe (Symbol je Herkunft `SUPPLIER_ICONS` in
+`suppliers/ui`, Icons `windmill`, `towers`, `tvTower`, `lighthouse`, `canalHouse`, `plane`, `arena`, `dom`; Lieferart als
+Abzeichen, Lieferzeit, Beziehung als fünf Stufen bis „Familie“), gesperrte mit Schloss und gleich „Freischalten“,
+sobald alles erfüllt ist. Unten nur noch der Hafen (Logistik); Routen erst ab der zweiten Stadt (`LogisticsLinks`).
+Fahrer stehen in der Lager-App (Slot `'goods.app'`, `DriverSection` in `logistics/ui`): anheuern und der Hafen-Fahrer
+(`logistics.setHarborDriver`, `harborDriverOn`, Zustand `harborDriver` pro Stadt, Version 7): ein freier Fahrer holt
+Ware am Kai von selbst ins Lager und beantwortet die Frage des Hafens. „Lager-Optionen“ am Startbildschirm ist größer.
+Nachrichten, Reviere und Shop (Feedback 13.10.2026): Die Nachrichten-App zeigt höchstens fünf offene Chats (Frage oder
+ungelesen, `INBOX_MAX` in `MessagesApp.tsx`), darunter „Archiv“ (`openPhone('core.messages', { view: 'archive' })`) mit
+allen Chats und Suche; keine Gruppen nach Kontaktart. Per Chat kommt nur noch, was eine Antwort braucht: Tagesbericht
+und stille Notizen der Rechten Hand und der Leutnants, Gang-Nachrichten ohne Antwort (`say()`), Polizei-Stufe,
+Lieferanten-Infos (`tell()`) und Rabatt-Aktionen stehen im Journal; ist der Hafen-Fahrer frei, kommt keine Hafen-Frage.
+Wochenverträge sind aus (`CONTRACTS_ENABLED` in `quests/config.ts`, in den Tests an über `quests/test-setup.ts`). Kein
+Rang-Widget mehr (der Rang wird weiter berechnet); oben links am Startbildschirm der Shop (`spots.shop`: Spot gründen
+gegen Schwarzgeld je Art, Ort per `ui.pickLocation`, `spots.found`), daneben breiter Ruf und Reviere. Die Reviere sind eine
+Seite: Kacheln Ruf (Slot `'territory.tiles'`, Tipp zeigt die letzten Gründe) und Fortschritt, darunter die Veedel als
+Tabelle (Einfluss, Spots, Heat); Spots stehen in den Veedel-Seiten, Stadtleben und Polizei-Karte sind weg.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -407,14 +488,15 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 `registerPhoneApp`, `registerStatusCounter` (Zähler in der festen Anzeige oben im Handy), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
 **Optik-Regeln (Auftrag 27):** Eigenschaften in Listen als Chips (`ItemContent tags`, `Chip`/`Chips`), nie als „a · b · c“;
-Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
+Abschnitte als `Group` (seit 13.10.2026 im iOS-Stil: Titel klein, grau und fast bündig über einem randlosen Kasten mit 12 px Rundung, kein Symbol und keine Farbe im Kopf, Fußnote grau darunter; `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
 `Disclosure` oder `Group more`; Namen und Werte brechen nie im Wort um.
 HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 sechs Apps**
 (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), dazu seit dem Hamburger Lager-Kauf die App „Lager“ (`goods.app`: eigene Lager, Standorte kaufen) und vier im Dock (Nachrichten, Lieferanten, Personal,
-Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
+Kasse; jede App steht nur einmal da, im Dock mit Namen wie im Raster): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
 `hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Keine Banner (Auftrag 46d):**
 `ui.toast(text, kind, { urgent })` schreibt nur in den Verlauf (Einstellungen › Verlauf, Seite `core.history`); `urgent`
-(Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen. Die einzige Einblendung ist die
+(Standard bei `'bad'`/`'warn'`) markiert den Eintrag im Verlauf als ungelesen (ohne Badge, Feedback 14.10.2026: Badges nur an
+den Nachrichten, auch nicht im Streifen „Mitteilungen“). Die einzige Einblendung ist die
 kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
 `var(--space-…)`) verwenden. **Farben tragen Bedeutung**: `color="money" | "dirty" | "danger" | "warn" | "place" | "goods" | "people" | "chat" | "law" …`

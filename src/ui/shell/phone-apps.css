@@ -93,7 +93,7 @@
   color: var(--phone-label-3);
 }
 .set-link:hover .set-link__label {
-  color: var(--cat-brand);
+  color: var(--phone-tint);
 }
 /* Sprachmodelle (Einstellungen › Ton & Musik): je eine Zeile mit Stand, Fortschritt und Laden/Entfernen */
 .set-voices {
@@ -532,7 +532,7 @@
   background: var(--phone-group);
 }
 .msg-bubble.is-open {
-  box-shadow: 0 0 0 1.5px var(--cat-brand);
+  box-shadow: 0 0 0 1.5px var(--phone-tint);
 }
 .msg-expired {
   display: block;
@@ -558,7 +558,7 @@
 }
 /* Offene Frage: Rahmen in Gold (Vorrang vor dem Farbstreifen) */
 .msg-bubbles .msg-bubble.is-open {
-  box-shadow: 0 0 0 1.5px var(--cat-brand);
+  box-shadow: 0 0 0 1.5px var(--phone-tint);
 }
 .msg-typing {
   display: flex;
@@ -734,6 +734,10 @@
   flex: none;
   color: var(--cat-danger);
   font-size: 18px;
+}
+/* Hinweis beim Tipp auf Gesperrtes (ui.notice): Schloss in neutraler Farbe statt rotem Warnzeichen. */
+.ui-error-notice__icon.is-hint {
+  color: var(--color-muted);
 }
 .ui-error-notice__text {
   flex: 1;
@@ -1094,4 +1098,56 @@
 .contact-profile__actions {
   display: flex;
   justify-content: center;
+}
+
+/* Nachrichten (Feedback 13.10.2026): Abschnitt „Offen“ mit Titel wie die Gruppen, darunter die Zeile „Archiv“ */
+.msg-section {
+  display: flex;
+  flex-direction: column;
+}
+.msg-section__title {
+  margin: 0;
+  padding: 0 4px 6px;
+  font-size: var(--type-footnote);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--phone-label-2);
+}
+.msg-archive {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--phone-label);
+  font: inherit;
+  font-size: var(--type-body);
+  text-align: left;
+  cursor: pointer;
+}
+.msg-archive:hover {
+  background: var(--phone-fill-hover);
+}
+.msg-archive > .ui-icon:first-child {
+  color: var(--phone-tint);
+}
+.msg-archive__label {
+  flex: 1;
+}
+.msg-archive__more {
+  font-size: var(--type-footnote);
+  color: var(--cat-warn);
+}
+.msg-archive__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--phone-label-2);
+}
+.msg-archive > .ui-icon:last-child {
+  font-size: 13px;
+  color: var(--phone-label-2);
 }

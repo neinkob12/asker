@@ -110,7 +110,7 @@ function stage0(ctx: TourContext): TourStep[] {
       anchor: 'phone.screen',
       tint: 'people',
       before: () => ui.openPhone('tab:staff'),
-      text: 'Personal. Am Anfang nur Läufer. Wer sich bewirbt, steht hier, oder du fragst selbst rum.',
+      text: 'Personal. Oben dein Team mit Lohn pro Tag, darunter Problemfälle und wen du einstellen könntest.',
     }),
     step({
       id: 'settings',
@@ -143,17 +143,19 @@ function stage1(ctx: TourContext): TourStep[] {
       text: 'Der Neumarkt, dein Spot. Steht ein Kunde da, erscheint hier die 1. Läuft seine Zeit ab, wird et rot.',
     }),
     step({
+      // Feedback 13.10.2026: Verkauft wird nur noch mit einem Tipp auf den Spot, nicht mehr im Handy.
+      id: 'sell',
+      anchor: 'spot.customer',
+      anchorKey: SPOT,
+      tint: 'brand',
+      waitFor: { event: 'sale.completed' },
+      text: 'Verkauf einmal selbst: Tipp auf den Spot, sobald einer da ist.',
+    }),
+    step({
       id: 'panel',
       anchor: 'spot.panel',
       before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
       text: 'Dat Spot-Fenster: Kunden, Preise, Leute. Alles für diese Ecke.',
-    }),
-    step({
-      id: 'sell',
-      anchor: 'spot.sell',
-      tint: 'brand',
-      waitFor: { event: 'sale.completed' },
-      text: 'Verkauf einmal selbst: Tipp auf Verkaufen, sobald einer da ist.',
     }),
     step({
       id: 'price',
@@ -201,9 +203,9 @@ function stage3(ctx: TourContext): TourStep[] {
   return [
     step({
       id: 'app',
-      anchor: 'phone.app.tab:territory',
+      anchor: 'hud.territory',
       before: () => home(ui),
-      text: 'Neue App: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
+      text: 'Neu oben im Handy: Reviere. Köln hat zwölf Veedel, jedes mit Nachfrage, Kaufkraft und Polizei.',
     }),
     step({
       id: 'list',
@@ -319,6 +321,8 @@ function stage7(ctx: TourContext): TourStep[] {
       id: 'appoint',
       anchor: 'staff.lieutenants',
       tint: 'people',
+      // Der Aufbau mit Leutnants steht auf der Seite „Leutnants“ der Personal-App.
+      before: () => ui.openPanel('staff.role', { group: 'lead' }),
       waitFor: { state: (s) => getLieutenants(s).length > 0 },
       text: 'Ernenn jetzt einen: Leutnant ernennen, Person und Spots wählen. Er will dafür mehr Lohn.',
     }),
@@ -360,7 +364,7 @@ function stage8(ctx: TourContext): TourStep[] {
       id: 'driver',
       anchor: 'staff.hire',
       tint: 'people',
-      before: () => ui.openPhone('tab:staff'),
+      before: () => ui.openPanel('staff.role', { group: 'driver' }),
       text: 'Mit dem Hafen gibt et Fahrer. Die holen Schiffsware am Kai ab und bringen sie ins Lager.',
     }),
   ];
@@ -408,7 +412,7 @@ function stage10(ctx: TourContext): TourStep[] {
       tint: 'people',
       before: () => ui.openPhone('tab:staff'),
       waitFor: { state: (s) => getStaff(s, { role: 'accountant', cityId: CITY }).length > 0 },
-      text: 'Neu: der Buchhalter. Einer bringt mehr Gewinn und billigere Leute. Stell einen ein.',
+      text: 'Neu: der Buchhalter. Einer bringt mehr Gewinn und billigere Leute. Stell unten einen ein.',
     }),
     step({
       id: 'app',
@@ -496,7 +500,7 @@ export function stageTour(stage: number, ctx: TourContext): TourDef {
   };
 }
 
-/** Nach der ersten Lieferung (Moment 'delivery'): das Lager im HUD und die Lieferungen in der App. */
+/** Nach der ersten Lieferung (Moment 'delivery'): das Lager-Widget im Handy und die Lieferungen in der App. */
 export function deliveryTour(ctx: TourContext): TourDef {
   const { ui } = ctx;
   return {
@@ -506,8 +510,8 @@ export function deliveryTour(ctx: TourContext): TourDef {
         id: 'stock',
         anchor: 'hud.stock',
         tint: 'goods',
-        before: () => onMap(ui),
-        text: 'Deine erste Lieferung ist da. Neu im HUD: dat Lager. Tipp drauf, dann siehst du, wat drin ist.',
+        before: () => ui.openPhone(null),
+        text: 'Deine erste Lieferung ist da. Oben im Handy steht jetzt dat Lager. Tipp drauf, dann kannste nachbestellen.',
       }),
       step({
         id: 'shipments',
@@ -561,7 +565,7 @@ export function phoneOrderTour(ctx: TourContext, contactId: string | undefined):
   };
 }
 
-/** Erster Gang-Angriff (Moment 'firstAttack'): Hotspot-Regel, Sicherheit einstellen und auf den Neumarkt setzen. */
+/** Erster Gang-Angriff (Moment 'firstAttack'): Hotspot-Regel, Sicherheit direkt am Neumarkt anheuern. */
 export function firstAttackTour(ctx: TourContext, gangName: string): TourDef {
   const { ui } = ctx;
   return {
@@ -583,19 +587,11 @@ export function firstAttackTour(ctx: TourContext, gangName: string): TourDef {
       }),
       step({
         id: 'hire',
-        anchor: 'phone.screen',
-        tint: 'people',
-        before: () => ui.openPhone('tab:staff'),
-        waitFor: { state: (s) => getStaff(s, { role: 'security', cityId: CITY }).length > 0 },
-        text: 'Neu im Personal: Sicherheit. Nimm einen Bewerber oder frag rum, und stell einen ein.',
-      }),
-      step({
-        id: 'assign',
         anchor: 'spot.runner',
         tint: 'danger',
         before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
         waitFor: { state: (s) => securityAt(s, { spotId: SPOT }).length > 0 },
-        text: 'Setz ihn auf den Neumarkt. Dann überlegen die et sich zweimal.',
+        text: 'Neu: Sicherheit. Heuer direkt hier am Neumarkt jemanden an. Dann überlegen die et sich zweimal.',
       }),
     ],
   };

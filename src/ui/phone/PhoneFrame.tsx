@@ -16,21 +16,11 @@ import type { ComponentType } from 'preact';
 import { memo } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
-import {
-  Badge,
-  ContextMenu,
-  ErrorBoundary,
-  Icon,
-  IconChip,
-  type MenuAction,
-  PortalHostContext,
-  SwipeRow,
-} from '../components';
+import { Badge, ContextMenu, ErrorBoundary, Icon, IconChip, type MenuAction, PortalHostContext } from '../components';
 import { sectionTitle } from '../components/section';
 import { shallowEqual, useRuntime, useRuntimeSelector } from '../hooks';
 import { hasOverlay } from '../overlays';
 import {
-  type Advice,
   dialogLocksPhone,
   type PhoneApp,
   panels,
@@ -56,6 +46,7 @@ import {
   homeSwipeOpenness,
   rubberBand,
 } from './gestureModel';
+import { HomeNotices } from './HomeNotices';
 import { chatList } from './messagesModel';
 import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
@@ -64,21 +55,17 @@ import { bindPressFeedback } from './press';
 import { StatusPill } from './StatusPill';
 import { tileColor } from './tile';
 
-/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
-const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`, 'finance.app'];
+/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal (sofern vorhanden). */
+const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`];
 
-/** Reihenfolge der Apps im Raster: Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen. Unbekannte hinten. */
-const HOME_ORDER = [
-  'finance.app',
-  `${TAB_APP_PREFIX}territory`,
-  `${TAB_APP_PREFIX}gangs`,
-  `${TAB_APP_PREFIX}staff`,
-  'laundering.app',
-  'core.settings',
-];
+/** Reihenfolge der Apps im Raster: Gangs, Geldwäsche, Kasse, Einstellungen. Unbekannte hinten. */
+const HOME_ORDER = [`${TAB_APP_PREFIX}gangs`, 'laundering.app', 'finance.app', 'core.settings'];
 
-/** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
-export const URGENT_ADVICE = 80;
+/**
+ * Nicht als Kachel auf dem Startbildschirm, aber weiter in Suche und Tastenkürzeln: Die Reviere öffnet das
+ * Reviere-Widget oben.
+ */
+const NOT_ON_HOME = [`${TAB_APP_PREFIX}territory`];
 
 /** Eine Kachel auf dem Startbildschirm: Tab eines Moduls oder Handy-App. */
 interface HomeApp {
@@ -87,6 +74,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
+  /** Gesperrt (lockedWhen): ausgegraut mit Schloss; ein Tipp zeigt diesen Hinweis statt die App zu öffnen. */
+  locked?: string;
   /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
   replaces?: string;
 }
@@ -101,6 +90,17 @@ function badgeOf(read: () => number | undefined): number {
   }
 }
 
+/** Sperre einer Kachel: Wirft das Modul, gilt die App als frei. */
+function lockOf(read: () => string | null | undefined): { locked?: string } {
+  try {
+    const text = read();
+    return text ? { locked: text } : {};
+  } catch (error) {
+    console.error('Sperre einer App', error);
+    return {};
+  }
+}
+
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
@@ -112,6 +112,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: tabIcon(t),
         color: tabTint(t),
         badge: badgeOf(() => t.badge?.(state)),
+        ...lockOf(() => t.lockedWhen?.(state)),
       }),
     );
   const apps = phoneApps
@@ -124,10 +125,11 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: a.icon,
         color: a.color ?? 'system',
         badge: badgeOf(() => a.badge?.(state, ui)),
+        ...lockOf(() => a.lockedWhen?.(state)),
         ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
-  return [...tabs, ...apps];
+  return [...tabs, ...apps].filter((a) => !NOT_ON_HOME.includes(a.id));
 }
 
 /**
@@ -226,10 +228,7 @@ function tileActions(app: HomeApp, api: UiApi, state: GameState): MenuAction[] {
   return actions;
 }
 
-/**
- * Kasse und Personal stehen im Raster und im Dock: Die App wächst aus der Kachel, die angetippt wurde (stackAnimator
- * sucht erst data-tapped, dann irgendeine passende).
- */
+/** Die App wächst aus der Kachel, die angetippt wurde (stackAnimator sucht erst data-tapped, dann irgendeine passende). */
 function markTapped(button: HTMLElement): void {
   for (const other of button.closest('.phone__home')?.querySelectorAll('[data-tapped]') ?? []) {
     other.removeAttribute('data-tapped');
@@ -245,6 +244,29 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
   const { app } = props;
   const runtime = useRuntime();
   const tile = tileColor(app.color);
+  const icon = (
+    <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" class="phone__tile" />
+  );
+  // Gesperrt (Tutorial): steht schon da, ausgegraut mit Schloss; ein Tipp sagt kurz, womit die App frei wird.
+  if (app.locked) {
+    const hint = app.locked;
+    return (
+      <button
+        type="button"
+        class={`phone__app is-locked ${props.dock ? 'is-dock' : ''}`}
+        data-app-id={app.id}
+        data-tour={`phone.app.${app.id}`}
+        aria-label={`${app.name}, gesperrt`}
+        onClick={() => runtime.api.notice(`${app.name}: ${hint}`)}
+      >
+        {icon}
+        <span class="phone__app-lock" aria-hidden="true">
+          <Icon name="lock" size={13} strokeWidth={2.2} />
+        </span>
+        <span class="phone__app-name">{app.name}</span>
+      </button>
+    );
+  }
   return (
     <ContextMenu
       label={`Schnellaktionen ${app.name}`}
@@ -270,98 +292,29 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
         aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
         title={app.name}
       >
-        <IconChip
-          icon={app.icon}
-          color={tile.color}
-          style={tile.style}
-          shape="tile"
-          solid
-          size="xl"
-          class="phone__tile"
-        />
-        {!props.dock && <span class="phone__app-name">{app.name}</span>}
+        {icon}
+        <span class="phone__app-name">{app.name}</span>
         <Badge count={app.badge} />
       </button>
     </ContextMenu>
   );
 }, sameTile);
 
-/**
- * Welchen dringenden Rat der Spieler weggewischt hat (kommt erst wieder, wenn ein anderer kommt). Der Schlüssel enthält
- * den Titel: "core.answer" ist immer dieselbe ID, aber jede Frage (anderer Chat) ein anderer Rat.
- */
-let dismissedAdvice: string | null = null;
-const adviceKey = (advice: Advice) => `${advice.id}|${advice.title}`;
-
-/**
- * Dringender Rat als eine Zeile ganz oben: Kachel, Titel, Knopf. Nach links wischen (oder ×) blendet ihn aus, bis ein
- * anderer dringender Rat kommt. Alles andere, was die Module empfehlen, steht in der Suche (Strg/⌘+K).
- */
-function UrgentAdvice(props: { advice: Advice }) {
-  const runtime = useRuntime();
-  const { api } = runtime;
-  const [, redraw] = useState(0);
-  const { advice } = props;
-  const dismiss = () => {
-    dismissedAdvice = adviceKey(advice);
-    redraw((n) => n + 1);
-    // Den Startbildschirm zeichnet sonst erst der nächste Spielschritt neu (bei Pause bliebe die Zeile stehen).
-    runtime.requestRender();
-  };
-  return (
-    <SwipeRow actions={[{ label: 'Weg', icon: 'close', color: 'system', onSelect: dismiss }]} fullSwipe>
-      <div class="phone__urgent" role="status">
-        <button
-          type="button"
-          class="phone__urgent-main"
-          onClick={() => (advice.action ? advice.action(api) : api.togglePalette(true))}
-        >
-          <IconChip icon={advice.icon} color="brand" solid size="md" shape="tile" />
-          <span class="phone__urgent-text">
-            <span class="phone__urgent-kicker">Dringend</span>
-            <span class="phone__urgent-title">{advice.title}</span>
-          </span>
-          {advice.action && <span class="phone__urgent-action">{advice.actionLabel ?? 'Los'}</span>}
-        </button>
-        <button type="button" class="phone__urgent-close" onClick={dismiss} aria-label="Ausblenden">
-          <Icon name="close" />
-        </button>
-      </div>
-    </SwipeRow>
-  );
-}
-
-/** Der dringende Rat für den Startbildschirm, sofern es einen gibt und er nicht weggewischt wurde. */
-export function urgentAdvice(state: GameState): Advice | null {
-  const top = collectAdvice(state)[0];
-  if (!top || top.priority < URGENT_ADVICE) {
-    // Nichts Dringendes mehr: Kehrt derselbe Rat später zurück, soll er wieder erscheinen.
-    dismissedAdvice = null;
-    return null;
-  }
-  return dismissedAdvice === adviceKey(top) ? null : top;
-}
-
 const sameApps = (a: HomeApp[], b: HomeApp[]) => a.length === b.length && a.every((app, i) => shallowEqual(app, b[i]));
 
 /** Beiträge zu 'phone.home' lesen beliebig im Zustand: Sie ziehen bei jedem neuen Stand nach, der Rest des Bildschirms nicht. */
-function HomeSlot() {
+function HomeSlot(props: { name: 'phone.home' | 'phone.homeBottom' }) {
   useRuntimeSelector(() => stateRevision());
-  return <Slot name="phone.home" />;
+  return <Slot name={props.name} />;
 }
 
 /**
- * Startbildschirm. Ohne Props und mit eigenen Auszügen (Kacheln samt Zählern, dringender Rat) gelesen: Er zeichnet nur
- * neu, wenn sich eine Kachel, ein Zähler oder der dringende Rat ändert, nicht bei jedem Simulationsschritt.
+ * Startbildschirm. Ohne Props und mit eigenen Auszügen (Kacheln samt Zählern) gelesen: Er zeichnet nur neu, wenn sich
+ * eine Kachel oder ein Zähler ändert, nicht bei jedem Simulationsschritt. Dringendes steht in den Mitteilungen oben.
  */
 const HomeScreen = memo(function HomeScreen() {
   const runtime = useRuntime();
   const all = useRuntimeSelector((rt) => (rt.state ? homeApps(rt.state, rt.ui) : []), sameApps);
-  // Der Rat selbst (mit Knopf) wird hier gelesen, ausgelöst wird das Neuzeichnen über seinen Schlüssel (ID und Titel).
-  useRuntimeSelector((rt) => {
-    const advice = rt.state ? urgentAdvice(rt.state) : null;
-    return advice ? adviceKey(advice) : null;
-  });
   const state = runtime.state;
   if (!state) return null;
   // Eine App kann zeitweise eine andere im Dock ersetzen (PhoneApp.dock); die ersetzte rückt ins Raster.
@@ -371,22 +324,23 @@ const HomeScreen = memo(function HomeScreen() {
     const i = HOME_ORDER.indexOf(a.id);
     return i < 0 ? HOME_ORDER.length : i;
   };
-  // Im Raster stehen die sechs Apps der Tabelle (Kasse und Personal auch im Dock); Nachrichten und Lieferanten nur im Dock.
-  const grid = all
-    .filter((a) => HOME_ORDER.includes(a.id) || !dockIds.includes(a.id))
-    .sort((a, b) => rank(a) - rank(b));
-  const urgent = urgentAdvice(state);
+  // Jede App steht genau einmal da: was im Dock liegt (Nachrichten, Lieferanten, Personal, Kasse), nicht im Raster.
+  const grid = all.filter((a) => !dockIds.includes(a.id)).sort((a, b) => rank(a) - rank(b));
   return (
     <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
-        {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
+        <HomeNotices />
+        {/* Oben kleine Widgets nebeneinander (Rang, Ruf, Reviere), dann die Apps, darunter breite Widgets (Lager). */}
         <div class="phone__widgets">
-          <HomeSlot />
+          <HomeSlot name="phone.home" />
         </div>
         <div class="phone__apps">
           {grid.map((a) => (
             <AppTile key={a.id} app={a} onOpen={() => runtime.api.openPhone(a.id)} />
           ))}
+        </div>
+        <div class="phone__widgets">
+          <HomeSlot name="phone.homeBottom" />
         </div>
       </div>
       {dock.length > 0 && (
@@ -633,23 +587,38 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
       <ErrorBoundary name="Anruf" silent>
         <CallScreen state={props.state} />
       </ErrorBoundary>
-      {props.sheet ? null : props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
+      {props.device || props.sheet ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
       {/* Während eines Anrufs nichts über dem Anrufer. */}
-      {!inCall && <PhoneErrorNotice />}
+      {/* Auf dem Startbildschirm steht die Rückmeldung im Streifen „Mitteilungen“ (HomeNotices), nicht schwebend. */}
+      {!inCall && !atHome && <PhoneErrorNotice />}
       {props.sheet ? null : props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
         <nav class="phone__nav">
-          <button
-            type="button"
-            class="phone__nav-button"
-            onPointerDown={homeSwipe}
-            onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
-            aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
-            title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
-          >
-            <span class="phone__home-indicator" />
-          </button>
+          {atHome ? (
+            <button
+              type="button"
+              class="phone__nav-button"
+              onPointerDown={homeSwipe}
+              onClick={api.closePhone}
+              aria-label="Handy weglegen"
+              title="Handy weglegen (T)"
+            >
+              <span class="phone__home-indicator" />
+            </button>
+          ) : (
+            // In jeder App ein sichtbarer Home-Knopf (statt nur des Balkens): tippen = Startbildschirm, hochwischen ebenso.
+            <button
+              type="button"
+              class="phone__nav-button phone__home-button"
+              onPointerDown={homeSwipe}
+              onClick={() => api.openPhone(null)}
+              aria-label="Startbildschirm"
+              title="Startbildschirm"
+            >
+              <Icon name="home" size={18} />
+            </button>
+          )}
         </nav>
       )}
     </div>
@@ -680,6 +649,8 @@ export function PhoneFrame() {
     <section
       class={`phone ${device ? 'phone--device' : ''} ${locked ? 'is-locked' : ''}`}
       data-tour="phone"
+      // White Mode (Einstellungen › Anzeige): helle Tokens in tokens.css unter .phone[data-appearance="light"].
+      data-appearance={ui.phoneTheme === 'light' ? 'light' : undefined}
       aria-label="Handy"
       inert={locked}
     >
@@ -704,9 +675,10 @@ export function PhoneFrame() {
 
 /*
  * Prototyp „Karte zuerst“ (Handy-Bildschirm, `?ui=karte`): Die Karte bleibt der Grund, unten liegt das Dock des
- * Spiel-Handys als feste Leiste (wie dort ohne Namen unter den Kacheln): Karte, die vier Dock-Apps (dieselben Kacheln, Farben und Zähler wie am Desktop, auch
- * wenn eine App eine andere zeitweise ersetzt) und Start (Startbildschirm mit allen Apps). Ein Tipp auf eine App öffnet
- * das Handy ganz, wie am Desktop; innen gilt dasselbe System (Startbildschirm, Apps, „‹ Titel“ zurück). Nur ein Spot
+ * Spiel-Handys als feste Leiste: Karte, die Dock-Apps (dieselben Kacheln, Namen und Farben wie im Dock, auch wenn eine
+ * App eine andere zeitweise ersetzt) und Start (Startbildschirm mit Mitteilungen, Widgets und allen Apps). Ein Tipp auf
+ * eine App öffnet das Handy als Vollbild über dem HUD, wie ohne Prototyp; innen gilt dasselbe System (Startbildschirm,
+ * Apps, „‹ Titel“ zurück, Uhrzeit oben im Handy). Nur ein Spot
  * oder ein anderes Ziel auf der Karte öffnet es halb, damit die Karte darüber sichtbar bleibt. Ziehen am Griff wechselt
  * die Höhe oder legt das Handy weg.
  */
@@ -741,7 +713,6 @@ function MapFirstTabButton(props: {
       class={`mapfirst-tab ${props.active ? 'is-active' : ''}`}
       aria-current={props.active ? 'page' : undefined}
       aria-label={props.tile.badge > 0 ? `${props.label}, ${props.tile.badge} neu` : props.label}
-      title={props.label}
       onClick={props.onClick}
     >
       <span class="mapfirst-tab__icon">
@@ -751,10 +722,11 @@ function MapFirstTabButton(props: {
           style={props.tile.solid ? tile.style : undefined}
           shape="tile"
           solid={props.tile.solid}
-          size="lg"
+          size="md"
         />
         <Badge count={props.tile.badge} />
       </span>
+      <span class="mapfirst-tab__label">{props.label}</span>
     </button>
   );
 }
@@ -821,6 +793,7 @@ function MapFirstPhone(props: { state: GameState; unread: number; locked: boolea
           ref={sheet}
           class={`phone phone--sheet is-${detent} ${props.locked ? 'is-locked' : ''}`}
           data-tour="phone"
+          data-appearance={ui.phoneTheme === 'light' ? 'light' : undefined}
           aria-label="Handy"
           inert={props.locked}
         >

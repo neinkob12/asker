@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clock, loadSimulation, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
-import { LOYALTY, RUNNER_DAILY_WAGE } from './config';
+import { LOYALTY, ROLE_INFO, RUNNER_DAILY_WAGE, SECURITY_HIRE_COST } from './config';
 import {
   assign,
   bonus,
@@ -61,6 +61,21 @@ describe('staff', () => {
     const runner = runnerAt(sim.state, 'neumarkt');
     expect(runner).toMatchObject({ role: 'runner', status: 'active', wage: RUNNER_DAILY_WAGE, level: 1 });
     expect(runner?.name).toMatch(/\S+ \S+/);
+  });
+
+  it('Sicherheit gibt es direkt am Spot, eine pro Spot', () => {
+    const sim = quietGame();
+    const security = (spotId: string) => sim.dispatch({ type: 'staff.hireSecurity', payload: { spotId } });
+    expect(security('neumarkt').ok).toBe(true);
+    expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - SECURITY_HIRE_COST);
+    expect(securityAt(sim.state, { spotId: 'neumarkt' })[0]).toMatchObject({
+      role: 'security',
+      status: 'active',
+      wage: ROLE_INFO.security.wage,
+      origin: 'street',
+    });
+    expect(security('neumarkt')).toEqual({ ok: false, reason: 'Hier passt schon jemand auf.' });
+    expect(security('gibtsnicht').ok).toBe(false);
   });
 
   it('Mitarbeiter sind Individuen mit Alter, Hintergrund, Laufbahn und eigenen Werten', () => {

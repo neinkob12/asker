@@ -5,11 +5,12 @@
  */
 
 .shell.is-mapfirst {
-  --tabbar-height: 62px;
+  --tabbar-height: 66px;
   --tabbar-space: calc(var(--tabbar-height) + var(--safe-bottom));
   /* Kartensteuerung und Anzeigen unten rücken über Tab-Leiste und Hinweis */
   --mobile-dock-height: calc(var(--tabbar-height) + 44px);
-  --sheet-full-top: calc(var(--top) + 64px);
+  /* Ganz offen ist das Handy Vollbild über der HUD-Reihe (wie ohne Prototyp, die Uhrzeit steht dann oben im Handy) */
+  --sheet-full-top: var(--safe-top, 0px);
   --sheet-half-top: 48dvh;
 }
 
@@ -50,7 +51,7 @@
   top: var(--sheet-full-top);
 }
 .shell.is-mapfirst .phone--sheet .phone__device {
-  --phone-status-height: 14px;
+  --phone-status-height: 64px;
   --phone-home-inset: 8px;
   border-radius: 24px 24px 0 0;
   box-shadow:
@@ -59,6 +60,17 @@
 }
 .shell.is-mapfirst .phone--sheet .phone__screen {
   border-radius: 24px 24px 0 0;
+}
+/* Halb offen: keine Uhrzeit oben (das HUD darüber zeigt sie), nur der Griff */
+.shell.is-mapfirst .phone--sheet.is-half .phone__device {
+  --phone-status-height: 14px;
+}
+.shell.is-mapfirst .phone--sheet.is-half .phone__status {
+  display: none;
+}
+/* Ganz offen: Uhrzeit unter dem Griff */
+.shell.is-mapfirst .phone--sheet.is-full .phone__status {
+  top: 12px;
 }
 /* Großer Titel kleiner: Im halben Blatt zählt jede Zeile */
 .shell.is-mapfirst .phone--sheet.is-half .phone-screen__large {
@@ -102,7 +114,8 @@
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   height: var(--tabbar-space);
   padding: 0 max(4px, var(--safe-left)) var(--safe-bottom) max(4px, var(--safe-right));
   background: var(--hud-glass-strong);
@@ -121,7 +134,7 @@
   border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -144,12 +157,12 @@
   opacity: 0.82;
 }
 .mapfirst-tab.is-active {
-  color: var(--color-text);
+  color: var(--phone-tint);
 }
 .mapfirst-tab.is-active .mapfirst-tab__icon {
   box-shadow:
     0 0 0 2px var(--hud-glass-strong),
-    0 0 0 3.5px var(--cat-brand);
+    0 0 0 3.5px var(--phone-tint);
 }
 .mapfirst-tab:active .mapfirst-tab__icon {
   transform: scale(0.94);
@@ -196,6 +209,9 @@
   --cat-brand-a: #ff7ab9;
   --cat-brand-b: #d81b78;
   --cat-brand-on: #ffffff;
+  --phone-tint: #ff4fa3;
+  --phone-tint-fill: #d81b78;
+  --phone-tint-fill-hover: #e8308a;
   --color-primary: #ff4fa3;
   --hud-gold: #5ff2e8;
   --shadow-glow: 0 0 0 2px rgba(255, 79, 163, 0.55);
@@ -207,7 +223,7 @@
 .shell.is-mapfirst[data-accent="neon"] .mapfirst-tab.is-active .mapfirst-tab__icon {
   box-shadow:
     0 0 0 2px var(--hud-glass-strong),
-    0 0 0 3.5px var(--cat-brand),
+    0 0 0 3.5px var(--phone-tint),
     0 0 16px rgba(255, 79, 163, 0.5);
 }
 .shell.is-mapfirst[data-accent="neon"] .phone--sheet .phone__device {
@@ -219,4 +235,10 @@
 /* Start: Das Dock liegt schon als Leiste unten */
 .shell.is-mapfirst .phone--sheet .phone__dock {
   display: none;
+}
+.mapfirst-tab__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

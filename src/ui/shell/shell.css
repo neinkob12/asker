@@ -155,7 +155,7 @@
   transition: right var(--dock-duration) var(--dock-ease);
 }
 /* Weggelegtes Handy: Die Lasche am rechten Rand (phone.css, .phone-tab) bekommt Platz, sonst lag sie auf der Kachel
-   „Ruf · Reviere“ und auf den aufgeklappten Karten (Auftrag 43, N6). */
+   „Ruf, Reviere“ und auf den aufgeklappten Karten (Auftrag 43, N6). */
 .shell.is-desktop:not(.has-phone) .hud {
   right: calc(var(--map-right) + 52px);
 }
@@ -465,7 +465,7 @@
   background: var(--hud-empty);
 }
 .hud-segments__seg.is-on {
-  background: var(--hud-gold);
+  background: var(--hud-meter);
 }
 /* Leiste 0–100 (Ruf) mit Marken an den Stufen */
 .hud-bar {
@@ -481,7 +481,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 3px;
-  background: var(--hud-gold);
+  background: var(--hud-meter);
 }
 .hud-bar__mark {
   position: absolute;
@@ -490,7 +490,7 @@
   width: 1px;
   background: rgba(0, 0, 0, 0.45);
 }
-/* Kachel mit aufklappbarer Karte (Lager, Ruf · Reviere): Karte darunter, Glas, Knopf zum Ziel */
+/* Kachel mit aufklappbarer Karte (Lager, Ruf, Reviere): Karte darunter, Glas, Knopf zum Ziel */
 .hud-pill-wrap {
   position: relative;
   margin: 0;
@@ -545,8 +545,8 @@
   margin-top: var(--space-3);
   border: 0;
   border-radius: var(--hud-radius-button);
-  background: var(--hud-gold);
-  color: var(--hud-gold-on);
+  background: var(--hud-go);
+  color: var(--hud-go-on);
   font-family: var(--font-hud);
   font-size: 14px;
   font-weight: 700;
@@ -566,8 +566,11 @@
 .hud-label.is-place {
   color: var(--cat-place);
 }
+.hud-label.is-people {
+  color: var(--cat-people);
+}
 
-/* Spieltempo: Segmente 40 × 36, Pause gold, aktiv hell */
+/* Spieltempo: Segmente 40 × 36, Pause eisblau, aktiv hell */
 .hud-speed {
   display: flex;
   gap: 2px;
@@ -602,8 +605,8 @@
   background: var(--hud-glass-fill-active);
 }
 .hud-speed__btn.is-pause.is-active {
-  color: var(--hud-gold-on);
-  background: var(--hud-gold);
+  color: var(--hud-pause-on);
+  background: var(--hud-pause);
 }
 /* Tour (Auftrag 46a): gesperrt, solange sie die Uhr anhält; is-queued ist das Tempo, das nach der Tour gilt. */
 .hud-speed[disabled] .hud-speed__btn {
@@ -618,11 +621,11 @@
   color: var(--hud-ink);
 }
 .hud-speed[disabled] .hud-speed__btn.is-pause.is-active:hover {
-  color: var(--hud-gold-on);
-  background: var(--hud-gold);
+  color: var(--hud-pause-on);
+  background: var(--hud-pause);
 }
 .hud-speed__btn.is-queued {
-  box-shadow: 0 0 0 2px var(--hud-gold) inset;
+  box-shadow: 0 0 0 2px var(--hud-pause) inset;
   color: var(--hud-ink);
 }
 .hud-speed__btn .ui-icon {
@@ -653,7 +656,8 @@
 .hud-popover-scrim {
   position: fixed;
   inset: 0;
-  z-index: var(--z-popover);
+  /* Über dem Handy, unter dem angehobenen HUD mit dem offenen Popover (siehe unten). */
+  z-index: var(--z-notification);
   background: transparent;
   border: 0;
   cursor: default;
@@ -663,15 +667,6 @@
 .hud:has(.hud-popover, .hud-flyout),
 .shell-mapctl:has(.hud-popover) {
   z-index: calc(var(--z-notification) + 1);
-}
-/* Offenes Menü: Der Kasten darum verliert solange seinen backdrop-filter (dafür dichteres Glas). Mit Filter ist er der
-   Bezugsrahmen des Schleiers (position: fixed), der deckte dann nur den Kasten, und ein Klick daneben ging an die Karte
-   statt das Menü zu schließen. */
-.hud-capsule:has(.hud-popover),
-.shell-mapctl__group:has(.hud-popover) {
-  background: var(--hud-glass-strong);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 .hud-popover {
   position: absolute;
@@ -801,8 +796,7 @@ kbd {
   border-radius: var(--hud-radius-tile);
 }
 .shell-mapctl__group .ui-button,
-.shell-mapctl__button,
-.shell-mapctl__camera {
+.shell-mapctl__button {
   --btn-bg: transparent;
   --btn-border: transparent;
   display: grid;
@@ -829,48 +823,12 @@ kbd {
 }
 .shell-mapctl__group .ui-button:hover,
 .shell-mapctl__button:hover,
-.shell-mapctl__button.is-open,
-.shell-mapctl__camera:hover {
+.shell-mapctl__button.is-open {
   color: var(--hud-ink);
   background: var(--hud-glass-fill);
 }
 .shell-mapctl__group > * + * {
   border-top: 1px solid var(--hud-glass-line);
-}
-.shell-mapctl__camera {
-  font-family: var(--font-hud-display);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.shell-mapctl__camera.is-3d {
-  color: var(--hud-gold);
-}
-.shell-layers__group {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-.shell-layers__group + .shell-layers__group {
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--hud-glass-line);
-}
-.shell-layers__title {
-  display: block;
-  padding: var(--space-2) var(--space-3) var(--space-1);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--hud-ink-2);
-}
-.hud-menu__item.is-active .ui-icon {
-  color: var(--hud-gold);
-}
-.shell-layers__check {
-  margin-left: auto;
 }
 
 /* ---------------------------------------------------------------- Hinweise */
@@ -893,21 +851,6 @@ kbd {
 }
 .is-desktop.has-phone .shell-pick {
   left: calc((100% - var(--phone-space)) / 2);
-}
-
-/* Sanft pulsierender Hinweis (Onboarding) an einem Karten-Marker. */
-.maplibregl-marker.is-coach,
-.maplibregl-marker .is-coach {
-  animation: coach-pulse 1.8s ease-in-out infinite;
-}
-@keyframes coach-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(226, 174, 74, 0.8);
-  }
-  60% {
-    box-shadow: 0 0 0 12px rgba(226, 174, 74, 0);
-  }
 }
 
 /* ---------------------------------------------------------------- Suche */
@@ -1159,7 +1102,7 @@ kbd {
     column-gap: var(--space-2);
     row-gap: var(--space-2);
   }
-  /* Lager und Ruf · Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
+  /* Lager und Ruf, Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
   .hud-tiles {
     justify-self: stretch;
     flex-wrap: wrap;
@@ -1174,6 +1117,10 @@ kbd {
   .hud-tiles > * {
     flex: 1 1 calc((100% - 2 * var(--space-2)) / 3);
     min-width: 0;
+  }
+  /* Genau vier Kacheln (Rang, Lager, Ruf, Reviere): zwei mal zwei statt drei und eine allein über die ganze Breite. */
+  .hud-tiles:has(> :nth-child(4):last-child) > * {
+    flex-basis: calc((100% - var(--space-2)) / 2);
   }
   .hud-tiles .hud-pill {
     width: 100%;
@@ -1214,6 +1161,11 @@ kbd {
     right: auto;
     left: 0;
     width: min(300px, calc(100vw - 2 * var(--gap)));
+  }
+  /* Kacheln der rechten Spalte (zwei pro Reihe) klappen nach links auf, sonst ragt die Karte aus dem Bild. */
+  .hud-tiles > .hud-pill-wrap:nth-child(even) .hud-flyout {
+    right: 0;
+    left: auto;
   }
   .hud-capsule--money {
     flex-direction: row;
@@ -1275,12 +1227,6 @@ kbd {
   }
   .mode-choice {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .is-coach {
-    animation: none;
   }
 }
 

@@ -2,15 +2,16 @@
 //   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter die Mission
 //                ('below') und Warnungen
 //   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Spieltempo, Menü ('time' ist seit Auftrag 26 leer)
-//   oben rechts  Kennzahl-Kacheln Lager und Ruf · Reviere ('more'), jede klappt beim Drüberfahren eine Karte auf
+//   oben rechts  Kennzahl-Kacheln Lager und Ruf, Reviere ('more'), jede klappt beim Drüberfahren eine Karte auf
 // Ist die Kartenfläche schmal, rücken die Kacheln unter die Uhr (Container-Query in shell.css). Am Handy-Bildschirm
 // stehen Geld und Uhr kompakt nebeneinander, die Kacheln flach darunter. Meldungen gibt es über der Karte nicht mehr:
 // Sie laufen über den Verlauf (Auftrag 46d: keine Banner, keine Island).
 
 import type { ComponentChildren } from 'preact';
+import { createPortal } from 'preact/compat';
 import { SPEEDS } from '../../core';
 import { ClockHud } from '../builtin/CoreHud';
-import { Badge, ErrorBoundary, Icon } from '../components';
+import { ErrorBoundary, Icon } from '../components';
 import { useRuntime } from '../hooks';
 import { type HudItem, hudItems } from '../registry';
 import { useAudio } from '../useAudio';
@@ -31,13 +32,22 @@ export function HudItems(props: { items: HudItem[] }) {
   );
 }
 
-/** Popover unter einem HUD-Knopf. Klick daneben oder Escape schließt. */
+/**
+ * Popover unter einem HUD-Knopf. Klick daneben oder Escape schließt. Der Schleier für den Klick daneben liegt direkt in
+ * der Shell: Im Glas-Kasten (backdrop-filter) deckte er sonst nur den Kasten. Früher nahm der Kasten dafür solange seinen
+ * Filter weg; das An- und Ausschalten des Filters über der Karte ließ den Bildschirm beim Schließen kurz schwarz
+ * werden (Feedback 13.10.2026).
+ */
 export function Popover(props: { id: string; children: ComponentChildren; align?: 'left' | 'right'; class?: string }) {
   const { ui, api } = useRuntime();
   if (ui.popover !== props.id) return null;
   return (
     <>
-      <button type="button" class="hud-popover-scrim" aria-label="Schließen" onClick={() => api.setPopover(null)} />
+      {createPortal(
+        <button type="button" class="hud-popover-scrim" aria-label="Schließen" onClick={() => api.setPopover(null)} />,
+        // Neben HUD und Kartensteuerung (gleiche Ebene), sonst läge er über dem Popover.
+        document.querySelector('.shell') ?? document.body,
+      )}
       <div class={`hud-popover hud-popover--${props.align ?? 'left'} ${props.class ?? ''}`} role="dialog">
         {props.children}
       </div>
@@ -116,7 +126,6 @@ export function MenuButton(props: { up?: boolean }) {
   const audio = useAudio();
   const open = ui.popover === 'menu';
   const muted = audio.settings.muted;
-  const unread = ui.alerts.filter((a) => !a.read).length;
   const run = (fn: () => void) => () => {
     api.setPopover(null);
     fn();
@@ -135,7 +144,6 @@ export function MenuButton(props: { up?: boolean }) {
       <Popover id="menu" align="right" class={`hud-menu ${props.up ? 'hud-popover--up' : ''}`}>
         <button type="button" class="hud-menu__item" onClick={run(() => api.openPhone('core.history'))}>
           <Icon name="journal" /> Verlauf
-          <Badge count={unread} tone="warn" />
         </button>
         <button type="button" class="hud-menu__item" onClick={run(() => api.togglePalette(true))}>
           <Icon name="search" /> Suchen <kbd>{IS_MAC ? '⌘ K' : 'Strg K'}</kbd>

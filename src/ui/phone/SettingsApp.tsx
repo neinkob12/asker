@@ -61,7 +61,7 @@ function voiceStateText(state: VoiceModelState, voice: PiperVoice, removed: bool
   const size = formatMegabytes(voice.bytes);
   switch (state.kind) {
     case 'ready':
-      return `Bereit · ${size} auf diesem Gerät`;
+      return `${size} geladen`;
     case 'loading':
       return state.phase === 'init'
         ? 'Wird vorbereitet …'
@@ -69,10 +69,8 @@ function voiceStateText(state: VoiceModelState, voice: PiperVoice, removed: bool
     case 'error':
       return state.message;
     default:
-      if (state.cached) return `${size} auf diesem Gerät`;
-      return removed
-        ? 'Entfernt · lädt erst wieder über „Laden“'
-        : `Nicht geladen · ${size}, einmalig von Hugging Face`;
+      if (state.cached) return `${size} geladen`;
+      return removed ? 'Entfernt' : `Nicht geladen, ${size}`;
   }
 }
 
@@ -116,9 +114,8 @@ function VoiceModels() {
         );
       })}
       <p class="set-voices__note">
-        Die Stimmen rechnet das Sprachmodell Piper auf diesem Gerät; die Modelle kommen einmalig von Hugging Face und
-        bleiben im Browser. Beim ersten Anruf laden sie von selbst (nicht im Datensparmodus und nicht nach dem
-        Entfernen).
+        Die Stimmen rechnet Piper auf diesem Gerät. Die Modelle laden einmalig von Hugging Face, beim ersten Anruf von
+        selbst (nicht im Datensparmodus und nicht nach dem Entfernen).
       </p>
     </div>
   );
@@ -248,7 +245,7 @@ export function SettingsApp() {
           label="Stimmen im Anruf"
           hint={
             audio.canSpeakAtAll
-              ? 'Figuren sprechen am Telefon mit eigener Stimme; im Gespräch ist alles andere still. Aus: nur Untertitel.'
+              ? 'Figuren sprechen am Telefon. Aus: nur Untertitel.'
               : 'Dieser Browser hat keine Sprachausgabe, Anrufe laufen mit Untertiteln.'
           }
           checked={s.voices}
@@ -262,6 +259,22 @@ export function SettingsApp() {
         <Player />
       </Section>
 
+      <Section icon="phone" color="system" title="Anzeige">
+        <div class="set-choice">
+          <span class="set-choice__label">Handy</span>
+          <SegmentedControl
+            wide
+            aria-label="Farbe des Handys"
+            options={[
+              { value: 'dark', label: 'Dunkel' },
+              { value: 'light', label: 'Hell' },
+            ]}
+            value={ui.state.phoneTheme}
+            onChange={ui.setPhoneTheme}
+          />
+        </div>
+      </Section>
+
       <Section icon="map" color="place" title="Karte">
         <Toggle
           label="Überwachungs-Overlay"
@@ -269,19 +282,6 @@ export function SettingsApp() {
           checked={ui.state.overlay}
           onChange={ui.setOverlay}
         />
-        <div class="set-choice">
-          <span class="set-choice__label">Kamera</span>
-          <SegmentedControl
-            wide
-            aria-label="Kamera"
-            options={[
-              { value: '3d', label: '3D schräg' },
-              { value: '2d', label: '2D Draufsicht' },
-            ]}
-            value={ui.state.camera}
-            onChange={ui.setCameraMode}
-          />
-        </div>
         <div class="set-choice">
           <span class="set-choice__label">Verkehr</span>
           <SegmentedControl

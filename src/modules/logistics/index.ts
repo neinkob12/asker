@@ -21,7 +21,8 @@
 //   isInterCityTrip(state, trip), getRoutes(state), getRoute(state, id), nextDeparture(state, route),
 //   routeLoadPreview(state, route), driverWhereabouts(state, staffId), INTERCITY_CAPACITY
 // Befehle: 'logistics.buyBerth', 'logistics.pickup', 'logistics.transfer', 'logistics.addRoute',
-//   'logistics.updateRoute', 'logistics.removeRoute', 'logistics.runRouteNow'
+//   'logistics.updateRoute', 'logistics.removeRoute', 'logistics.runRouteNow',
+//   'logistics.setHarborDriver' (Hafen-Fahrer: ein freier Fahrer holt Ware am Kai von selbst, harborDriverOn)
 // Ereignisse: 'logistics.berthBought', 'cargo.docked', 'cargo.seized', 'transport.started', 'transport.stopped',
 //   'transport.arrived', 'transport.seized', 'transport.lost', 'route.departed', 'route.skipped'
 
@@ -292,10 +293,18 @@ export interface LogisticsState {
   routes: Route[];
   /** Was Routen aus Lagern schlafender Städte genommen haben: Die Rechte Hand kauft es um Mitternacht nach. */
   restock: RestockDue[];
+  /**
+   * Hafen-Fahrer pro Stadt (Feedback 13.10.2026): an, dann holt ein freier Fahrer der Stadt Ware am Kai von selbst ins
+   * Lager, ohne Frage im Chat. Fehlt die Stadt, ist er aus.
+   */
+  harborDriver: Record<string, boolean>;
 }
 
+/** Zustand in Version 6: ohne Hafen-Fahrer. */
+type LogisticsStateV6 = Omit<LogisticsState, 'harborDriver'>;
+
 /** Zustand in Version 5: Liegeplätze ohne Stufe. */
-type LogisticsStateV5 = Omit<LogisticsState, 'berths'> & { berths: Record<string, { since: number }> };
+type LogisticsStateV5 = Omit<LogisticsStateV6, 'berths'> & { berths: Record<string, { since: number }> };
 
 /** Zustand in Version 4: Routen ohne Wahl der Strecke. */
 type LogisticsStateV4 = Omit<LogisticsStateV5, 'routes'> & { routes: Omit<Route, 'choice'>[] };
@@ -353,6 +362,8 @@ declare module '../../core' {
     'logistics.redirect': { tripId: number; toId: string };
     /** Liegeplatz um eine Stufe ausbauen: Halle am Kai, dann Kran (sauberes Geld, Auftrag 33). Ohne Stadt: die aktive. */
     'logistics.upgradeBerth': { cityId?: string };
+    /** Hafen-Fahrer an oder aus: Ein freier Fahrer holt Ware am Kai der Stadt von selbst ab (ohne Stadt: die aktive). */
+    'logistics.setHarborDriver': { enabled: boolean; cityId?: string };
   }
   interface GameEvents {
     'logistics.berthBought': { cost: number; cityId?: string };
@@ -753,6 +764,16 @@ export function receiveCargo(
       : `Container im ${port.name}: ${goods} stehen am Kai und warten auf die Abholung.`,
     'good',
   );
+  ctx.emit('cargo.docked', {
+    cargoId: cargo.id,
+    supplierId: item.supplierId,
+    productId: item.productId,
+    amount: item.amount,
+  });
+  // Hafen-Fahrer an (Feedback 13.10.2026): Er fährt gleich los, dann braucht es keine Frage im Chat. Ist keiner frei,
+  // fragt der Hafen wie bisher; der Fahrer beantwortet die Frage, sobald er die Ware holt.
+  if (harborDriverOn(ctx.state, cityId)) harborDriverRun(ctx, cityId);
+  if (!ctx.state.modules.logistics.cargo.some((c) => c.id === cargo.id)) return cargo.id;
   messages.send(ctx, {
     contact: portContact(cityId),
     text: texts.pick(ctx, `port:${cityId}:docked`, portTexts(cityId).docked, {
@@ -777,12 +798,6 @@ export function receiveCargo(
     ],
     // Routine: Die Rechte Hand darf den Fahrer schicken (Aufgabe "Hafen abholen").
     routine: true,
-  });
-  ctx.emit('cargo.docked', {
-    cargoId: cargo.id,
-    supplierId: item.supplierId,
-    productId: item.productId,
-    amount: item.amount,
   });
   return cargo.id;
 }
@@ -1781,13 +1796,45 @@ function tick(ctx: Ctx): void {
     for (const cargo of [...s.cargo]) if (!isCityLive(ctx.state, cargo.cityId)) collectSleeping(ctx, cargo, true);
   }
   routesTick(ctx);
+  if (ctx.now % HARBOR_DRIVER_EVERY === 0) {
+    for (const [city, on] of Object.entries(s.harborDriver)) if (on) harborDriverRun(ctx, city);
+  }
   if (ctx.now % MINUTES_PER_DAY === 0) settleRestock(ctx);
   retractStaleQuestions(ctx);
 }
 
+/** So oft (Spielminuten) schaut der Hafen-Fahrer, ob am Kai etwas wartet. */
+const HARBOR_DRIVER_EVERY = 10;
+
+/** Ist der Hafen-Fahrer in dieser Stadt an (Standard: die aktive)? */
+export function harborDriverOn(state: GameState, cityId: string = activeCity(state)): boolean {
+  return state.modules.logistics.harborDriver?.[cityId] === true;
+}
+
+/**
+ * Hafen-Fahrer (Feedback 13.10.2026): Steht in einer Stadt, die live ist, Ware am Kai und ist ein Fahrer frei, fährt er
+ * sie ins Lager (wie „Fahrer schicken“) und beantwortet die Frage des Hafens dazu. Klappt die Fahrt nicht (Lager voll,
+ * kein Lager), versucht er es beim nächsten Mal wieder.
+ */
+function harborDriverRun(ctx: Ctx, cityId: string): void {
+  const state = ctx.state;
+  if (!isCityLive(state, cityId) || freeDrivers(state, cityId).length === 0) return;
+  const reserved = reservedCargo(state);
+  const cargoIds = state.modules.logistics.cargo
+    .filter((c) => c.cityId === cityId && !reserved.has(c.id))
+    .map((c) => c.id);
+  if (cargoIds.length === 0) return;
+  const questions = harborQuestions(state, cargoIds);
+  const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', cargoIds } });
+  if (!result.ok) return;
+  for (const m of questions) {
+    messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: 'Hafen-Fahrer' });
+  }
+}
+
 export default defineModule({
   id: 'logistics',
-  version: 6,
+  version: 7,
   dependsOn: ['goods', 'suppliers', 'staff', 'fleet'],
   init: (ctx) => ({
     // Alte Spielstände: Wer schon am Hafen bestellt hat, behält seinen Zugang (Bestandsschutz).
@@ -1800,6 +1847,7 @@ export default defineModule({
     stats: { trips: 0, checks: 0, seized: 0 },
     routes: [],
     restock: [],
+    harborDriver: {},
   }),
   tick,
   commands: {
@@ -1812,6 +1860,13 @@ export default defineModule({
     'logistics.runRouteNow': (ctx, { routeId }) => departRoute(ctx, routeId, 'now'),
     'logistics.redirect': (ctx, payload) => redirect(ctx, payload),
     'logistics.upgradeBerth': (ctx, payload) => upgradeBerth(ctx, payload?.cityId ?? activeCity(ctx.state)),
+    'logistics.setHarborDriver': (ctx, { enabled, cityId }) => {
+      const city = cityId ?? activeCity(ctx.state);
+      if (!PORTS[city]) return { ok: false, reason: `In ${cityName(city)} gibt es keinen Hafen.` };
+      ctx.state.modules.logistics.harborDriver[city] = !!enabled;
+      if (enabled) harborDriverRun(ctx, city);
+      return { ok: true };
+    },
   },
   on: {
     'encounter.resolved': (ctx, { request, outcome, result }) => {
@@ -1854,10 +1909,12 @@ export default defineModule({
       routes: old.routes.map((r) => ({ ...r, choice: 'autobahn' as const })),
     }),
     // Version 6 (Auftrag 33): Liegeplätze haben Stufen (Kai, Halle am Kai, Kran); bisher alle Kai.
-    6: (old: LogisticsStateV5): LogisticsState => ({
+    6: (old: LogisticsStateV5): LogisticsStateV6 => ({
       ...old,
       berths: Object.fromEntries(Object.entries(old.berths).map(([id, b]) => [id, { ...b, level: 0 }])),
     }),
+    // Version 7 (Feedback 13.10.2026): Hafen-Fahrer pro Stadt, bisher überall aus.
+    7: (old: LogisticsStateV6): LogisticsState => ({ ...old, harborDriver: {} }),
   },
 });
 

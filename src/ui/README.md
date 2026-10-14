@@ -32,7 +32,7 @@ und Symbol, kein Aufklappen, kein Puls.
 
 - **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`;
   Schwarzgeld und sauberes Geld öffnen per Klick die Geldwäsche), Uhr-Kapsel mit Tempo und Menü (`'time'` ist seit
-  Auftrag 26 leer), die Kennzahlen (`'more'`) als Kacheln (Lager, Ruf · Reviere; beide klappen beim Drüberfahren oder
+  Auftrag 26 leer), die Kennzahlen (`'more'`) als Kacheln (Lager, Ruf, Reviere; alle klappen beim Drüberfahren oder
   Antippen eine Karte auf, `HudPill` mit `details`) und Warnungen (`'alert'`). Dazu die Kartensteuerung und die
   Überlagerungen der Module (Slot `map.overlay`).
 - **Alles andere läuft über das Spiel-Handy** (`phone/PhoneFrame.tsx`):
@@ -118,14 +118,16 @@ Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dial
 die Heat-Pille der Polizei mit fünf Flammen), oben in der Mitte die Uhr-Kapsel (Wochentag · Tag, Uhrzeit, Tempo als
 Segmente 40 × 36, Menü mit Verlauf, Suche, Spielständen, Einstellungen, Ton), oben rechts die Kennzahl-Kacheln:
 **Lager** („40 g Gras + 2 weitere“, Karte mit Aufstellung nach Produkt, Qualität und Lager, Knopf „Bestellen“) und
-**Ruf · Reviere** (Leiste 0–100 über `HudBar` mit Marken an den Stufen, Revierzahl „4/7“; Karte mit der Stufe, der
-darunter und darüber mit je einem Satz, und den eigenen Veedeln). Die Karte klappt beim Drüberfahren oder Antippen auf
+**Ruf** (Leiste 0–100 über `HudBar` mit Marken an den Stufen; Karte mit der Stufe, der darunter und darüber mit je
+einem Satz) und **Reviere** (Revierzahl „4/7“; Karte mit den eigenen Veedeln). Ruf und Reviere sind getrennt und
+anders gefärbt als „Rang“, damit man die drei nicht verwechselt. Die Karte klappt beim Drüberfahren oder Antippen auf
 (`HudPill` mit `details`, `detailsAction`). Ist die Kartenfläche schmal (Container-Query `hud`, unter 1000 px), rücken
 die Kacheln unter die Uhr. Am Handy-Bildschirm stehen Geld (Heat als eine Flamme mit Stufenwort) und Uhr kompakt
 nebeneinander, die Kacheln flach darunter; das Menü steht dort in der Kartensteuerung.
 
-**Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−/Norden, dann 3D/2D
-(gold bei 3D), **Ebenen** und Köln. Das Menü Ebenen füllen Module mit
+**Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−, dann zurück zur Stadt
+und Übersicht (seit dem 13.10.2026 ohne Norden, 3D/2D und Menü Ebenen). Die Einträge für ein Menü Ebenen melden Module
+weiter an (zur Zeit ohne Knopf),
 `registerMapLayerOption({ id, order, group, label, icon?, toggle?, active(ui), select(api, ui) })`, z.B. Veedel nach
 Kontrolle oder Heat (territory) und das Überwachungs-Overlay (Kern).
 
@@ -177,7 +179,7 @@ Nur Variablen verwenden.
   34, `--type-title-2` 22, `--type-body` 17 (Fließtext, Zeilentitel, Knöpfe), `--type-subhead` 15 (Zweitzeilen,
   Hinweise), `--type-footnote` 13, `--type-caption` 12, `--type-caption-2` 11 (kleinste erlaubte Größe). Im Handy
   zeigen `--font-size-xs/sm/md/lg` auf Footnote, Subhead, Body, Title 3, damit auch Module iOS-Größen bekommen.
-- **Form:** `--radius-xs/sm/md/lg/xl` (4/6/8/12/16 px), `--radius-group` 16 (Gruppen, Karten), `--radius-tile` 22,5 %
+- **Form:** `--radius-xs/sm/md/lg/xl` (4/6/8/12/16 px), `--radius-group` 12 (Gruppen, Karten, iOS-Stil; Widgets am Startbildschirm 16), `--radius-tile` 22,5 %
   (App-Kacheln), `--radius-round` für Pillen und Zähler. `--stroke` (1 px). `--shadow-panel`, `--shadow-float`.
 - **Bewegung:** `--ease-out`, `--ease-ios`, `--duration(-fast/-slow)`. `prefers-reduced-motion` schaltet Animationen
   aus, `prefers-reduced-transparency` und `prefers-contrast: more` machen Glas deckend.

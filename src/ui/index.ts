@@ -15,8 +15,9 @@ export {
 } from '../audio';
 export * from './components';
 export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
-export { shallowEqual, useGame, useGameSelector, useSession, useUi } from './hooks';
+export { shallowEqual, useGame, useGameSelector, useSession, useUi, useUiSelector } from './hooks';
 export { hourCountdown } from './phone/countdown';
+export { LockedWidget, type LockedWidgetProps } from './phone/LockedWidget';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 /** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
 export { cleanPlayerName, getPlayerName, PLAYER_NAME_MAX, setPlayerName } from './player';
@@ -65,7 +66,6 @@ export {
 } from './registry';
 export type {
   Alert,
-  CameraMode,
   MapController,
   ToastKind,
   ToastOptions,

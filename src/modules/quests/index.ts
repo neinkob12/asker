@@ -31,6 +31,7 @@ import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addSupplierTrust, getRelation, getSuppliers, isUnlocked, supplierById } from '../suppliers';
 import { addInfluence, campaignProgress, hasPlayerPresence, PLAYER_FACTION } from '../territory';
+import { CONTRACTS_ENABLED } from './config';
 import {
   type ActiveContract,
   CONTRACT_HISTORY,
@@ -134,7 +135,7 @@ export function contractStats(state: GameState): QuestsState['stats'] {
  * ist. In der Hafen-Phase sind die Verträge in den Bestellungen der Kunden aufgegangen (trade).
  */
 export function contractsOpen(state: GameState): boolean {
-  if (isBusinessSold(state)) return false;
+  if (!CONTRACTS_ENABLED || isBusinessSold(state)) return false;
   return activeCity(state) !== 'koeln' || campaignProgress(state, 'koeln').complete;
 }
 

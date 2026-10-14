@@ -8,41 +8,19 @@
 // Mit der Maus erscheint über der Blase eine Karte mit Details, ein Klick öffnet den Spot im Handy. Am
 // Handy-Bildschirm ist alles etwas kleiner, die Plakette sitzt über der Blase.
 //
-// Dazu die Hotspots: weicher Farb-Blob, wo etwas los ist. Seit dem Ring deutlich leiser (HOTSPOT_SCALE), er
-// zeigt nur noch Nachfrage und Verkäufe, die man am Marker nicht sieht.
+// Keine Hotspots, Puls- oder Hinweis-Ringe mehr (Feedback 13.10.2026: die aufploppenden Kreise verwirrten nur).
 
 import type { Marker } from 'maplibre-gl';
-import { formatEuro, type GameState } from '../../../core';
-import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
+import type { GameState } from '../../../core';
+import { addHtmlMarker, el, type MapLayer, metersPerPixel, setText } from '../../../map';
 import { iconElement } from '../../../ui';
 import { activeCity } from '../../city';
-import {
-  allWaiting,
-  CUSTOMER_PATIENCE,
-  type Customer,
-  canServeCustomer,
-  playerSpot,
-  spotDemand,
-  waitingAt,
-} from '../../customers';
+import { allWaiting, CUSTOMER_PATIENCE, type Customer, canServeCustomer, playerSpot, waitingAt } from '../../customers';
 import { activeEncounters } from '../../encounters';
-import { DEFAULT_PRODUCT } from '../../goods';
 import { lieutenantOfSpot } from '../../hierarchy';
-import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
-import { veedelName } from '../../veedel';
-import {
-  getAllSpots,
-  isKneipe,
-  isSpotActive,
-  type Spot,
-  spotAwareness,
-  spotCity,
-  spotKind,
-  spotLabelPlacement,
-  spotType,
-} from '../index';
-import { raidShown, saleGlow, syncSpotGlow } from './glow';
+import { getAllSpots, isSpotActive, type Spot, spotAwareness, spotCity, spotLabelPlacement } from '../index';
+import { raidShown, syncSpotGlow } from './glow';
 import { patienceFill } from './ringModel';
 
 /** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
@@ -60,8 +38,41 @@ export function spotLift(zoom: number): number {
   return Math.min(1, Math.max(0, (zoom - LIFT_ZOOM.low) / (LIFT_ZOOM.high - LIFT_ZOOM.low)));
 }
 
-/** Hotspots leiser als früher: Den Zustand zeigt jetzt der Ring. */
-const HOTSPOT_SCALE = 0.45;
+/** Grundgröße der Blase in Pixeln (wie --bubble in spots.css, ganz nah). */
+const BUBBLE_PX = 26;
+/** So viele Pixel greift ein Klick höchstens neben der Blase, wenn Kunden warten und kein Läufer dort steht. */
+const HIT_EXTRA_MAX = 14;
+
+/** Größe der Blase wie in spots.css (--scale aus --spot-lift). */
+function bubblePx(zoom: number): number {
+  return BUBBLE_PX * (0.6 + 0.4 * spotLift(zoom));
+}
+
+/**
+ * Zusätzlicher Klickrand um die Blase in Pixeln (Feedback 13.10.2026: wartet ein Kunde, soll man nicht so oft
+ * danebentippen). Nie so groß, dass sich die Klickflächen der zwei nächsten Spots berühren: Jeder Spot darf höchstens
+ * bis zur halben Entfernung zum nächsten reichen, auch weit herausgezoomt.
+ */
+export function spotHitExtra(nearestMeters: number, lat: number, zoom: number): number {
+  if (!Number.isFinite(nearestMeters)) return HIT_EXTRA_MAX;
+  const half = nearestMeters / metersPerPixel(lat, zoom) / 2;
+  return Math.max(0, Math.min(HIT_EXTRA_MAX, Math.floor(half - bubblePx(zoom) / 2)));
+}
+
+/** Kleinste Entfernung zweier Spots in Metern (Infinity bei weniger als zwei). */
+export function nearestSpotMeters(spots: readonly { lng: number; lat: number }[]): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      const a = spots[i];
+      const b = spots[j];
+      const kx = 111320 * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180);
+      const d = Math.hypot((a.lng - b.lng) * kx, (a.lat - b.lat) * 110540);
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
 
 export type SpotLook = 'idle' | 'waiting' | 'urgent' | 'raid';
 
@@ -102,19 +113,6 @@ export function waitingBySpot(state: GameState): Map<string, Customer[]> {
   return bySpot;
 }
 
-/** Wie viel an einem Spot los ist (0 = nichts, 1 = viel, bis 1,5). Offene Spots glimmen immer etwas. */
-export function spotActivity(
-  state: GameState,
-  spotId: string,
-  waitingList: readonly Customer[] = waitingAt(state, spotId),
-): number {
-  if (!isSpotActive(state, spotId)) return 0;
-  syncSpotGlow(state);
-  const demand = spotDemand(state, spotId);
-  const waiting = waitingList.length;
-  return Math.min(1.5, 0.3 + demand * 0.15 + waiting * 0.16 + saleGlow(spotId, state.time) * 0.25);
-}
-
 /** Zustand des Markers: Razzia/Überfall vor allem anderen, dann dringend (Kunden gehen bald), wartend, ruhig. */
 export function spotLook(
   state: GameState,
@@ -128,13 +126,6 @@ export function spotLook(
   const minLeft = waiting.reduce((m, c) => Math.min(m, c.expiresAt - state.time), Infinity);
   return minLeft < CUSTOMER_PATIENCE / 3 ? 'urgent' : 'waiting';
 }
-
-const LOOK_TEXT: Record<SpotLook, string> = {
-  idle: 'ruhig',
-  waiting: 'Kunden warten',
-  urgent: 'Kunden werden ungeduldig',
-  raid: 'Razzia oder Überfall',
-};
 
 /**
  * Läufer je Spot in einem Durchlauf (wie runnerAt aus staff: zuerst wer dort aktiv eingesetzt ist, sonst wer dorthin
@@ -184,19 +175,32 @@ export const spotsLayer: MapLayer = {
   order: 50,
   mount(ctx) {
     const markers = new Map<string, SpotMarker>();
-    const hotspots = createHotspots(ctx.map, 'spots.hotspots');
-    let lastHotspots = '';
     let hovered: string | null = null;
     const container = ctx.map.getContainer();
     let lastLift = '';
+    let lastHit = '';
+    /** Nächster Abstand zweier Spots der Stadt und ihre Breite (für den Klickrand), neu bei anderer Lage. */
+    let nearest = { meters: Number.POSITIVE_INFINITY, lat: 50.94, layout: '' };
     const onZoom = () => {
       const zoom = ctx.map.getZoom();
       container.classList.toggle('spots-far', zoom < NAMES_ZOOM);
       // Nur bei Änderung setzen: Jede neue Variable lässt alle Marker neu rechnen.
+      const hit = `${spotHitExtra(nearest.meters, nearest.lat, zoom)}px`;
+      if (hit !== lastHit) {
+        lastHit = hit;
+        container.style.setProperty('--spot-hit', hit);
+      }
       const lift = spotLift(zoom).toFixed(2);
       if (lift === lastLift) return;
       lastLift = lift;
       container.style.setProperty('--spot-lift', lift);
+    };
+    const measureNearest = (state: GameState) => {
+      const spots = mapSpots(state);
+      const layout = spots.map((s) => `${s.lng},${s.lat}`).join('|');
+      if (layout === nearest.layout) return;
+      nearest = { meters: nearestSpotMeters(spots), lat: spots[0]?.lat ?? nearest.lat, layout };
+      onZoom();
     };
     ctx.map.on('zoom', onZoom);
     onZoom();
@@ -223,26 +227,6 @@ export const spotsLayer: MapLayer = {
       hoverCard.element.classList.toggle('is-locked', !isSpotActive(state, spot.id));
       hoverCard.marker.setLngLat([spot.lng, spot.lat]);
       hoverCard.element.hidden = false;
-    };
-
-    let lastTime = -1;
-    let lastLayout = '';
-    const drawHotspots = (state: GameState, waiting: Map<string, Customer[]>) => {
-      // Nachfrage und Verkäufe ändern sich nur mit der Spielzeit. Freischalten, Verlegen oder Aufgeben ändert die Spots
-      // aber auch bei Tempo 0 (gleiche Minute), darum zählen offene Spots und ihre Lage mit.
-      const spots = mapSpots(state);
-      const layout = spots.map((s) => `${s.id}:${isSpotActive(state, s.id) ? 1 : 0}:${s.lng},${s.lat}`).join('|');
-      if (state.time === lastTime && layout === lastLayout) return;
-      lastTime = state.time;
-      lastLayout = layout;
-      const list: Hotspot[] = spots.map((spot) => ({
-        position: spot,
-        intensity: Math.round(spotActivity(state, spot.id, waiting.get(spot.id) ?? []) * HOTSPOT_SCALE * 20) / 20,
-      }));
-      const key = `${layout}#${list.map((h) => h.intensity).join(',')}`;
-      if (key === lastHotspots) return;
-      lastHotspots = key;
-      hotspots.setHotspots(list);
     };
 
     const ensureMarkers = () => {
@@ -273,13 +257,7 @@ export const spotsLayer: MapLayer = {
       bubble.dataset.tourKey = spot.id;
       const sign = el('span', 'spot-sign');
       sign.append(bubble);
-      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase, seit Auftrag 23 jede Art außer der Straßenecke
-      // ihr Icon (Club, Park, Bahnhof …).
-      if (isKneipe(spot) || spotKind(spot) !== 'corner') {
-        const kind = el('span', 'spot-kind');
-        kind.appendChild(iconElement(spotType(spot).icon, { strokeWidth: 2.4 }));
-        sign.append(kind);
-      }
+      // Kein Symbol für die Art des Spots mehr (Feedback 12.10.2026: Club, Park, Kneipe … sagten auf der Karte nichts).
 
       // Plakette nur als Symbole: Läufer (oder du selbst) und Leutnant, der den Spot versorgt.
       const crew = el('span', 'spot-crew');
@@ -296,21 +274,18 @@ export const spotsLayer: MapLayer = {
         tag: 'button',
         anchor: 'bottom',
         title: spot.name,
-        children: [
-          el('span', 'spot-ring'),
-          el('span', 'spot-pulse'),
-          el('span', 'spot-foot'),
-          el('span', 'spot-stem'),
-          sign,
-          plate,
-        ],
+        children: [el('span', 'spot-ring'), el('span', 'spot-foot'), el('span', 'spot-stem'), sign, plate],
         onClick: () => {
           if (ctx.isPicking()) return;
-          // Wartet jemand, verkauft der Klick direkt (Fehler wie fehlende Ware meldet dispatch als Banner).
+          // Wartet jemand, verkauft der Klick direkt. Fehlt die Ware (Feedback 13.10.2026): keine Meldung, sondern der
+          // Startbildschirm des Handys, wo das Fach dieser Ware rot aufleuchtet und wackelt (goods/ui, Lager-Widget).
           const state = ctx.getState();
           const customer = state ? clickSaleCustomer(state, spot.id) : null;
-          if (customer) ctx.ui.dispatch({ type: 'customers.serve', payload: { customerId: customer.id } });
-          else ctx.ui.openPanel('spots.spot', { spotId: spot.id });
+          if (!customer) ctx.ui.openPanel('spots.spot', { spotId: spot.id });
+          else if (state && !canServeCustomer(state, customer)) {
+            ctx.ui.openPhone(null);
+            ctx.ui.flash(`goods.missing:${customer.productId}`);
+          } else ctx.ui.dispatch({ type: 'customers.serve', payload: { customerId: customer.id } });
         },
       });
       element.setAttribute('aria-label', markerLabel(spot.name, 0));
@@ -330,10 +305,10 @@ export const spotsLayer: MapLayer = {
     return {
       update(state, ui) {
         ensureMarkers();
+        measureNearest(state);
         // Einmal pro Aktualisierung gruppieren statt pro Spot über alle Kunden zu laufen.
         const waitingMap = waitingBySpot(state);
         const runners = runnersBySpot(state);
-        drawHotspots(state, waitingMap);
         const selected = ui.panel?.id === 'spots.spot' ? (ui.panel.props as { spotId: string }).spotId : null;
         for (const spot of mapSpots(state)) {
           const entry = markers.get(spot.id);
@@ -348,7 +323,9 @@ export const spotsLayer: MapLayer = {
           const fill = active && look !== 'raid' ? patienceFill(state.time, queue) : 100;
           // Auftrag 23: Wenig bekannte eigene Spots sind blasser; verlegte Spots wandern mit.
           const faint = spotAwareness(state, spot.id) < 0.5;
-          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
+          // Größerer Klickrand, solange jemand wartet und du selbst bedienen musst (kein Läufer am Spot).
+          const wide = waiting > 0 && runners.get(spot.id)?.status !== 'active';
+          const key = `${active}|${look}|${waiting}|${wide}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
           if (key === entry.key) continue;
           entry.key = key;
           entry.marker.setLngLat([spot.lng, spot.lat]);
@@ -358,6 +335,7 @@ export const spotsLayer: MapLayer = {
           entry.element.classList.toggle('is-faint', faint);
           entry.element.style.setProperty('--fill', String(fill));
           entry.element.classList.toggle('is-locked', !active);
+          entry.element.classList.toggle('is-wide-hit', wide);
           entry.element.classList.toggle('is-custom', !!spot.custom);
           entry.element.classList.toggle('selected', spot.id === selected);
           entry.element.dataset.urgency = look;
@@ -375,7 +353,7 @@ export const spotsLayer: MapLayer = {
       destroy() {
         ctx.map.off('zoom', onZoom);
         container.style.removeProperty('--spot-lift');
-        hotspots.remove();
+        container.style.removeProperty('--spot-hit');
         hoverCard.marker.remove();
         for (const entry of markers.values()) entry.marker.remove();
         markers.clear();
@@ -384,48 +362,18 @@ export const spotsLayer: MapLayer = {
   },
 };
 
+/**
+ * Beim Drüberfahren nur der Name des Spots (Feedback 12.10.2026: die Karte mit Veedel, Wartenden, Verkäufer und Preis
+ * war zu groß; das alles steht im Spot-Fenster im Handy).
+ */
 interface HoverCard {
   root: HTMLElement;
-  title: HTMLElement;
-  sub: HTMLElement;
-  waiting: HTMLElement;
-  seller: HTMLElement;
-  price: HTMLElement;
-  foot: HTMLElement;
 }
 
 function buildHoverCard(): HoverCard {
-  const root = el('div', 'spot-hover__card');
-  const title = el('div', 'spot-hover__title');
-  const sub = el('div', 'spot-hover__sub');
-  const rows = el('dl', 'spot-hover__rows');
-  const row = (label: string) => {
-    const value = el('dd', 'spot-hover__value');
-    rows.append(el('dt', 'spot-hover__label', label), value);
-    return value;
-  };
-  const waiting = row('Wartend');
-  const seller = row('Verkauft von');
-  const price = row('Preis');
-  const foot = el('div', 'spot-hover__foot', 'Klick: im Handy öffnen ›');
-  root.append(title, sub, rows, foot);
-  return { root, title, sub, waiting, seller, price, foot };
+  return { root: el('div', 'spot-hover__card') };
 }
 
-function fillHoverCard(card: HoverCard, state: GameState, spot: Spot): void {
-  const active = isSpotActive(state, spot.id);
-  setText(card.title, spot.name);
-  setText(card.sub, `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`);
-  setText(card.foot, clickSaleCustomer(state, spot.id) ? 'Klick: verkaufen ›' : 'Klick: im Handy öffnen ›');
-  if (!active) {
-    setText(card.waiting, '–');
-    setText(card.seller, '–');
-    setText(card.price, '–');
-    return;
-  }
-  const waiting = waitingAt(state, spot.id).length;
-  const who = seller(state, spot.id);
-  setText(card.waiting, waiting === 1 ? '1 Kunde' : `${waiting} Kunden`);
-  setText(card.seller, who.kind === 'runner' ? who.name : who.kind === 'self' ? 'dir selbst' : 'niemandem');
-  setText(card.price, `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))} / g`);
+function fillHoverCard(card: HoverCard, _state: GameState, spot: Spot): void {
+  setText(card.root, spot.name);
 }

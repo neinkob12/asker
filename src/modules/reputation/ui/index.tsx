@@ -1,35 +1,36 @@
-// Oberfläche des Rufs: Kachel „Ruf · Reviere“ im HUD (mit aufklappbarer Karte) und ein Abschnitt mit den letzten
-// Gründen im Tab "Reviere".
+// Oberfläche des Rufs: Widgets „Ruf“ und „Reviere“ am Startbildschirm und die Ruf-Kachel oben in den Revieren (mit den
+// letzten Gründen im Blatt).
 
+import { useState } from 'preact/hooks';
 import { formatNumber } from '../../../core';
 import {
-  Card,
   Empty,
   Group,
-  HudBar,
   HudPill,
   Icon,
   ItemContent,
   List,
   ListItem,
-  ProgressBar,
+  LockedWidget,
   registerHudItem,
   registerSlot,
+  Sheet,
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
 import { supplierReputation } from '../../trade';
-import { tutorialAllows } from '../../tutorial';
+import { tutorialAllows, tutorialLockText } from '../../tutorial';
 import { veedelCity, veedelName } from '../../veedel';
-import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
+import { getReputation, recentReputationChanges, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
 
 /**
- * HUD über der Karte: Ruf und Reviere in einer Kachel (Auftrag 26). Leiste 0–100 mit den Stufen, daneben die Zahl
- * der Veedel. Beim Drüberfahren oder Antippen klappt eine Karte auf: die Stufe, die darunter und die darüber mit je
- * einem Satz, und die Reviere als kleine Liste. Der Knopf unten führt zu den Revieren.
+ * HUD über der Karte: Ruf (Leiste 0–100 mit den Stufen) und Reviere (Zahl der Veedel) als zwei Kacheln mit eigener
+ * Farbe; in einer Kachel neben „Rang“ waren Rang und Ruf kaum zu unterscheiden. Beim Drüberfahren oder Antippen
+ * klappt eine Karte auf: beim Ruf die Stufe, die darunter und die darüber mit je einem Satz, bei den Revieren die
+ * eigenen Veedel. Der Knopf unten führt zu den Revieren.
  */
 /**
  * Nach dem Verkauf (Auftrag 43): Ruf als Lieferant statt Ruf und Reviere (es gibt keine Veedel mehr). Pünktlich und
@@ -57,21 +58,62 @@ function ReputationHud() {
   const { state } = useGame();
   // Auftrag 46b: Im Tutorial erscheint der Ruf mit dem ersten Stammkunden.
   if (!tutorialAllows(state, 'hud.reputation')) return null;
-  if (isBusinessSold(state)) return <SupplierReputationHud />;
-  return <PlayerReputationHud />;
+  // Der Ruf des Spielers steht als Widget im Handy (ReputationWidget); im HUD bleibt nur der Ruf als Lieferant.
+  return isBusinessSold(state) ? <SupplierReputationHud /> : null;
 }
 
-function PlayerReputationHud() {
+/**
+ * Ruf als kleines Widget oben rechts auf dem Startbildschirm des Handys (vorher Kachel im HUD): Zahl, Stufe, Balken
+ * und die nächste Stufe. Ein Tipp öffnet die Reviere (dort steht der Ruf ausführlich).
+ */
+function ReputationWidget() {
   const { state } = useGame();
   const ui = useUi();
+  // Nach dem Verkauf zählt der Ruf als Lieferant (Kachel im HUD).
+  if (isBusinessSold(state)) return null;
+  const locked = tutorialLockText(state, 'hud.reputation');
+  if (locked) return <LockedWidget icon="star" label="Ruf" hint={locked} data-tour="hud.reputation" />;
   const value = getReputation(state);
   // Stufe aus der gezeigten Zahl, sonst stünde bei 59,6 „60 Bekannt“ unter „ab 60: Gefragt“.
   const shown = Math.round(value);
   const tiers = reputationTiers();
   const index = tiers.indexOf(reputationTier(shown));
   const tier = tiers[index];
-  const below = tiers[index - 1];
-  const above = tiers[index + 1];
+  // Farben des Startbildschirms (dunkel oder White Mode): Leute (cyan), bei schlechtem Ruf Warnung bzw. Gefahr.
+  const accent = shown < 20 ? 'var(--home-danger)' : shown < 40 ? 'var(--home-warn)' : 'var(--home-people)';
+  return (
+    <button
+      type="button"
+      class="phone-widget phone-stat"
+      style={{ '--stat-accent': accent }}
+      data-tour="hud.reputation"
+      onClick={() => ui.selectTab('territory')}
+      title={`Ruf ${shown} von 100: ${tier.name}. ${tier.effect}`}
+    >
+      <span class="phone-widget__label">
+        <Icon name="star" size={12} /> Ruf
+      </span>
+      <strong class="phone-stat__value">{shown}</strong>
+      <span class="phone-stat__sub">{tier.name}</span>
+      <span class="phone-stat__bar" aria-hidden="true">
+        <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Reviere als kleines Widget oben auf dem Startbildschirm des Handys (vorher Kachel im HUD): Veedel der aktiven Stadt
+ * („7/12“), das nächste Ziel und eine Leiste. Ein Tipp öffnet die Reviere.
+ */
+function TerritoryWidget() {
+  const { state } = useGame();
+  const ui = useUi();
+  // Das Widget ist der Weg in die Reviere (die App hat keine Kachel mehr). Nach dem Verkauf gibt es keine Veedel mehr;
+  // im Tutorial steht es schon da, gesperrt bis zur Stufe der Reviere.
+  if (isBusinessSold(state)) return null;
+  const locked = tutorialLockText(state, 'app.territory');
+  if (locked) return <LockedWidget icon="flag" label="Reviere" hint={locked} data-tour="hud.territory" />;
   const cityId = activeCity(state);
   const city = cityName(cityId);
   const progress = campaignProgress(state, cityId);
@@ -80,128 +122,98 @@ function PlayerReputationHud() {
     .map(veedelName)
     .sort();
   return (
-    <HudPill
-      data-tour="hud.reputation"
-      icon="star"
-      color="brand"
-      label="Ruf · Reviere"
-      value={`${shown} ${tier.name}`}
-      tone={shown < 20 ? 'bad' : shown < 40 ? 'warn' : undefined}
-      title={`Ruf ${shown} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
+    <button
+      type="button"
+      class="phone-widget phone-stat"
+      // Hell wie die Bedeutungsfarbe Ort im dunklen Schema (der Startbildschirm ist immer dunkel).
+      style={{ '--stat-accent': 'var(--home-place)' }}
+      data-tour="hud.territory"
       onClick={() => ui.selectTab('territory')}
-      detailsAction="Reviere öffnen"
-      details={
-        <div class="rep-flyout">
-          <div class="rep-flyout__now">
-            <span class="hud-label is-brand">Ruf</span>
-            <strong>
-              {shown} · {tier.name}
-            </strong>
-          </div>
-          <p class="rep-flyout__text">{tier.effect}</p>
-          <ul class="rep-flyout__tiers">
-            {above && (
-              <li>
-                <span class="rep-flyout__dir">
-                  <Icon name="arrowUp" /> ab {above.min}: {above.name}
-                </span>
-                <span class="rep-flyout__text">{above.effect}</span>
-              </li>
-            )}
-            {below && (
-              <li>
-                <span class="rep-flyout__dir">
-                  <Icon name="arrowDown" /> unter {tier.min}: {below.name}
-                </span>
-                <span class="rep-flyout__text">{below.effect}</span>
-              </li>
-            )}
-          </ul>
-          <div class="rep-flyout__now">
-            <span class="hud-label is-place">Reviere</span>
-            <strong>
-              {progress.controlled}/{progress.total}
-              {progress.complete
-                ? ` · ${city} komplett`
-                : !majorityMakesBoss(cityId)
-                  ? progress.majorityReached
-                    ? ' · Mehrheit'
-                    : ''
-                  : progress.majorityReached
-                    ? ` · Boss von ${city}`
-                    : ` · ab ${progress.majority} Boss`}
-            </strong>
-          </div>
-          <p class="rep-flyout__text">
-            {mine.length === 0 ? 'Noch kein Veedel unter deiner Kontrolle.' : mine.join(', ')}
-          </p>
-        </div>
-      }
+      title={`${progress.controlled} von ${progress.total} Veedeln: ${
+        mine.length === 0 ? 'noch keins unter deiner Kontrolle' : mine.join(', ')
+      }`}
     >
-      <span class="hud-rep">
-        <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
-        <span
-          class="hud-rep__veedel"
-          data-tour="hud.territory"
-          title={`${progress.controlled} von ${progress.total} Veedeln`}
-        >
-          <Icon name="flag" />
-          {progress.controlled}/{progress.total}
-        </span>
+      <span class="phone-widget__label">
+        <Icon name="flag" size={12} /> Reviere
       </span>
-    </HudPill>
+      <strong class="phone-stat__value">
+        {progress.controlled}/{progress.total}
+      </strong>
+      <span class="phone-stat__sub">{city}</span>
+      <span class="phone-stat__bar" aria-hidden="true">
+        <span style={{ width: `${progress.total > 0 ? (100 * progress.controlled) / progress.total : 0}%` }} />
+      </span>
+    </button>
   );
 }
 
-function ReputationSection() {
+/**
+ * Ruf als Kachel oben in den Revieren (Feedback 13.10.2026): Wert, Stufe, Leiste. Ein Tipp öffnet ein Blatt mit dem,
+ * was die Stufe bringt, und dem, was den Ruf zuletzt verändert hat.
+ */
+function ReputationTile() {
   const { state } = useGame();
+  const [open, setOpen] = useState(false);
   const value = getReputation(state);
-  // Stufe aus der gezeigten Zahl (wie im HUD).
+  // Stufe aus der gezeigten Zahl (wie im Widget).
   const shown = Math.round(value);
+  const tier = reputationTier(shown);
   const recent = recentReputationChanges(state);
   return (
-    <Card
-      title={`Ruf: ${reputationLabel(shown)}`}
-      icon="star"
-      color="brand"
-      status={value < 25 ? 'bad' : value < 45 ? 'warn' : 'good'}
-      summary={shown}
-    >
-      <List>
-        <ListItem value={`${shown} von 100`}>
-          <ItemContent icon="star" color="brand" title={reputationLabel(shown)}>
-            <ProgressBar value={value / 100} tone={value < 25 ? 'bad' : value < 45 ? 'warn' : 'accent'} label="Ruf" />
-          </ItemContent>
-        </ListItem>
-      </List>
-      <Group title="Zuletzt" icon="clock" color="system">
-        {recent.length === 0 ? (
-          <Empty>Noch redet keiner über dich.</Empty>
-        ) : (
-          <List>
-            {recent.map((c) => (
-              <ListItem
-                key={`${c.reason}:${c.time}`}
-                value={
-                  <span class={c.delta >= 0 ? 'rep-up' : 'rep-down'}>
-                    {c.delta >= 0 ? '+' : ''}
-                    {formatNumber(c.delta, 1)}
-                  </span>
-                }
-              >
-                <ItemContent
-                  icon={c.delta >= 0 ? 'trendUp' : 'trendDown'}
-                  color={c.delta >= 0 ? 'money' : 'danger'}
-                  title={c.reason}
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Group>
-    </Card>
+    <>
+      <button
+        type="button"
+        class="territory-tile territory-tile--button"
+        style={{
+          '--tile-accent': shown < 20 ? 'var(--cat-danger)' : shown < 40 ? 'var(--cat-warn)' : 'var(--cat-people)',
+        }}
+        onClick={() => setOpen(true)}
+      >
+        <span class="territory-tile__label">Ruf</span>
+        <strong class="territory-tile__value">{shown}</strong>
+        <span class="territory-tile__sub">{tier.name}</span>
+        <span class="territory-tile__bar" aria-hidden="true">
+          <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+        </span>
+      </button>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={`Ruf ${shown}: ${tier.name}`}
+        detents={['medium', 'large']}
+      >
+        <p class="rep-sheet__lead">{tier.effect}</p>
+        <Group title="Zuletzt" icon="clock" color="system">
+          {recent.length === 0 ? (
+            <Empty>Noch redet keiner über dich.</Empty>
+          ) : (
+            <List>
+              {recent.map((c) => (
+                <ListItem
+                  key={`${c.reason}:${c.time}`}
+                  value={
+                    <span class={c.delta >= 0 ? 'rep-up' : 'rep-down'}>
+                      {c.delta >= 0 ? '+' : ''}
+                      {formatNumber(c.delta, 1)}
+                    </span>
+                  }
+                >
+                  <ItemContent
+                    icon={c.delta >= 0 ? 'trendUp' : 'trendDown'}
+                    color={c.delta >= 0 ? 'money' : 'danger'}
+                    title={c.reason}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Group>
+      </Sheet>
+    </>
   );
 }
 
 registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
-registerSlot('tab:territory', { id: 'reputation.summary', title: 'Ruf', order: 20, component: ReputationSection });
+registerSlot('phone.home', { id: 'reputation.widget', order: 20, component: ReputationWidget });
+registerSlot('phone.home', { id: 'reputation.territory', order: 30, component: TerritoryWidget });
+registerSlot('territory.tiles', { id: 'reputation.tile', order: 10, component: ReputationTile });

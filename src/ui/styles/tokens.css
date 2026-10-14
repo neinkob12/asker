@@ -146,6 +146,12 @@
   /* Handy: Flächen, Füllungen und Beschriftungen (iOS: systemGrouped, label) */
   --phone-bg: light-dark(#f2f2f7, #000000);
   --phone-group: light-dark(#ffffff, #1c1c1e);
+  /* Akzent im Handy (Feedback 13.10.2026: das Kölsch-Gold nervte): iOS-Blau für Zurück, Links und Hauptknöpfe.
+     Die Fläche ist etwas dunkler, damit weiße Schrift darauf lesbar bleibt. */
+  --phone-tint: light-dark(#007aff, #0a84ff);
+  --phone-tint-fill: light-dark(#0062cc, #0a6fd8);
+  --phone-tint-fill-hover: light-dark(#0057b5, #1a7ae6);
+  --phone-on-tint: #ffffff;
   --phone-group-2: light-dark(#f2f2f7, #2c2c2e);
   --phone-fill: light-dark(rgba(120, 120, 128, 0.16), rgba(120, 120, 128, 0.24));
   --phone-fill-hover: light-dark(rgba(120, 120, 128, 0.24), rgba(120, 120, 128, 0.36));
@@ -195,6 +201,27 @@
   --home-label-2: rgba(255, 255, 255, 0.8);
   --home-glass: rgba(255, 255, 255, 0.16);
   --home-glass-edge: rgba(255, 255, 255, 0.22);
+  /* Flächen des Startbildschirms (Widgets, Fächer, Mitteilungen). Im White Mode des Handys Creme, siehe unten. */
+  --home-bg: var(--hw-black);
+  --home-card: rgba(255, 255, 255, 0.08);
+  --home-card-hover: rgba(255, 255, 255, 0.12);
+  --home-card-dim: rgba(255, 255, 255, 0.04);
+  --home-card-edge: rgba(255, 255, 255, 0.06);
+  --home-card-ring: rgba(255, 255, 255, 0.22);
+  --home-flash: rgba(255, 255, 255, 0.2);
+  --home-track: rgba(255, 255, 255, 0.14);
+  --home-cell: rgba(255, 255, 255, 0.05);
+  --home-cell-dim: rgba(255, 255, 255, 0.025);
+  --home-name-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  /* Akzente auf dem Startbildschirm (Widgets): hell auf Schwarz, dunkler auf Creme. */
+  --home-brand: #e2ae4a;
+  --home-place: #6ab2ff;
+  --home-people: #40c8e0;
+  --home-warn: #ff9f0a;
+  --home-danger: #ff7b73;
+  --home-money: #30d158;
+  --home-alert: var(--hud-alert);
+  --home-lock: #3a3a3c;
 
   /* Akzente: Grundname = Text auf der Fläche, -strong = Fläche (Knopf), -soft = getönter Grund, -edge = Kante */
   --color-accent: var(--cat-money);
@@ -332,6 +359,18 @@
   /* Gold für Hauptaktionen und Übernahme über der Karte */
   --hud-gold: #f2c766;
   --hud-gold-on: #15120a;
+  /* Spielfarben über der Karte (Feedback 13.10.2026: weniger Gold, hell und bunt wie im Spiel). Jede Rolle eine Farbe,
+     Schrift darauf immer die dunkle -on-Farbe. */
+  --hud-pause: #7fd4ff; /* Eisblau: Pause */
+  --hud-pause-on: #04202e;
+  --hud-mission: #b9a8ff; /* Lavendel: Missionen und Fortschritt im Tutorial */
+  --hud-mission-on: #170f36;
+  --hud-go: #7dedb8; /* Minze: Hauptknopf (Weiter, Los) */
+  --hud-go-on: #03251a;
+  --hud-meter: #ffb68c; /* Pfirsich: Leisten und Segmente (Ruf, Stufen) */
+  --hud-meter-on: #2b1206;
+  --hud-alert: #ff9fb8; /* Bonbon-Rosa: Wichtiges in den Mitteilungen */
+  --hud-alert-on: #2f0a16;
 
   /* Konfrontation als Akte (nur in diesem Dialog): Papier, Innenfläche, Stempel */
   --file-paper: rgba(201, 178, 133, 0.16);
@@ -437,7 +476,7 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
-  --radius-group: 16px;
+  --radius-group: 12px; /* iOS-Rundung für Gruppen und Karten in Apps (Feedback 13.10.2026, vorher 16) */
   --radius-tile: 22.5%;
   --radius-round: 999px;
 
@@ -523,6 +562,54 @@
 }
 .phone[data-appearance="auto"] {
   color-scheme: light dark;
+}
+/*
+ * White Mode des Handys (Einstellungen › Anzeige, Feedback 13.10.2026): warmes Off-White statt Grau. Die Apps nehmen
+ * die Hell-Varianten der Tokens, Flächen und Schrift hier bekommen Creme; der Startbildschirm wird ebenfalls hell.
+ */
+.phone[data-appearance="light"] {
+  --phone-bg: #f6f1e7;
+  --phone-group: #fffcf6;
+  --phone-group-2: #efe8da;
+  --phone-sheet: #f6f1e7;
+  --phone-sheet-group: #fffcf6;
+  --phone-sheet-group-2: #efe8da;
+  --phone-glass: rgba(250, 246, 238, 0.78);
+  --phone-glass-solid: #faf6ee;
+  --phone-glass-strong: rgba(250, 246, 238, 0.92);
+  --phone-glass-strong-solid: #faf6ee;
+  --phone-center: rgba(246, 241, 231, 0.86);
+  --phone-bubble: #ece4d5;
+  --phone-separator: rgba(110, 102, 87, 0.28);
+  --phone-fill: rgba(110, 102, 87, 0.12);
+  --phone-fill-hover: rgba(110, 102, 87, 0.2);
+  --color-text: #2a2620;
+  --color-muted: #6e6657;
+  --color-faint: rgba(110, 102, 87, 0.45);
+  --color-line: rgba(110, 102, 87, 0.28);
+  --home-bg: #f6f1e7;
+  --home-label: #2a2620;
+  --home-label-2: #6e6657;
+  --home-glass: rgba(255, 252, 246, 0.82);
+  --home-glass-edge: #e2d9c8;
+  --home-card: #fffcf6;
+  --home-card-hover: #ffffff;
+  --home-card-dim: #efe8da;
+  --home-card-edge: #e2d9c8;
+  --home-card-ring: rgba(42, 38, 32, 0.28);
+  --home-flash: #efe8da;
+  --home-track: #e7dfcf;
+  --home-cell: #f3ecdf;
+  --home-cell-dim: #f8f3ea;
+  --home-name-shadow: none;
+  --home-brand: #8a6200;
+  --home-place: #2f6fd0;
+  --home-people: #1a6b7b;
+  --home-warn: #9a5200;
+  --home-danger: #c8463d;
+  --home-money: #2f8f4e;
+  --home-alert: #c23f6b;
+  --home-lock: #e7dfcf;
 }
 /* Die Anzeige oben ist Hardware (schwarz) und bleibt in beiden Schemata dunkel. */
 .status-pill-wrap {

@@ -1,6 +1,6 @@
 // Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel mit Tutorial (nur der Neumarkt, Mission 1 mit drei
 // Verkäufen und Belohnung, dann in den Einstellungen beendet), selbst verkaufen, Läufer anheuern, Ware bestellen,
-// Shop-Platzhalter „Spot gründen“ (Auftrag 46e), speichern, laden und nach dem Neuladen der Seite den Autosave
+// Shop „Spot gründen“ vom Startbildschirm, speichern, laden und nach dem Neuladen der Seite den Autosave
 // fortsetzen. Pop-ups (Lieferant kennenlernen, Stadt-Event) klickt jeder Schritt vorher weg (dismissPopups). Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
 // wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
@@ -203,15 +203,24 @@ async function run() {
   await check(
     'Tutorial: nur der Neumarkt, Mission 1 auf der Karte, drei Verkäufe erledigen sie, Belohnung kommt',
     async () => {
-      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten fehlen noch.
+      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten sind noch gesperrt.
       // Marker gibt es für jeden Spot der aktiven Stadt (gesperrte grau, Auftrag 47); offen ist nur der Neumarkt.
       assert.equal(await page.locator('.spot-marker:not(.is-locked)').count(), 1, 'nur ein offener Spot');
       const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       const home = page.locator('.phone__home');
       await home.getByRole('button', { name: /^Einstellungen/ }).waitFor();
-      assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
-      assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
+      // Seit dem 13.10.2026 stehen sie schon da, aber gesperrt (ausgegraut mit Schloss, lockedWhen).
+      assert.equal(
+        await home.locator('.phone__app.is-locked[data-app-id="tab:gangs"]').count(),
+        1,
+        'Gangs gesperrt am Anfang',
+      );
+      assert.equal(
+        await home.locator('.phone__app.is-locked[data-app-id="suppliers.app"]').count(),
+        1,
+        'Lieferanten gesperrt am Anfang',
+      );
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
       // Auftrag 46c: Stufe 0 ist Peters Tour durchs HUD und Handy (zehn Schritte, mit Enter weiter); am Ende schaltet
       // die Tour selbst auf Stufe 1 und stellt das Tempo auf 1.
@@ -228,8 +237,8 @@ async function run() {
       await page.waitForTimeout(800);
       await shot(page, 'tutorial-mission-1');
       const before = await game(page, (s) => s.wallet.dirty);
-      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und öffnet das Spot-Fenster; sie wartet dann auf
-      // den ersten Verkauf (die Uhr läuft dabei, der Test spult trotzdem selbst vor).
+      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und wartet auf den ersten Verkauf per Tipp auf den
+      // Spot (die Uhr läuft dabei, der Test spult trotzdem selbst vor); danach zeigt sie das Spot-Fenster.
       await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:1');
       await page.getByText('Verkauf einmal selbst').waitFor({ timeout: 15000 });
       await page.waitForTimeout(1200);
@@ -243,16 +252,9 @@ async function run() {
           if (waiting > 0) break;
           await advance(page, 10);
         }
-        // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
-        const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
-        if (await sell.isVisible()) {
-          // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
-          await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-          await sell.click();
-        } else {
-          // Ohne offenes Spot-Fenster: Ein Klick auf den Spot verkauft direkt (Feedback vom 08.10.2026).
-          await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
-        }
+        // Verkauft wird nur noch mit einem Tipp auf den Spot (Feedback 13.10.2026, im Handy gibt es keinen Knopf mehr).
+        // Am Handy-Bildschirm liegt danach das Spot-Fenster über der Karte: den Klick direkt am Marker auslösen.
+        await page.locator('.spot-marker[aria-label*="Neumarkt"]').dispatchEvent('click');
         // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
         if (sold === 0) await nextTour(page);
       }
@@ -341,7 +343,11 @@ async function run() {
   });
 
   await check('Läufer am Spot anheuern', async () => {
-    await page.getByRole('button', { name: /^Anheuern/ }).click();
+    // Seit Sicherheit am Spot angeheuert wird, gibt es zwei Knöpfe „Anheuern“: Der Läufer steht oben.
+    await page
+      .getByRole('button', { name: /^Anheuern/ })
+      .first()
+      .click();
     const staff = await game(page, (s) => s.modules.staff.members.map((m) => [m.role, m.assignment?.targetId]));
     assert.deepEqual(staff, [['runner', 'zuelpicher']]);
     await shot(page, 'laeufer');
@@ -427,18 +433,13 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Spot gründen: der Shop-Platzhalter (Auftrag 46e), kein Kauf', async () => {
-    await page.evaluate(() => window.koeln.runtime.api.selectTab('territory'));
-    await page
-      .locator('.phone')
-      .getByRole('button', { name: /^Spot gründen/ })
-      .click();
+  await check('Spot gründen: Shop vom Startbildschirm, ohne Kauf', async () => {
+    // Seit dem 13.10.2026 ist der Shop ein Widget oben links auf dem Startbildschirm.
+    await page.evaluate(() => window.koeln.runtime.api.openPhone());
     const phone = page.locator('.phone');
-    await phone.getByText('0,99 € pro Spot').first().waitFor();
-    const soon = phone.getByRole('button', { name: 'Bald verfügbar', exact: true });
-    await soon.waitFor();
-    assert.equal(await soon.isDisabled(), true, 'noch kein Kauf');
-    assert.equal(await phone.getByText(/^Spot [123]$/).count(), 3, 'drei Plätze');
+    await phone.locator('.phone-shop').click();
+    await phone.locator('.spot-shop__tile').first().waitFor();
+    assert.ok((await phone.locator('.spot-shop__tile').count()) > 0, 'Arten zum Gründen');
     assert.deepEqual(await game(page, (s) => s.modules.spots.custom), [], 'nichts gegründet');
     await shot(page, 'spot-shop');
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
@@ -530,7 +531,7 @@ async function run() {
           )?.name ?? null,
       );
       assert.ok(candidate, 'ein Bewerber wartet');
-      // Offene HUD-Karten (z.B. „Ruf · Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
+      // Offene HUD-Karten (z.B. „Ruf, Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
       // erst schließen (Esc), dann das Ziel in die Mitte scrollen (oben HUD, unten Handy-Leiste) und antippen.
       // Nur ein Esc, dann warten, bis die Karte weg ist: Ein zweites Esc ginge ans Handy und legte es weg.
       const closeFlyouts = async () => {

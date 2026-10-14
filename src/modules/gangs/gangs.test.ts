@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, messages, type Simulation, wallet } from '../../core';
+import { journal, loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { autoResolveEncounter, getEncounter, startEncounter } from '../encounters';
 import { getStock } from '../goods';
@@ -223,10 +223,14 @@ describe('gangs: KI', () => {
         ...eventsOfType(events, 'gang.poachAttempt'),
       ].filter((e) => e.payload.gangId === 'nord').length;
     for (let day = 0; day < 20 && actions() === 0; day++) sellHours(sim, 'ebertplatz', 15, 24);
+    // Feedback 13.10.2026: Per Chat kommen nur Nachrichten mit Antworten (die Warnung steht im Journal).
     const fromNord = messages.thread(sim.state, 'gang:nord');
-    expect(fromNord.length).toBeGreaterThanOrEqual(3);
+    expect(fromNord.every((m) => (m.options?.length ?? 0) > 0)).toBe(true);
+    expect(journal.entries(sim.state).some((e) => e.text.startsWith(`${getGang(sim.state, 'nord')?.name}:`))).toBe(
+      true,
+    );
     // Die Drohung bietet Diplomatie als Antwort an.
-    expect(fromNord[1].options?.map((o) => o.command?.type)).toEqual([
+    expect(fromNord[0].options?.map((o) => o.command?.type)).toEqual([
       'gangs.payTribute',
       'gangs.ceasefire',
       'gangs.refuse',
@@ -468,7 +472,12 @@ describe('gangs: Gewalt und Polizei', () => {
       found = true;
       expect(s.relation).toBeLessThan(0);
       expect(hasCeasefire(sim.state, 'west')).toBe(false);
-      const last = messages.thread(sim.state, 'gang:west').at(-1)?.text;
+      // Feedback 13.10.2026: ohne Antwort im Journal statt im Chat.
+      const name = getGang(sim.state, 'west')?.name ?? '';
+      const last = journal
+        .entries(sim.state)
+        .find((e) => e.text.startsWith(`${name}: `))
+        ?.text.slice(name.length + 2);
       expect(GANG_VOICES.west.snitch).toContain(last);
     }
     expect(found).toBe(true);

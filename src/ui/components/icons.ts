@@ -304,13 +304,18 @@ export const ICONS = {
   tag: ['M3.5 12.5V4h8.5l8.5 8.5l-8.5 8.5z', 'M8 8.5h.01'],
   percent: ['M19 5L5 19', circle(7, 7, 2.2), circle(17, 17, 2.2)],
   cart: ['M3 4h2.5l2.2 11h10.8L20.5 7.5H6.3', circle(9, 19, 1.5), circle(17, 19, 1.5)],
+  // Händedruck (Feedback 13.10.2026 neu gezeichnet): zwei Ärmel, die Hände greifen ineinander, drei Finger unten.
   handshake: [
-    'M2.5 12l3-5.5l4 1.5l2.5-1.5h3.5l6 5.5',
-    'M9.5 8L6.5 11.5a1.5 1.5 0 0 0 2.2 2l2.8-2.5',
-    'M11.5 11l4 4a1.4 1.4 0 0 1-2 2l-1-1',
-    'M12.5 16l.5.5a1.4 1.4 0 0 1-2 2l-1.5-1.5',
-    'M5.5 12.5l4 4.5',
-    'M21.5 12l-3 4',
+    'M2 11l3-1.5',
+    'M22 11l-3-1.5',
+    'M5 9.5l3-1.5h3.5l-3 3a1.3 1.3 0 0 0 1.9 1.8l2.1-2l5.5 5.2',
+    'M19 9.5l-3-1.5h-3',
+    'M19 9.5v5.5',
+    'M5 9.5v5',
+    'M18 15.2l-4.5 3.8a1.3 1.3 0 0 1-1.7 0L5 14.5',
+    'M14.8 13.6l1.6 1.6',
+    'M12.8 15.2l1.3 1.3',
+    'M10.8 16.8l.9.9',
   ],
   chart: ['M4 4v16h16', 'M8 16v-4', 'M12 16V8', 'M16 16v-6'],
   trendUp: ['M3 17l6-6l4 4l8-8', 'M15 7h6v6'],
@@ -372,6 +377,74 @@ export const ICONS = {
     'M19 21l2-2',
     'M9.5 6.5L18 3h3v3l-3.5 8.5',
     'M5 14l-2 2l4 4l2-2',
+  ],
+  // Lieferanten (Feedback 13.10.2026): ein Symbol je Herkunft statt nur Schiff oder Transporter.
+  /** Rotterdam: Windmühle */
+  windmill: [
+    'M10.5 21l.8-9h1.4l.8 9',
+    'M9 21h6',
+    circle(12, 10, 1.2),
+    'M11.2 9.2L6 4l-1.5 1.5l5.2 5.2',
+    'M12.8 9.2L18 4l1.5 1.5l-5.2 5.2',
+    'M11.2 10.8L6 16l-1.5-1.5l5.2-5.2',
+    'M12.8 10.8L18 16l1.5-1.5l-5.2-5.2',
+  ],
+  /** Frankfurt: Bankentürme */
+  towers: [
+    rect(4, 10, 6, 11, 1),
+    rect(12, 4, 8, 17, 1),
+    'M16 2v2',
+    'M6.5 13.5h1',
+    'M6.5 17h1',
+    'M15 8h2',
+    'M15 11.5h2',
+    'M15 15h2',
+    'M3 21h18',
+  ],
+  /** Berlin: Fernsehturm */
+  tvTower: ['M12 2v5.5', circle(12, 10, 2.5), 'M12 12.5V21', 'M10.5 13l-1 8', 'M13.5 13l1 8', 'M8 21h8', 'M10 7.5h4'],
+  /** Hamburg: Leuchtturm */
+  lighthouse: [
+    'M9 21l1.5-11h3L15 21',
+    'M7.5 21h9',
+    rect(10, 6, 4, 4, 0.8),
+    'M12 3.5V6',
+    'M10.5 14h3',
+    'M10 17.5h4',
+    'M4.5 6.5l3 1',
+    'M19.5 6.5l-3 1',
+  ],
+  /** Amsterdam: Grachtenhaus */
+  canalHouse: [
+    'M7 21V10l2-2V5.5h1.5V4h3v1.5H15V8l2 2v11z',
+    'M10 12h1.5',
+    'M12.5 12h1.5',
+    'M10 15.5h1.5',
+    'M12.5 15.5h1.5',
+    'M11 21v-2.5h2V21',
+  ],
+  /** Cargo City (Flughafen): Flugzeug */
+  plane: [
+    'M12 2.5c.9 0 1.4 1 1.4 2v5l7 4.2v2.1l-7-2.1v4.3l2.1 1.7v1.6L12 20.4l-3.5.9v-1.6l2.1-1.7V13.7l-7 2.1v-2.1l7-4.2v-5c0-1 .5-2 1.4-2z',
+  ],
+  /** Verona: Arena */
+  arena: [
+    'M3 9c0-2 4-3.5 9-3.5S21 7 21 9v8c0 2-4 3.5-9 3.5S3 19 3 17z',
+    'M3 9c0 2 4 3.5 9 3.5S21 11 21 9',
+    'M7 12v6.5',
+    'M12 12.5v7.5',
+    'M17 12v6.5',
+  ],
+  /** Zwei gekreuzte Schwerter (Angriff in der Gangs-Tabelle, Feedback 13.10.2026). */
+  swordsCrossed: [
+    'M20.5 3.5L8.5 15.5',
+    'M6.5 13.5l4 4',
+    'M8.5 15.5L5 19',
+    'M4.2 19.8h.01',
+    'M3.5 3.5l12 12',
+    'M13.5 17.5l4-4',
+    'M15.5 15.5L19 19',
+    'M19.8 19.8h.01',
   ],
   anchor: [circle(12, 5, 2), 'M12 7v14', 'M7.5 11.5h9', 'M4 15a8 8 0 0 0 16 0', 'M4 15l-1.5 1.8', 'M20 15l1.5 1.8'],
   web: [
@@ -461,6 +534,37 @@ export const ICONS = {
   briefcase: ['M4 7.5h16v11.5H4z', 'M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2', 'M4 12.5h16'],
   home: ['M4 10.5L12 4l8 6.5V20H4z', 'M10 20v-6h4v6'],
   gauge: ['M3.5 16a8.5 8.5 0 1 1 17 0', 'M12 16l4-5', 'M12 16h.01', 'M6.5 11.5l1 .8', 'M17.5 11.5l-1 .8', 'M12 8v1.2'],
+
+  // Ware (Lager im HUD): je Sorte ein Umriss, mittig im Raster (Mitte des Umrisses bei 12/12)
+  /** Hanfblatt, fünf Finger, schmal am Ansatz (erzeugt aus Lanzetten um einen Punkt, deshalb krumme Zahlen). */
+  cannabis: [
+    'M10.93 16.13C7.35 18.46 4.47 16.04 3.23 15.03C4.63 14.25 7.88 12.37 10.75 15.18C5.73 13.91 4.89 9.39 4.51 7.48C6.37 8.06 10.78 9.36 11.5 14.49C8.43 9.2 10.95 4.58 12 2.6C13.05 4.58 15.57 9.2 12.5 14.49C13.22 9.36 17.63 8.06 19.49 7.48C19.11 9.39 18.27 13.91 13.25 15.18C16.12 12.37 19.37 14.25 20.77 15.03C19.53 16.04 16.65 18.46 13.07 16.13z',
+    'M12 16.92V21.4',
+  ],
+  /** Hasch-Block mit Prägung. */
+  hashish: [
+    'M3 10.1l9-4.2l9 4.2l-9 4.2z',
+    'M3 10.1v3.8l9 4.2l9-4.2v-3.8',
+    'M12 14.3v3.8',
+    'M12 8.5l2.2 1.1l-2.2 1.1l-2.2-1.1z',
+  ],
+  /** Vape-Pen schräg, mit Mundstück und LED. */
+  vape: [
+    'M13.27 7.61L16.38 10.72L8.18 18.92L6.76 19.21L4.78 17.23L5.07 15.81z',
+    'M13.91 8.25L16.88 5.28L18.36 4.78L19.21 5.63L18.71 7.11L15.74 10.08',
+    'M11.29 9.59L14.4 12.7',
+    'M8.32 15.67h.01',
+  ],
+  /** Torte mit Zuckerguss und Kerze (Edibles). */
+  cake: [
+    'M3 20.5h18',
+    'M4.5 20.5V13a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v7.5',
+    'M4.5 14.5c1.25 0 1.25 1.5 2.5 1.5s1.25-1.5 2.5-1.5s1.25 1.5 2.5 1.5s1.25-1.5 2.5-1.5s1.25 1.5 2.5 1.5s1.25-1.5 2.5-1.5',
+    'M12 11V8',
+    'M12 3.5c.9 1 1.3 1.8 1 2.5a1.1 1.1 0 0 1-2 0c-.3-.7.1-1.5 1-2.5z',
+  ],
+  /** Öl-Tropfen mit Glanz, eine Spur höher als drop, damit er mittig sitzt. */
+  oil: ['M12 3.25s6.5 7 6.5 11a6.5 6.5 0 0 1-13 0c0-4 6.5-11 6.5-11z', 'M9 14.25a3 3 0 0 0 2.5 3'],
 } satisfies Record<string, string[]>;
 
 export type IconName = keyof typeof ICONS;

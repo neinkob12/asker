@@ -4,6 +4,7 @@ import {
   type CommandType,
   createSaveFile,
   type GameState,
+  journal,
   loadSimulation,
   type ModuleDefinition,
   parseSaveFile,
@@ -361,7 +362,10 @@ describe('hierarchy: Delegation', () => {
     expect(shipmentsInTransit(sim.state)).toHaveLength(0);
     const post = getPost(sim.state, lt.id);
     expect(post?.settings.orderRules[0].paused).toMatch(/liefert noch nicht/);
-    expect(sim.state.messages.list.some((m) => m.contactId === `staff:${lt.id}` && m.text.includes('ruht'))).toBe(true);
+    // Feedback 13.10.2026: Notizen der Leutnants stehen im Journal statt im Chat.
+    expect(journal.entries(sim.state).some((e) => e.text.startsWith(`${lt.name}:`) && e.text.includes('ruht'))).toBe(
+      true,
+    );
     // Mit "automatisch" kauft er beim, der liefert.
     configure(sim, lt.id, { orderRules: [rule({ minStock: 500 })] });
     sim.advance(5);
@@ -521,9 +525,9 @@ describe('hierarchy: Ausfälle im Team', () => {
     expect(sim.state.messages.list.some((m) => m.options?.some((o) => o.id === 'replace'))).toBe(false);
     sim.advance(5);
     expect(runnerAt(sim.state, 'uni')?.id).toBe(free.id);
-    expect(sim.state.messages.list.some((m) => m.contactId === `staff:${lt.id}` && m.text.includes(runner.name))).toBe(
-      true,
-    );
+    expect(
+      journal.entries(sim.state).some((e) => e.text.startsWith(`${lt.name}:`) && e.text.includes(runner.name)),
+    ).toBe(true);
     // Nach zwei Tagen Haft ist er raus (über staff.fire mit dem Leutnant als Akteur).
     sim.advance(2 * 1440 + 100);
     expect(getStaff(sim.state).some((m) => m.id === runner.id)).toBe(false);
@@ -584,9 +588,8 @@ describe('hierarchy: Ausfälle im Team', () => {
       sim.advance(10);
     }
     expect(activeRunnerAt(sim.state, 'uni')).toBeUndefined();
-    const stuck = (m: { contactId: string; text: string }) =>
-      m.contactId === `staff:${lt.id}` && m.text.includes('ich bleib dran');
-    expect(sim.state.messages.list.filter(stuck)).toHaveLength(1);
+    const stuck = (e: { text: string }) => e.text.startsWith(`${lt.name}:`) && e.text.includes('ich bleib dran');
+    expect(journal.entries(sim.state).filter(stuck)).toHaveLength(1);
     // Kommt ein freier Läufer dazu, stellt er ihn hin, solange die Person noch sitzt.
     const free = recruit(sim, 'runner');
     wake(sim, lt.id);
