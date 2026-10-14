@@ -210,7 +210,7 @@ Spot gründen geht nicht mehr über die Karte (Platzhalter im Shop mit 46e). **D
 über `registerStatusCounter({ id, order, icon, count(state), label(count), open?(ui) })` aus `src/ui` anmelden; der
 einzige ist „n Lieferungen unterwegs“ (`suppliers/ui/island.ts`, Tipp öffnet die Lieferanten-App), sichtbar nur bei n > 0;
 liegt das Handy weg, schwebt sie über der Karte. **Keine Push-Banner:** `ui.toast(text, kind, options)` schreibt nur noch
-in den Verlauf (Einstellungen › Verlauf, Badge an den Einstellungen), `urgent` markiert den Eintrag nur als ungelesen;
+in den Verlauf (Einstellungen › Verlauf, ohne Badge; ein Badge gibt es nur an den Nachrichten), `urgent` markiert den Eintrag nur als ungelesen;
 `PhoneNotification`, `ui.notify`, `holdBanner`, die Mitteilungszentrale (`NotificationCenter`), `soundOnEvent`-Banner und
 die Einstellungen dazu sind weg. Einzige Einblendung: die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des
 Spielers (`ui.error`, `ErrorNotice.tsx`, oben im Handy bzw. über der Karte). Neue Nachricht: nur Badge an der
@@ -495,7 +495,8 @@ HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-
 Kasse; jede App steht nur einmal da, im Dock mit Namen wie im Raster): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
 `hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Keine Banner (Auftrag 46d):**
 `ui.toast(text, kind, { urgent })` schreibt nur in den Verlauf (Einstellungen › Verlauf, Seite `core.history`); `urgent`
-(Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen. Die einzige Einblendung ist die
+(Standard bei `'bad'`/`'warn'`) markiert den Eintrag im Verlauf als ungelesen (ohne Badge, Feedback 14.10.2026: Badges nur an
+den Nachrichten, auch nicht im Streifen „Mitteilungen“). Die einzige Einblendung ist die
 kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
 `var(--space-…)`) verwenden. **Farben tragen Bedeutung**: `color="money" | "dirty" | "danger" | "warn" | "place" | "goods" | "people" | "chat" | "law" …`

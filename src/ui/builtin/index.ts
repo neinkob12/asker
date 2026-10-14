@@ -80,8 +80,8 @@ export function registerBuiltins(): void {
     icon: 'gear',
     order: 90,
     color: 'system',
+    // Kein Badge (Feedback 14.10.2026): Gezählt wird nur an den Nachrichten, der Verlauf zählt nicht mit.
     component: SettingsApp,
-    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
   });
   registerSearch({
     id: 'core.settings',
