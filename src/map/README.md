@@ -204,6 +204,12 @@ Knoten im Ausschnitt plus Rand, fahren als Zufallsweg über die Kanten (geradeau
 - **Weit draußen (`FAR_ZOOM` = 9):** GameMap setzt die Klasse `is-far`; Marker mit `addHtmlMarker({ near: true })`
   (Lager, Häfen, Gang-Quartiere, Lieferziele, Veedel-Namen) sind dann aus, damit die Glas-Karten der Städte frei liegen.
   Neue Marker, die nur in der Stadt Sinn ergeben, bekommen `near: true`.
+- **Atlas weit draußen (`OVERVIEW_ZOOM` = 9,5, `style.ts`):** Darunter zeigt die Grundkarte nur Autobahnen, Flüsse
+  und Kanäle (Bäche erst ab Zoom 10), Wald, Städte als ruhige Flächen (`kt-town` aus `landuse`), Landes- und
+  Staatsgrenzen (`kt-border-state`, `kt-border`) und Städtenamen (`kt-place-labels`, Schrift Noto Sans von OpenFreeMap,
+  `glyphs` im Stil). Felder, Wiesen und Parks blenden um `OVERVIEW_ZOOM` aus, Haupt- und Nebenstraßen samt Leuchten
+  fehlen, Brücken nur bei Autobahnen; die Autobahnen werden unter Zoom 10 schmaler (`FAR_WIDTH`). Farben der neuen
+  Ebenen kommen aus der Palette (`townColor`, `borderColor`, `labelColor`) und wandern mit Tageszeit und Wetter.
 - **Wechsel beim Zoomen:** Zoomt man aus einer Stadt unter `FAR_ZOOM`, wird daraus die Deutschland-Ansicht (flach),
   zoomt man über einer freien Stadt wieder hinein, deren Stadtansicht (`city/ui/map.ts`, `ui.enterView(view)`, auf
   der Karte `settleView`: Ausschnitt bleibt, nur Neigung und Drehung gleiten).
