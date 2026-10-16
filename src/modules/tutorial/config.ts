@@ -74,6 +74,12 @@ export type TutorialFeature =
   | 'app.laundering'
   | 'app.goods'
   | 'app.finance'
+  /**
+   * Feedback 16.10.2026: Läufer anheuern und sich selbst an einen Spot stellen gibt es erst nach der Mission „Drei
+   * Kunden bedienen“. Dort zählt nur der Verkauf per Tipp auf den Spot.
+   */
+  | 'staff.runners'
+  | 'customers.stand'
   | 'staff.lieutenants'
   | 'staff.security'
   | 'staff.driver'
@@ -113,6 +119,8 @@ export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
   'app.laundering': 8,
   'app.goods': 8,
   'app.finance': 10,
+  'staff.runners': 2,
+  'customers.stand': 2,
   'staff.lieutenants': 7,
   'staff.security': 7,
   'staff.driver': 8,
@@ -135,8 +143,9 @@ export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
 /** Features, die ein Ereignis freischaltet (Stufe egal). */
 export const EVENT_FEATURES: Readonly<Partial<Record<TutorialFeature, keyof GameEvents>>> = {};
 
-/** Welche Rolle beim Personal an welchem Feature hängt (Läufer, Arbeiter und Gärtner sind immer frei). */
+/** Welche Rolle beim Personal an welchem Feature hängt (Arbeiter und Gärtner sind immer frei). */
 export const ROLE_FEATURE: Readonly<Record<string, TutorialFeature>> = {
+  runner: 'staff.runners',
   driver: 'staff.driver',
   security: 'staff.security',
   lawyer: 'staff.specialist',

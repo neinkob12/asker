@@ -126,11 +126,13 @@ export const MISSIONS: readonly MissionDef[] = [
     stage: 1,
     icon: 'smile',
     title: 'Drei Kunden bedienen',
-    task: 'Am Neumarkt warten Leute auf dich. Bedien drei davon selbst, dann weißt du, wie das läuft.',
-    hint: 'Wartet jemand am Neumarkt, tipp auf den Spot.',
+    task: 'Am Neumarkt warten Leute auf dich. Bedien drei davon selbst mit einem Tipp auf den Spot, dann weißt du, wie das läuft.',
+    hint: 'Wartet jemand am Neumarkt, tipp auf den Spot. Läufer und Hinstellen kommen danach.',
     doneText: 'Drei Kunden, drei Scheine. Jetzt holen wir uns mehr Ecken.',
     goTo: 'spot',
     parts: [{ id: 'served', label: 'Kunden selbst bedient', target: 3 }],
+    // Feedback 16.10.2026: Läufer anheuern und sich hinstellen ('staff.runners', 'customers.stand') gibt es erst ab
+    // Stufe 2. So bleibt hier nur der Tipp auf den Spot, und jeder eigene Verkauf auf der Straße zählt.
     count: {
       'sale.completed': (p) => (p.sellerId === null && p.channel === 'street' ? 1 : 0),
     },

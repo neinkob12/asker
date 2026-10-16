@@ -167,7 +167,8 @@ function stage1(ctx: TourContext): TourStep[] {
       id: 'runner',
       anchor: 'spot.runner',
       tint: 'people',
-      text: 'Läufer stehen für dich am Spot und verkaufen von allein. Dat kommt gleich.',
+      // Feedback 16.10.2026: Läufer und Hinstellen sind bis zum Ende der Mission gesperrt, hier zählt nur der Tipp.
+      text: 'Läufer verkaufen von allein, und du kannst dich selbst hinstellen. Dat gibt et nach deinen drei Kunden.',
     }),
   ];
 }
@@ -193,6 +194,14 @@ function stage2(ctx: TourContext): TourStep[] {
       anchorKey: 'rudolfplatz',
       tint: 'place',
       text: 'Und der Rudolfplatz, auch 350 €. Hol dir beide, dann hast du drei Ecken in der Stadt.',
+    }),
+    step({
+      // Feedback 16.10.2026: ab jetzt frei ('staff.runners', 'customers.stand').
+      id: 'runner',
+      anchor: 'spot.runner',
+      tint: 'people',
+      before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
+      text: 'Neu: Am Spot kannst du jetzt Läufer anheuern oder dich selbst hinstellen. Dann läuft der Verkauf ohne Tippen.',
     }),
   ];
 }
