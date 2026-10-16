@@ -6,6 +6,8 @@
 // Hafenware kommt als Schiff auf dem echten Fluss (roads: shipRoute, aus Overture-Daten: Rhein bis Niehl, Elbe bis zum
 // O'Swaldkai) und legt am Liegeplatz der Stadt an (den Hafen zeigt die Logistik); in der Stadt fährt es langsamer,
 // damit man es sieht. Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
+// Nur die aktive Stadt, und alle Lieferungen eines Lieferanten an dasselbe Ziel fahren als ein Konvoi (convoys.ts):
+// ein Fahrzeug, eine Strecke, ein Etikett, auch bei 30 Bestellungen (Feedback 16.10.2026).
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
@@ -21,8 +23,8 @@ import {
   type VehicleHandle,
 } from '../../../map';
 import { iconElement } from '../../../ui';
-import { playableCities } from '../../city';
-import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
+import { activeCity, playableCities } from '../../city';
+import { getWarehouse, getWarehouses } from '../../goods';
 import { portPlace } from '../../logistics';
 import { interCityRoute, roadApproach, roadEntryFrom, roadNetworkAt, roadRoute, shipRoute } from '../../roads';
 import {
@@ -31,11 +33,10 @@ import {
   getSuppliers,
   type Shipment,
   type Supplier,
-  shipmentProgress,
-  shipmentSupplier,
-  shipmentsInTransit,
+  shipmentCity,
   supplierVia,
 } from '../index';
+import { type Convoy, convoyLabel, convoyTitle, shipmentConvoys } from './convoys';
 
 const SOURCE = 'suppliers.routes';
 /** Lieferanten näher als das an der Kölner Mitte gelten als "vor Ort" (Marker nur weit herausgezoomt). */
@@ -122,12 +123,9 @@ function cityProgress(split: number, t: number): number {
     : split + ((t - outsideShare) / CITY_APPROACH_SHARE) * (1 - split);
 }
 
-/** Etikett über Schiff oder Transporter: "500 g Haze · 62 %". */
-function shipmentLabel(s: Shipment, progress: number): string {
-  return `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} · ${Math.round(progress * 100)} %`;
-}
-
-interface ShownShipment {
+interface ShownConvoy {
+  /** Vorderste Lieferung beim letzten Update: Wechselt sie (die vorige ist angekommen), springt das Fahrzeug. */
+  leadId: number;
   ship: VehicleHandle | null;
   road: VehicleHandle | null;
   split: number;
@@ -139,7 +137,7 @@ export const suppliersLayer: MapLayer = {
   order: 20,
   mount(ctx) {
     const { map } = ctx;
-    const shown = new Map<number, ShownShipment>();
+    const shown = new Map<string, ShownConvoy>();
     const lateColor = mapToken('--color-warn', '#ffb547');
     map.addSource(SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
@@ -188,29 +186,38 @@ export const suppliersLayer: MapLayer = {
     };
     placeSuppliers();
 
-    /** Stadt einer Lieferung (alte Spielstände: Köln). */
-    const cityOf = (s: Shipment) => s.cityId ?? 'koeln';
     const targetOf = (state: GameState, s: Shipment): LngLat | undefined =>
-      s.toPort ? portIn(cityOf(s)) : (getWarehouse(state, s.warehouseId) ?? getWarehouses(state)[0]);
+      s.toPort ? portIn(shipmentCity(s)) : (getWarehouse(state, s.warehouseId) ?? getWarehouses(state)[0]);
 
-    // Routen nur für Lieferungen, die gerade unterwegs sind.
+    // Weg eines Konvois auf der Straße (Lieferant bis vor das Lager) einmal je Konvoi rechnen, nicht bei jedem Update.
+    const roadPaths = new Map<string, { path: LngLat[]; split: number; walk: [LngLat, LngLat] | null }>();
+    const roadPathOf = (convoy: Convoy, target: LngLat) => {
+      let known = roadPaths.get(convoy.key);
+      if (!known) {
+        known = cityPath(convoy.supplier, target);
+        roadPaths.set(convoy.key, known);
+      }
+      return known;
+    };
+
+    // Gestrichelte Strecken: eine je Konvoi (Schiffe einer Stadt teilen sich den Fluss), nur bei neuen Konvois neu.
     let routesKey = '';
-    const drawRoutes = (state: GameState) => {
-      const transit = shipmentsInTransit(state);
-      const key = transit.map((s) => `${s.id}:${s.warehouseId}`).join(',');
+    const drawRoutes = (state: GameState, convoys: readonly Convoy[]) => {
+      const key = convoys.map((c) => c.key).join(',');
       if (key === routesKey) return;
       routesKey = key;
+      const keys = new Set(convoys.map((c) => c.key));
+      for (const known of roadPaths.keys()) if (!keys.has(known)) roadPaths.delete(known);
       const lines: { kind: 'ship' | 'road'; path: LngLat[] }[] = [];
       const rivers = new Set<string>();
-      for (const s of transit) {
-        const supplier = shipmentSupplier(state, s);
-        const target = targetOf(state, s);
-        if (!supplier || !target) continue;
-        if (supplier.kind === 'port') {
-          rivers.add(cityOf(s));
-          if (!s.toPort) lines.push({ kind: 'road', path: roadRoute(portIn(cityOf(s)), target).drive });
+      for (const convoy of convoys) {
+        const target = targetOf(state, convoy.lead);
+        if (!target) continue;
+        if (convoy.supplier.kind === 'port') {
+          rivers.add(convoy.cityId);
+          if (!convoy.lead.toPort) lines.push({ kind: 'road', path: roadRoute(portIn(convoy.cityId), target).drive });
         } else {
-          lines.push({ kind: 'road', path: cityPath(supplier, target).path });
+          lines.push({ kind: 'road', path: roadPathOf(convoy, target).path });
         }
       }
       for (const cityId of rivers) lines.push({ kind: 'ship', path: riverRoute(cityId).path });
@@ -222,16 +229,17 @@ export const suppliersLayer: MapLayer = {
       (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
     };
 
-    const create = (s: Shipment, supplier: Supplier, target: LngLat, progress: number): ShownShipment => {
-      const title = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} aus ${supplier.name}`;
-      const label = shipmentLabel(s, progress);
-      const leg = deliveryLeg(supplier, progress, s.toPort);
+    const create = (convoy: Convoy, target: LngLat): ShownConvoy => {
+      const title = convoyTitle(convoy);
+      const label = convoyLabel(convoy);
+      const { lead, supplier, progress } = convoy;
+      const leg = deliveryLeg(supplier, progress, lead.toPort);
       if (supplier.kind === 'port') {
-        const { path: riverPath, fraction } = riverRoute(cityOf(s));
+        const { path: riverPath, fraction } = riverRoute(convoy.cityId);
         const ship = createVehicle(map, { path: riverPath, kind: 'ship', title, progress: fraction(leg.t) });
         ship.setLabel(label);
         // Alte Lieferungen ohne Liegeplatz: Lkw vom Hafen ins Lager.
-        const truckRoute = s.toPort ? null : roadRoute(portIn(cityOf(s)), target);
+        const truckRoute = lead.toPort ? null : roadRoute(portIn(convoy.cityId), target);
         const road = truckRoute
           ? createVehicle(map, {
               path: truckRoute.drive,
@@ -242,67 +250,71 @@ export const suppliersLayer: MapLayer = {
           : null;
         road?.setLabel(label);
         const walks = truckRoute ? [addFootpath(map, truckRoute.walkFrom), addFootpath(map, truckRoute.walkTo)] : [];
-        return { ship, road, split: 0, walks };
+        return { leadId: lead.id, ship, road, split: 0, walks };
       }
-      const { path, split, walk } = cityPath(supplier, target);
+      const { path, split, walk } = roadPathOf(convoy, target);
       const road = createVehicle(map, { path, kind: 'van', title, progress: cityProgress(split, progress) });
       road.setLabel(label);
-      return { ship: null, road, split, walks: [addFootpath(map, walk)] };
+      return { leadId: lead.id, ship: null, road, split, walks: [addFootpath(map, walk)] };
+    };
+
+    const removeEntry = (entry: ShownConvoy) => {
+      entry.ship?.remove();
+      entry.road?.remove();
+      for (const walk of entry.walks) walk.remove();
     };
 
     return {
       update(state) {
         placeSuppliers();
-        drawRoutes(state);
-        const transit = shipmentsInTransit(state);
-        const active = new Set(transit.map((s) => s.id));
-        for (const [id, entry] of shown) {
-          if (active.has(id)) continue;
-          entry.ship?.remove();
-          entry.road?.remove();
-          for (const walk of entry.walks) walk.remove();
-          shown.delete(id);
+        const convoys = shipmentConvoys(state, activeCity(state));
+        drawRoutes(state, convoys);
+        const active = new Set(convoys.map((c) => c.key));
+        for (const [key, entry] of shown) {
+          if (active.has(key)) continue;
+          removeEntry(entry);
+          shown.delete(key);
         }
-        for (const s of transit) {
-          const supplier = shipmentSupplier(state, s);
-          const target = targetOf(state, s);
-          if (!supplier || !target) continue;
-          const progress = shipmentProgress(state, s);
-          let entry = shown.get(s.id);
+        for (const convoy of convoys) {
+          const { lead, supplier, progress } = convoy;
+          const target = targetOf(state, lead);
+          if (!target) continue;
+          let entry = shown.get(convoy.key);
+          let jump = false;
           if (!entry) {
-            entry = create(s, supplier, target, progress);
-            shown.set(s.id, entry);
+            entry = create(convoy, target);
+            shown.set(convoy.key, entry);
+          } else if (entry.leadId !== lead.id) {
+            // Die vorderste ist angekommen: Das Fahrzeug fährt jetzt für die nächste (springt, statt zurückzufahren).
+            entry.leadId = lead.id;
+            jump = true;
           }
-          const label = shipmentLabel(s, progress);
-          entry.ship?.setLabel(label);
-          entry.road?.setLabel(label);
-          const late = s.problem === 'delayed' && !!s.problemRevealed;
-          const color = late ? lateColor : null;
+          const label = convoyLabel(convoy);
+          const title = convoyTitle(convoy);
+          const color = convoy.late ? lateColor : null;
+          const move = (vehicle: VehicleHandle | null, t: number) => {
+            if (!vehicle) return;
+            if (jump) vehicle.jumpTo(t);
+            else vehicle.setProgress(t);
+            vehicle.setLabel(label);
+            vehicle.setTitle(title);
+            vehicle.setColor(color);
+          };
           if (supplier.kind !== 'port') {
-            entry.road?.setProgress(cityProgress(entry.split, progress));
-            entry.road?.setColor(color);
+            move(entry.road, cityProgress(entry.split, progress));
             continue;
           }
-          const leg = deliveryLeg(supplier, progress, s.toPort);
-          if (entry.ship) {
-            entry.ship.setVisible(leg.stage !== 'road');
-            entry.ship.setProgress(leg.stage === 'ship' ? riverRoute(cityOf(s)).fraction(leg.t) : 1);
-            entry.ship.setColor(color);
-          }
-          if (entry.road) {
-            entry.road.setVisible(leg.stage !== 'ship');
-            entry.road.setProgress(leg.stage === 'road' ? leg.t : 0);
-            entry.road.setColor(color);
-          }
+          const leg = deliveryLeg(supplier, progress, lead.toPort);
+          entry.ship?.setVisible(leg.stage !== 'road');
+          move(entry.ship, leg.stage === 'ship' ? riverRoute(convoy.cityId).fraction(leg.t) : 1);
+          entry.road?.setVisible(leg.stage !== 'ship');
+          move(entry.road, leg.stage === 'road' ? leg.t : 0);
         }
       },
       destroy() {
-        for (const entry of shown.values()) {
-          entry.ship?.remove();
-          entry.road?.remove();
-          for (const walk of entry.walks) walk.remove();
-        }
+        for (const entry of shown.values()) removeEntry(entry);
         shown.clear();
+        roadPaths.clear();
       },
     };
   },
