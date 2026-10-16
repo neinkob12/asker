@@ -2,7 +2,7 @@
 // 3D-Mini-Fahrzeuge über echte Straßen (roads): erst leer vom Lager zum Hafen, dann mit Ware zurück. Routen zwischen
 // den Städten fahren über die A1 (Deutschland-Ansicht und in beiden Städten bis zur Auffahrt). Das Fahrzeug hält an
 // der Straße, die letzten Meter zu Lager und Kai sind ein gepunkteter Fußweg. Bei einer Kontrolle steht das Fahrzeug
-// mit Blaulicht.
+// mit Blaulicht. Nur Fahrten, die die aktive Stadt berühren.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState, LngLat } from '../../../core';
@@ -20,6 +20,7 @@ import {
   type VehicleHandle,
 } from '../../../map';
 import { iconElement } from '../../../ui';
+import { activeCity } from '../../city';
 import { vehicleSpec } from '../../fleet';
 import { formatProductAmount, getProduct } from '../../goods';
 import { getStaffMember } from '../../staff';
@@ -42,6 +43,7 @@ import {
   tripAmount,
   tripProgress,
   tripRoute,
+  tripTouchesCity,
 } from '../index';
 
 interface ShownTrip {
@@ -145,8 +147,10 @@ export const logisticsLayer: MapLayer = {
           if (p.name.textContent !== label) p.name.textContent = label;
         }
 
-        // Geplante Nachtfahrten fahren noch nicht (Auftrag 33).
-        const trips = getTrips(state).filter((t) => t.status !== 'planned');
+        // Geplante Nachtfahrten fahren noch nicht (Auftrag 33). Nur Fahrten, die die aktive Stadt berühren (Routen
+        // zwischen zwei Städten in beiden); was in einer anderen Stadt fährt, zeichnet die Karte nicht (Feedback 16.10.2026).
+        const cityId = activeCity(state);
+        const trips = getTrips(state).filter((t) => t.status !== 'planned' && tripTouchesCity(state, t, cityId));
         const ids = new Set(trips.map((t) => t.id));
         for (const [id, entry] of shown) {
           if (ids.has(id)) continue;

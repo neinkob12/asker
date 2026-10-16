@@ -3,6 +3,8 @@
 // Karte teilen sich eine GeoJSON-Quelle; ihr Grundriss wird höchstens 20-mal pro Sekunde neu berechnet und nur, wenn
 // sich eines sichtbar bewegt hat. Damit man sie auf jeder Zoomstufe sieht, wachsen sie beim Herauszoomen mit
 // (feste Größe in Pixeln, nie kleiner als in echt). Nachts werfen sie Scheinwerferlicht auf die Straße.
+// Gezeichnet wird nur, was im Bildausschnitt (mit Rand) liegt; Fahrzeuge außerhalb kosten weder Geometrie noch
+// Etikett (Feedback 16.10.2026: viele Lieferungen ließen die Karte ruckeln).
 // Viele Fahrzeuge als Kulisse (Verkehr) zeichnet createFleet (fleet.ts) in einer eigenen WebGL-Ebene.
 // Reine Optik: Die Position kommt von außen (setProgress, z.B. aus dem Lieferfortschritt der Simulation) und
 // wird weich nachgezogen, damit das Fahrzeug fährt statt zu springen.
@@ -44,6 +46,8 @@ export interface VehicleHandle {
   jumpTo(t: number): void;
   setPath(path: LngLat[]): void;
   setLabel(label: string): void;
+  /** Text beim Überfahren mit der Maus. */
+  setTitle(title: string): void;
   /** Karosseriefarbe (Hex) oder null für die Standardfarbe. */
   setColor(color: string | null): void;
   setVisible(visible: boolean): void;
@@ -155,6 +159,13 @@ const FOLLOW_MS = 280;
 const MAX_FPS = 20;
 /** Neu zeichnen erst, wenn sich ein Fahrzeug um mindestens so viele Pixel bewegt hat. */
 const MIN_MOVE_PX = 0.35;
+/**
+ * Gezeichnet wird nur, was im Bildausschnitt liegt, mit so viel Rand (Anteil der Breite bzw. Höhe je Seite): Beim
+ * Verschieben der Karte ist das Fahrzeug schon da, neu ausgewählt wird am Ende der Bewegung.
+ */
+const VIEW_MARGIN = 0.5;
+/** Fahren Fahrzeuge außerhalb, wird spätestens so oft (ms) geprüft, ob eines hereingefahren ist. */
+const OFFSCREEN_CHECK_MS = 1000;
 /** Unter dieser Dunkelheit gibt es kein Scheinwerferlicht (dann bleibt die Licht-Quelle leer). */
 const LIGHTS_FROM_NIGHT = 0.05;
 
@@ -170,6 +181,8 @@ interface Vehicle {
   /** Fortschritt beim letzten Zeichnen (für "hat sich sichtbar bewegt?"). */
   drawn: number;
   visible: boolean;
+  /** Lag es beim letzten Zeichnen im Ausschnitt (mit Rand)? Außerhalb: keine Geometrie, Etikett aus. */
+  onScreen: boolean;
   label: { marker: Marker; element: HTMLElement; text: HTMLElement; value: string } | null;
 }
 
@@ -191,6 +204,8 @@ class Fleet {
   /** Enthält die Quelle der Fahrzeuge Geometrie? Leer und weiter leer: kein setData. */
   private sourceEmpty = true;
   private lightsShown = false;
+  /** Fahrzeuge, die beim letzten Zeichnen außerhalb des Ausschnitts lagen. */
+  private offScreen = 0;
   private hover: { marker: Marker; element: HTMLElement; text: HTMLElement } | null = null;
 
   constructor(private readonly map: MapLibreMap) {
@@ -202,6 +217,10 @@ class Fleet {
     }
     // Zoom ändert nur etwas an der Geometrie, wenn es Fahrzeuge gibt.
     map.on('zoom', () => {
+      if (this.vehicles.size > 0) this.schedule(true);
+    });
+    // Nach dem Verschieben neu auswählen, was im Ausschnitt liegt.
+    map.on('moveend', () => {
       if (this.vehicles.size > 0) this.schedule(true);
     });
     map.on('click', LAYER, (e) => this.onClick(e));
@@ -267,6 +286,7 @@ class Fleet {
       shown: start,
       drawn: -1,
       visible: true,
+      onScreen: true,
       label: null,
     };
     this.vehicles.set(vehicle.id, vehicle);
@@ -302,7 +322,14 @@ class Fleet {
     }
     vehicle.label.value = text;
     vehicle.label.text.textContent = text;
-    vehicle.label.element.hidden = !vehicle.visible;
+    this.showLabel(vehicle);
+  }
+
+  /** Etikett nur, solange das Fahrzeug sichtbar ist und im Ausschnitt liegt (DOM nur bei Änderung). */
+  showLabel(vehicle: Vehicle): void {
+    if (!vehicle.label) return;
+    const hidden = !vehicle.visible || !vehicle.onScreen;
+    if (vehicle.label.element.hidden !== hidden) vehicle.label.element.hidden = hidden;
   }
 
   setNight(night: number): void {
@@ -337,7 +364,9 @@ class Fleet {
       moving = true;
     }
     const due = now - this.lastDraw >= 1000 / MAX_FPS;
-    if (due && (this.dirty || (moving && this.movedVisibly()))) {
+    // Fährt etwas außerhalb des Ausschnitts, ab und zu nachsehen, ob es hereingefahren ist.
+    const check = moving && this.offScreen > 0 && now - this.lastDraw >= OFFSCREEN_CHECK_MS;
+    if (due && (this.dirty || check || (moving && this.movedVisibly()))) {
       this.draw();
       this.lastDraw = now;
       this.dirty = false;
@@ -351,7 +380,7 @@ class Fleet {
   private movedVisibly(): boolean {
     const mpp = metersPerPixel(this.map.getCenter().lat, this.map.getZoom());
     for (const v of this.vehicles.values()) {
-      if (!v.visible) continue;
+      if (!v.visible || !v.onScreen) continue;
       if (v.drawn < 0 || (Math.abs(v.shown - v.drawn) * v.path.length) / mpp >= MIN_MOVE_PX) return true;
     }
     return false;
@@ -369,13 +398,29 @@ class Fleet {
     if (this.vehicles.size === 0 && this.sourceEmpty && !this.lightsShown) return;
     const zoom = this.map.getZoom();
     const withLights = this.night >= LIGHTS_FROM_NIGHT;
+    const view = this.viewBounds();
     const features: Feature[] = [];
     const lightFeatures: Feature[] = [];
+    this.offScreen = 0;
     for (const v of this.vehicles.values()) {
       v.drawn = v.shown;
       if (!v.visible) continue;
       const along = v.shown * v.path.length;
       const position = pointAtDistance(v.path, along);
+      const onScreen =
+        !view ||
+        (position.lng >= view.west &&
+          position.lng <= view.east &&
+          position.lat >= view.south &&
+          position.lat <= view.north);
+      if (onScreen !== v.onScreen) {
+        v.onScreen = onScreen;
+        this.showLabel(v);
+      }
+      if (!onScreen) {
+        this.offScreen++;
+        continue;
+      }
       const spec = KINDS[v.kind];
       const mpp = metersPerPixel(position.lat, zoom);
       const length = Math.max(spec.meters, spec.pixels * mpp);
@@ -403,6 +448,8 @@ class Fleet {
         });
       }
     }
+    mapPerf.count('vehicles', this.vehicles.size - this.offScreen);
+    mapPerf.count('vehicles:polygons', features.length);
     if (features.length > 0 || !this.sourceEmpty) {
       source.setData({ type: 'FeatureCollection', features } as never);
       this.sourceEmpty = features.length === 0;
@@ -412,6 +459,24 @@ class Fleet {
       lights.setData({ type: 'FeatureCollection', features: lightFeatures } as never);
       this.lightsShown = lightFeatures.length > 0;
     }
+  }
+
+  /** Bildausschnitt mit Rand (VIEW_MARGIN) in Grad; null, wenn die Karte ihn nicht liefern kann. */
+  private viewBounds(): { west: number; east: number; south: number; north: number } | null {
+    let bounds: ReturnType<MapLibreMap['getBounds']>;
+    try {
+      bounds = this.map.getBounds();
+    } catch {
+      return null;
+    }
+    const west = bounds.getWest();
+    const east = bounds.getEast();
+    const south = bounds.getSouth();
+    const north = bounds.getNorth();
+    if (![west, east, south, north].every(Number.isFinite)) return null;
+    const dx = (east - west) * VIEW_MARGIN;
+    const dy = (north - south) * VIEW_MARGIN;
+    return { west: west - dx, east: east + dx, south: south - dy, north: north + dy };
   }
 
   private find(e: MapLayerMouseEvent): Vehicle | undefined {
@@ -532,6 +597,9 @@ export function createVehicle(map: MapLibreMap, options: VehicleOptions): Vehicl
     setLabel(label) {
       fleet.setLabel(vehicle, label);
     },
+    setTitle(title) {
+      vehicle.title = title;
+    },
     setColor(color) {
       if (color === vehicle.color) return;
       vehicle.color = color;
@@ -540,7 +608,7 @@ export function createVehicle(map: MapLibreMap, options: VehicleOptions): Vehicl
     setVisible(visible) {
       if (visible === vehicle.visible) return;
       vehicle.visible = visible;
-      if (vehicle.label) vehicle.label.element.hidden = !visible;
+      fleet.showLabel(vehicle);
       fleet.schedule(true);
     },
     remove() {
