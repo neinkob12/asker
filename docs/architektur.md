@@ -1451,7 +1451,10 @@ und Methoden); Polizei (Kontrollen, Razzien, Zivis); `canUnlockChannel` (Geldwä
 Neumarkt, 2 Zülpicher Platz und Rudolfplatz je 350 € über `tutorialSpotCost` und `unlockCostOf`, 6 eigenes Veedel und
 Nachbarn bzw. Luftlinie unter 2 km, ab 7 alle), `getSuppliers` nur, was `tutorialSupplierOpen` erlaubt (Kalle und Toni
 ab 5, Hein ab 6, der Rest wie heute über `requires`). Peters Quests und „Handy Schritt für Schritt“ gibt es seit
-Auftrag 46d nicht mehr; Wochenverträge kommen erst nach Köln (`contractsOpen`).
+Auftrag 46d nicht mehr; Wochenverträge kommen erst nach Köln (`contractsOpen`). Läufer anheuern (`staff.runners`,
+`staff.hireRunner`) und sich selbst hinstellen (`customers.stand`, `customers.standAt`) gibt es erst ab Stufe 2
+(Feedback 16.10.2026): In der Mission „Drei Kunden bedienen“ zählt so nur der Tipp auf den Spot; im Spot-Fenster
+stehen beide Knöpfe bis dahin ausgegraut mit Schloss, die Tour der Stufe 2 zeigt sie.
 
 **Oberfläche** (`tutorial/ui`): Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`) mit
 Peters Porträt, Teilzielen als Liste mit Haken oder Fortschrittsbalken, Belohnung live aus `missionReward` und Knopf

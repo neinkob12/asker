@@ -371,6 +371,9 @@ Fahrzeug je Lieferant und Ziel mit Etikett „3 Lieferungen · 62 %“ (`shipmen
 nur die der aktiven Stadt; Fahrten der Logistik nur, wenn sie die aktive Stadt berühren (`tripTouchesCity`). Die Flotte
 (`src/map/vehicles.ts`) zeichnet nur Fahrzeuge im Bildausschnitt, `VehicleHandle.setTitle` ändert den Hover-Text.
 Messen: `npm run perf:browser -- --save=public/spielstaende/boss-von-hamburg.json --scenes=lieferungen`.
+Feedback 16.10.2026 (Tutorial, drei Kunden): In der Mission „Drei Kunden bedienen“ zählt nur der Tipp auf den Spot.
+Läufer anheuern (`staff.runners`, auch `ROLE_FEATURE.runner`) und sich hinstellen (`customers.stand`) sind erst ab
+Stufe 2 frei; `staff.hireRunner` und `customers.standAt` lehnen vorher ab, das Spot-Fenster zeigt beide mit Schloss.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

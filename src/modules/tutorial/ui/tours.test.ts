@@ -70,13 +70,15 @@ describe('tutorial: Touren', () => {
     }
   });
 
-  it('Stufe 1 wartet auf den ersten Verkauf, Stufe 2 zeigt beide Spots zum Kauf', () => {
+  it('Stufe 1 wartet auf den ersten Verkauf, Stufe 2 zeigt beide Spots zum Kauf und die Läufer', () => {
     const ctx = context();
     const sell = stageTour(1, ctx).steps.find((s) => s.id === 'sell');
     expect(sell?.waitFor).toEqual({ event: 'sale.completed' });
+    // Feedback 16.10.2026: Läufer und Hinstellen werden mit Stufe 2 frei, die Tour zeigt es am Spot.
     expect(stageTour(2, ctx).steps.map((s) => [s.anchor, s.anchorKey])).toEqual([
       ['spot.marker', 'zuelpicher'],
       ['spot.marker', 'rudolfplatz'],
+      ['spot.runner', undefined],
     ]);
   });
   it('Stufe 5: Der Spieler tippt selbst einen Lieferanten an und bestellt einmal (Anker bleibt frei)', () => {

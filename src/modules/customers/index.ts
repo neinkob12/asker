@@ -33,6 +33,7 @@ import { type CommandResult, type Ctx, defineModule, type GameState, journal } f
 import { cityName, cityOfSpot, isPlayerIn } from '../city';
 import { getStock } from '../goods';
 import { atSpot, getSpot, getSpots, isSpotActive } from '../spots';
+import { tutorialAllows } from '../tutorial';
 import type { DealerStageId } from './config';
 import { CUSTOMER_TYPES, HANDOVER_MINUTES, WHOLESALE_HANDOVER_MINUTES } from './config';
 import { type DealerRelation, setExclusive, setMiddleman } from './dealers';
@@ -449,6 +450,8 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
     ctx.emit('customers.selfMoved', { spotId: null });
     return { ok: true };
   }
+  // Feedback 16.10.2026: Im Tutorial erst nach der Mission „Drei Kunden bedienen“ (dort zählt nur der Tipp).
+  if (!tutorialAllows(ctx.state, 'customers.stand')) return { ok: false, reason: 'Dazu kommst du später.' };
   const spot = getSpot(ctx.state, spotId);
   if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Hier kannst du noch nicht verkaufen.' };
   // Selbst verkaufen geht nur in der Stadt, in der du bist (Auftrag 30).

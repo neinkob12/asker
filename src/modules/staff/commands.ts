@@ -50,6 +50,8 @@ const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 
 /** Läufer von der Straße anheuern und direkt an einen Spot stellen (wie im Prototyp). */
 export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
+  // Feedback 16.10.2026: Im Tutorial erst nach der Mission „Drei Kunden bedienen“ (dort zählt nur der Tipp).
+  if (!tutorialAllowsRole(ctx.state, 'runner')) return { ok: false, reason: 'Dazu kommst du später.' };
   const spot = getSpot(ctx.state, spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
   if (!isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' };
