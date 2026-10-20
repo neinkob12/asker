@@ -64,7 +64,8 @@ registerMinigameView('container', {
     help:
       'Die Ware muss rundherum von Deckladung umgeben sein. An den Türen (rechts) sieht sie jeder, der aufmacht, an ' +
       'der Wand zum Röntgen (oben) leuchtet sie im Scanner, und große zusammenhängende Ware-Blöcke fallen auf. ' +
-      'Lücken neben der Ware kosten Tarnung. Ein abgelegtes Teil antippen nimmt es wieder heraus. Gut gepackt senkt ' +
+      'Lücken neben der Ware kosten Tarnung; ganz versteckte Ware bekommt einen grünen Haken. Ein abgelegtes Teil ' +
+      'antippen nimmt es wieder heraus. Am Ende rollt der Scanner heran. Gut gepackt senkt ' +
       'die Chance einer Zollkontrolle für alle Container der Bestellung, schlecht gepackt hebt sie.',
   },
   previewParams: (seed) => PREVIEWS[(((seed - 1) % PREVIEWS.length) + PREVIEWS.length) % PREVIEWS.length],

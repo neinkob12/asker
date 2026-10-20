@@ -737,6 +737,8 @@
   stroke-width: 1;
   filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.45));
   animation: papers-finger 1.2s ease-in-out infinite;
+  /* Eigene Ebene: Finger und Balken bewegen sich jedes Bild, das Papier mit Faser soll nicht neu gemalt werden. */
+  will-change: transform;
 }
 @keyframes papers-finger {
   50% {
@@ -757,6 +759,7 @@
   background: var(--pp-stamp);
   transform-origin: 0 50%;
   transform: scaleX(0);
+  will-change: transform;
 }
 
 /* Großer Stempel am Ende: schlägt ein, Farbe abgenutzt; rot, wenn er beanstandet. */

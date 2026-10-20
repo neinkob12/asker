@@ -4,8 +4,8 @@
 // verschweißte Blöcke (Folie mit Glanz, Klebeband, Etikett mit dem Symbol der Ware), Deckladung als Bananenkisten,
 // Fliesen auf Paletten oder Kartons mit Altkleidern; jedes Teil mit Kante, Licht und weichem Schatten.
 //
-// Teure Dinge (Hintergrund, jedes Teil als Bild, Vignette) entstehen einmal je Größe in createPackArt; pro Bild werden
-// nur Bilder kopiert, dazu Staub, Fallen, Aufblitzen, Kranschatten und der Scanner. Farben der Dinge (Stahl, Holz,
+// Teure Dinge (Hintergrund mit Kranschatten und Vignette, jedes Teil als Bild) entstehen einmal je Größe in
+// createPackArt; pro Bild werden nur Bilder kopiert, dazu Staub, Fallen, Siegel, Vorschau und der Scanner. Farben der Dinge (Stahl, Holz,
 // Pappe, Beton) sind Inhalt wie Haut- und Papierfarben (PACK_MATERIALS); Bedeutungsfarben (Ware, Gefahr, gut) kommen
 // aus den Design-Tokens (mapToken über readPalette).
 
@@ -205,7 +205,7 @@ function lcg(seed: number): () => number {
   };
 }
 
-/** Körnung: helle und dunkle Punkte. */
+/** Körnung: helle und dunkle Punkte (je Farbe ein Pfad, sonst kostet jeder Punkt einen Farbwechsel). */
 function grain(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -218,12 +218,17 @@ function grain(
 ): void {
   const rnd = lcg(seed);
   const count = Math.round((w * h) / density);
+  const light = new Path2D();
+  const dark = new Path2D();
   for (let i = 0; i < count; i++) {
     const px = x + rnd() * w;
     const py = y + rnd() * h;
-    ctx.fillStyle = rnd() < 0.5 ? `rgba(255, 255, 255, ${alpha})` : `rgba(0, 0, 0, ${alpha * 1.4})`;
-    ctx.fillRect(px, py, 1, 1);
+    (rnd() < 0.5 ? light : dark).rect(px, py, 1, 1);
   }
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.fill(light);
+  ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 1.4})`;
+  ctx.fill(dark);
 }
 
 /** Farbe mit Deckkraft (#rrggbb oder rgb(…)). */
@@ -618,12 +623,31 @@ export function renderBackground(l: PackLayout, p: PackPalette, setup: PackSetup
     casting(ctx, cx, cy, cs);
   }
   ctx.restore();
+  drawCraneAndVignette(ctx, l);
   return canvas;
 }
 
-/** Dunkle Ränder über allem (einmal je Größe): lenkt den Blick auf den Container. */
-export function renderVignette(l: PackLayout, dpr: number): HTMLCanvasElement {
-  const [canvas, ctx] = offscreen(l.width, l.height, Math.min(dpr, 1));
+/**
+ * Kranschatten (Ausleger mit Seil) und dunkle Ränder, fest im Hintergrund: Bewegte Flächen über die ganze Bühne kosten
+ * am Handy zu viel (gemessen mit gebremster CPU, Auftrag 48).
+ */
+function drawCraneAndVignette(ctx: CanvasRenderingContext2D, l: PackLayout): void {
+  const x = l.width * 0.78;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x + 46, 0);
+  ctx.lineTo(x - l.height * 0.35 + 46, l.height);
+  ctx.lineTo(x - l.height * 0.35, l.height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + 60, 0);
+  ctx.lineTo(x - l.height * 0.35 + 140, l.height);
+  ctx.stroke();
   const c = toScreen(l, l.ox + l.cell * 3, l.oy + l.cell * 2);
   const v = ctx.createRadialGradient(
     c.x,
@@ -637,7 +661,7 @@ export function renderVignette(l: PackLayout, dpr: number): HTMLCanvasElement {
   v.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, l.width, l.height);
-  return canvas;
+  ctx.restore();
 }
 
 /** Farbe eines Teils (Leiste und Röntgen). */
@@ -706,15 +730,19 @@ export function renderPiece(
   const base = baseOf(piece, cover);
   const lx = l.light.x;
   const ly = l.light.y;
-  // Weicher Schatten vom Licht weg (Gerätepixel, im Bild nicht gedreht: im Modell vom Licht weg).
+  // Weicher Schatten vom Licht weg: die Form mehrmals leicht versetzt und durchsichtig (shadowBlur kostet am Handy beim
+  // ersten Zeichnen eines Teils zu viel).
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-  ctx.shadowBlur = cell * 0.16 * dpr;
-  ctx.shadowOffsetX = -lx * cell * 0.1 * dpr;
-  ctx.shadowOffsetY = -ly * cell * 0.1 * dpr;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+  for (const k of [0.04, 0.08, 0.12, 0.17]) {
+    ctx.save();
+    ctx.translate(-lx * cell * k, -ly * cell * k);
+    ctx.fill(body);
+    ctx.restore();
+  }
+  ctx.restore();
   ctx.fillStyle = base;
   ctx.fill(body);
-  ctx.restore();
   ctx.save();
   ctx.clip(body);
   // Ware: dunkle Folie, durch die die Farbe der Ware schimmert. Deckladung etwas abgedunkelt.
@@ -736,7 +764,7 @@ export function renderPiece(
   shine.addColorStop(1, 'rgba(0, 0, 0, 0.28)');
   ctx.fillStyle = shine;
   ctx.fillRect(0, 0, bw, bh);
-  const rnd = lcg(piece.id * 97 + rot * 13 + 5);
+  const rnd = lcg(spriteSeed(piece) * 97 + rot * 13 + 5);
   // Material je Art.
   for (const [x, y] of shape) {
     const [rx, ry, rw, rh] = rect(x, y);
@@ -833,7 +861,7 @@ export function renderPiece(
     ctx.fillStyle = gloss;
     ctx.fillRect(0, 0, bw, bh);
   }
-  grain(ctx, 0, 0, bw, bh, piece.kind === 'goods' ? 0.06 : 0.12, piece.id * 7 + 3, 10);
+  grain(ctx, 0, 0, bw, bh, piece.kind === 'goods' ? 0.06 : 0.12, spriteSeed(piece) * 7 + 3, 10);
   ctx.restore();
   // Kanten: zum Licht hin hell, davon weg dunkel (Fase).
   const bevel = Math.max(1.2, cell * 0.045);
@@ -886,13 +914,14 @@ export function renderPiece(
     ctx.translate(label.x, label.y);
     if (l.rotated) ctx.rotate(-Math.PI / 2);
     const r = cell * 0.25;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = cell * 0.06 * dpr;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.arc(cell * 0.02, cell * 0.03, r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = m.sticker;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0)';
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -905,16 +934,23 @@ export function renderPiece(
   return { canvas, pad, w: bw + pad * 2, h: bh + pad * 2, label };
 }
 
-/** Bilder, die einmal je Größe entstehen: Hintergrund, Vignette, Teile (nach Bedarf). */
+/** Fester Zufall für das Bild eines Teils: Ware je Teil, Deckladung je Form. */
+function spriteSeed(piece: PackPiece): number {
+  if (piece.kind === 'goods') return piece.id + 1;
+  let h = 7;
+  for (const ch of piece.shapeId) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+  return h;
+}
+
+/** Bilder, die einmal je Größe entstehen: Hintergrund (mit Kranschatten und Vignette), Teile (nach Bedarf). */
 export interface PackArt {
   bg: HTMLCanvasElement;
-  vignette: HTMLCanvasElement;
   dpr: number;
   sprites: Map<string, PieceSprite>;
 }
 
 export function createPackArt(l: PackLayout, p: PackPalette, setup: PackSetup, dpr: number): PackArt {
-  return { bg: renderBackground(l, p, setup, dpr), vignette: renderVignette(l, dpr), dpr, sprites: new Map() };
+  return { bg: renderBackground(l, p, setup, dpr), dpr, sprites: new Map() };
 }
 
 function spriteFor(
@@ -925,13 +961,36 @@ function spriteFor(
   piece: PackPiece,
   rot: number,
 ): PieceSprite {
-  const key = `${piece.id}:${((rot % 4) + 4) % 4}`;
+  // Deckladung derselben Form sieht gleich aus: ein Bild je Form und Drehung; Ware je Teil (Farbe der Ware).
+  const turn = ((rot % 4) + 4) % 4;
+  const key = piece.kind === 'goods' ? `g${piece.id}:${turn}` : `c${piece.shapeId}:${turn}`;
   let sprite = art.sprites.get(key);
   if (!sprite) {
     sprite = renderPiece(p, l, piece, rot, setup.cover, art.dpr);
     art.sprites.set(key, sprite);
   }
   return sprite;
+}
+
+/**
+ * Bilder der Teile vorab zeichnen (je Aufruf höchstens `budget`), damit Ablegen und Drehen im Spiel nicht ruckeln:
+ * jedes Ware-Teil und jede Form der Deckladung in allen vier Drehungen. true, solange noch welche fehlen.
+ */
+export function warmSprites(art: PackArt, p: PackPalette, l: PackLayout, setup: PackSetup, budget = 1): boolean {
+  let made = 0;
+  const seen = new Set<string>();
+  for (const piece of setup.pieces) {
+    const id = piece.kind === 'goods' ? `g${piece.id}` : `c${piece.shapeId}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (let rot = 0; rot < 4; rot++) {
+      if (art.sprites.has(`${id}:${rot}`)) continue;
+      if (made >= budget) return true;
+      spriteFor(art, p, l, setup, piece, rot);
+      made += 1;
+    }
+  }
+  return false;
 }
 
 /** Ein Staubkorn (Modell-Pixel). */
@@ -1233,13 +1292,18 @@ function drawXray(
       const v = exposure.get(`${x},${y}`) ?? 0;
       const flagged = goods && v >= FLAG_AT;
       if (flagged) {
-        ctx.shadowColor = p.danger;
-        ctx.shadowBlur = cell * 0.5;
+        // Glühen um die Zelle (Verlauf statt shadowBlur).
+        const cx = ox + (x + 0.5) * cell;
+        const cy = oy + (y + 0.5) * cell;
+        const glow = ctx.createRadialGradient(cx, cy, cell * 0.3, cx, cy, cell);
+        glow.addColorStop(0, withAlpha(p.danger, 0.5));
+        glow.addColorStop(1, withAlpha(p.danger, 0));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = glow;
+        ctx.fillRect(cx - cell, cy - cell, cell * 2, cell * 2);
         ctx.fillStyle = p.danger;
         ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 14);
       } else {
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0)';
         ctx.fillStyle = p.sky;
         ctx.globalAlpha = goods ? 0.34 + 0.4 * v : 0.1;
       }
@@ -1253,30 +1317,6 @@ function drawXray(
       }
     }
   }
-  ctx.restore();
-}
-
-/** Kranschatten: Ausleger und Spreader ziehen langsam über den Kai (Optik, nicht bei reduzierter Bewegung). */
-function drawCraneShadow(ctx: CanvasRenderingContext2D, l: PackLayout, t: number): void {
-  const span = l.width + l.height;
-  const x = ((t * 9) % (span + 400)) - 200;
-  ctx.save();
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.13)';
-  ctx.beginPath();
-  // Ausleger als breites Band von oben links nach unten.
-  ctx.moveTo(x, 0);
-  ctx.lineTo(x + 46, 0);
-  ctx.lineTo(x - l.height * 0.35 + 46, l.height);
-  ctx.lineTo(x - l.height * 0.35, l.height);
-  ctx.closePath();
-  ctx.fill();
-  // Stahlseile.
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + 60, 0);
-  ctx.lineTo(x - l.height * 0.35 + 140, l.height);
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -1425,8 +1465,6 @@ export function drawScene(
     drawGantry(ctx, p, l, setup, parked + (waiting - parked) * ease, fx.t, false, fx.near);
   }
   ctx.restore();
-  if (!fx.reduced) drawCraneShadow(ctx, l, fx.t);
-  ctx.drawImage(art.vignette, 0, 0, l.width, l.height);
 }
 
 /** Linke obere Ecke des ausgewählten Teils am Cursor (Mitte der Form auf der Cursor-Zelle). */

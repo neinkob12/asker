@@ -27,6 +27,7 @@ import {
   spawnDust,
   stepDust,
   toScreen,
+  warmSprites,
 } from './draw';
 import {
   analyze,
@@ -232,7 +233,13 @@ export function ContainerGame(props: MinigameViewProps) {
   const stage = useStageCanvas(canvas, (st) => {
     const l = packLayout(st.width, st.height, setup.cols, setup.rows);
     layoutRef.current = l;
-    art.current = createPackArt(l, palette, setup, st.dpr);
+    const made = createPackArt(l, palette, setup, st.dpr);
+    art.current = made;
+    // Teile vorab zeichnen, eins pro Takt (schon während der Einleitung), solange diese Größe gilt.
+    const warm = () => {
+      if (art.current === made && warmSprites(made, palette, l, setup, 1)) window.setTimeout(warm, 20);
+    };
+    window.setTimeout(warm, 20);
     setLayout(l);
     draw();
   });
@@ -467,6 +474,14 @@ export function ContainerGame(props: MinigameViewProps) {
       setHud((h) => (Math.abs(h.left - timeLeft(setup, s)) >= 0.05 ? { ...h, left: timeLeft(setup, s) } : h));
     }
   }, running);
+
+  // Beim Schließen: Vorab-Zeichnen beenden (warm prüft art.current).
+  useEffect(
+    () => () => {
+      art.current = null;
+    },
+    [],
+  );
 
   // Entwicklung: window.koeln.dev.container.pack(n) packt n Teile gierig (Screenshots, Playwright), .state zeigt den
   // laufenden Container.
