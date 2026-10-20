@@ -64,7 +64,7 @@ export const ATTACKS: Record<AttackId, AttackDef> = {
 };
 
 /** Leben eines Gegners (vor Rolle und Stärke). */
-export const FOE_HP = 80;
+export const FOE_HP = 120;
 /** Nach so vielen Treffern in Folge (je höchstens CHAIN_GAP auseinander) fliegt der Getroffene aus der Reichweite. */
 export const CHAIN_MAX = 3;
 export const CHAIN_GAP = 0.9;
@@ -91,6 +91,8 @@ export const CREW_MOVES: Record<CrewMove, { label: string; hint: string; icon: s
 
 /** Treffer im letzten Moment abgefangen (Block oder Ausweichen so kurz davor) = Konter. */
 export const PARRY_WINDOW = 0.22;
+/** Anteil Schaden, der bei einem schweren Schlag der Gegner durch einen gehaltenen Block geht (Deckung durch). */
+export const HELD_BLOCK_HEAVY = 0.45;
 export const DODGE_TIME = 0.34;
 export const DODGE_COOLDOWN = 0.45;
 export const COUNTER_TIME = 1.4;
@@ -368,7 +370,7 @@ export function createBrawl(seed: number, difficulty: number, params: Record<str
       lookSeed: `gang:${label}:${seed}:${i}`,
       age: null,
       hp: Math.round(FOE_HP * r.hp * scale),
-      power: r.power * (0.95 + d * 0.5) * rage,
+      power: r.power * (0.9 + d * 0.7) * rage,
       speed: 2.4 * r.speed,
       move: null,
       knife: i === knifeAt,
@@ -431,7 +433,7 @@ export function createBrawl(seed: number, difficulty: number, params: Record<str
     callout: INTENT_CALLOUTS[intentId] ?? null,
     own,
     foes,
-    attackers: d >= 0.7 && foes.length > 2 ? 2 : 1,
+    attackers: d >= 0.6 && foes.length > 2 ? 2 : 1,
     pace: (1.25 - d * 0.55) * (calm ? 1.35 : 1) * (intentId === 'callFriends' || intentId === 'wreck' ? 0.85 : 1),
     nervousAt: intentId === 'nervousWavers' || intentId === 'exit' ? 0.8 : 0.5,
   };
@@ -713,6 +715,13 @@ function land(c: Ctx, f: Fighter): void {
       hit(c, f, t, attack, def.damage * 0.5 * f.power, false, false);
       continue;
     }
+    // Gehaltener Block gegen einen schweren Schlag der Gegner: Deckung durch, du taumelst und kriegst einiges ab.
+    // Gegen das Ausholen mit der Flamme hilft nur Ausweichen oder der Block im letzten Moment (Auftrag 48).
+    if (blocking && attack === 'heavy' && playerHit) {
+      c.events.push({ type: 'guardBreak', id: t.id });
+      hit(c, f, t, attack, def.damage * f.power * HELD_BLOCK_HEAVY, false, false);
+      continue;
+    }
     const isCounter = f.kind === 'player' && state.time <= state.counterUntil;
     let damage = def.damage * f.power * (isCounter ? 2 : 1);
     if (blocking) damage *= attack === 'knife' ? 0.3 : 0.15;
@@ -828,7 +837,8 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
       setState(p, 'block');
       p.blockSince = state.time;
     }
-    const near = nearestFoe(state, p, 3);
+    // Zum Gegner drehen, der gerade auf dich ausholt (sonst zum nächsten): Ein Block nach hinten hielte nichts ab.
+    const near = urgentThreat(state, p) ?? nearestFoe(state, p, 3);
     if (near) faceTowards(p, near.x);
     return;
   }
@@ -840,6 +850,23 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
       if (p.state !== 'walk') setState(p, 'walk');
     } else if (p.state === 'walk') setState(p, 'idle');
   }
+}
+
+/** Der Gegner, dessen Schlag als Nächstes bei f ankäme (holt aus oder schlägt zu, dieselbe Ebene, nah genug). */
+export function urgentThreat(state: BrawlState, f: Fighter): Fighter | undefined {
+  let best: Fighter | undefined;
+  let bestLeft = Number.POSITIVE_INFINITY;
+  for (const o of state.fighters) {
+    if (o.side === f.side || !isIn(o) || !o.attack || (o.state !== 'windup' && o.state !== 'strike')) continue;
+    if (!sameLane(o, f) || Math.abs(o.x - f.x) > ATTACKS[o.attack].reach + 0.4) continue;
+    if (o.facing !== (f.x > o.x ? 1 : -1)) continue;
+    const left = o.state === 'windup' ? o.dur - o.t : 0;
+    if (left < bestLeft) {
+      best = o;
+      bestLeft = left;
+    }
+  }
+  return best;
 }
 
 function nearestFoe(state: BrawlState, f: Fighter, within = Number.POSITIVE_INFINITY): Fighter | undefined {
