@@ -279,6 +279,17 @@ describe('Bewerbungsgespräch: Zeichen und Urteil', () => {
     expect(mark(setup, { ...s, phase: 'verdict' })).toBeNull();
   });
 
+  it('zu wenig Druck: Eine unauffällige Antwort sagt dann nichts', () => {
+    const setup = createInterview(2, 0.5, { traits: ['ambitious'] });
+    const s = initInterview(setup);
+    const neutral = s.offer.findIndex((id) => !questionById(id)?.probes.includes('ambitious'));
+    choose(setup, s, neutral);
+    step(setup, s, 30);
+    expect(s.results[0].soft).toBe(true);
+    expect(s.results[0].correct).toBe(false);
+    expect(ruledOutBy(setup, s, 0)).toEqual([]);
+  });
+
   it('zu viele Fehlalarme verderben die Runde', () => {
     const setup = createInterview(4, 0.5, PERSON);
     const s = initInterview(setup);
@@ -294,7 +305,7 @@ describe('Bewerbungsgespräch: Zeichen und Urteil', () => {
     const s = initInterview(setup);
     const neutral = s.offer.findIndex((id) => !questionById(id)?.probes.includes('ambitious'));
     choose(setup, s, neutral);
-    step(setup, s, 30);
+    step(setup, s, 30, () => keepPressure(setup, s));
     expect(s.results[0].reveals).toBe('none');
     expect(s.results[0].correct).toBe(true);
     const out = ruledOutBy(setup, s, 0);
@@ -338,10 +349,10 @@ describe('Bewerbungsgespräch: Schwierigkeit (Test-Bot)', () => {
     expect(average(0.9, slow).score).toBeLessThan(0.6);
   });
 
-  it('ohne Druck klappt es leicht noch, schwer kaum; Dauerdruck lässt die Leute zumachen', () => {
+  it('ohne Druck verrät niemand etwas; Dauerdruck lässt die Leute zumachen', () => {
     const lazy: Bot = { pressure: 'none', reaction: 0.4 };
     const skilled: Bot = { pressure: 'keep', reaction: 0.4 };
-    expect(average(0.2, lazy).score).toBeGreaterThanOrEqual(0.6);
+    expect(average(0.2, lazy).score).toBeLessThan(average(0.2, skilled).score - 0.3);
     expect(average(0.9, lazy).score).toBeLessThan(average(0.9, skilled).score - 0.2);
     expect(average(0.6, { pressure: 'max', reaction: 0.3 }).score).toBeLessThan(average(0.6, skilled).score - 0.2);
   });
@@ -362,5 +373,42 @@ describe('Bewerbungsgespräch: Werte fürs Ergebnis', () => {
     expect(stats.length).toBe(4);
     expect(stats[0].value).toBe(`${ROUNDS}/${ROUNDS}`);
     expect(stats[0].tone).toBe('good');
+  });
+});
+
+describe('Bewerbungsgespräch: Schweigen aushalten', () => {
+  /** Eine Runde mit einer Antwort, die etwas verrät; Druck nach Wunsch bis zum Ende. */
+  function silentRound(keep: boolean) {
+    const setup = createInterview(4, 0.5, { traits: ['drinker'] });
+    const s = initInterview(setup);
+    const index = s.offer.findIndex((id) => questionById(id)?.probes.includes('drinker'));
+    choose(setup, s, Math.max(0, index));
+    const signals = step(setup, s, 40, () => {
+      if (keep) keepPressure(setup, s);
+      else {
+        const round = currentRound(setup, s);
+        // Bis zum Ende der Antwort halten, danach loslassen.
+        if (round && s.phase === 'answer' && s.t < round.duration) keepPressure(setup, s);
+        else press(s, false);
+      }
+    });
+    return { setup, s, signals };
+  }
+
+  it('wer nach der Antwort den Blick hält, bekommt den Nachsatz mit einem Zeichen mehr', () => {
+    const { s, signals } = silentRound(true);
+    expect(signals).toContain('silence');
+    expect(signals).toContain('afterword');
+    const round = s.rounds[0];
+    expect(round.afterword).not.toBeNull();
+    expect(round.cues.filter((c) => c.bonus)).toHaveLength(1);
+    // Das Zeichen im Nachsatz zählt nicht zu den nötigen.
+    expect(s.results[0].tells).toBe(round.cues.filter((c) => c.tell && !c.bonus).length);
+  });
+
+  it('wer loslässt, bekommt keinen Nachsatz', () => {
+    const { s, signals } = silentRound(false);
+    expect(signals).not.toContain('afterword');
+    expect(s.rounds[0].cues.some((c) => c.bonus)).toBe(false);
   });
 });

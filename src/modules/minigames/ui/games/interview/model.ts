@@ -26,9 +26,11 @@ export const OFFER = 3;
 export const CHOOSE_TIME = 9;
 /** So viele Zeichen pro Antwort, harmlose Gesten dazu (leicht bis schwer). */
 export const TELLS = { min: 2, max: 3 };
-export const DECOYS = { easy: 1, hard: 3 };
+export const DECOYS = { easy: 1, hard: 4 };
 /** Ein Zeichen steht so lange, wenn die Person angespannt ist (Sekunden, leicht bis schwer). */
-export const TELL_WINDOW = { easy: 1.3, hard: 0.68 };
+export const TELL_WINDOW = { easy: 1.3, hard: 0.5 };
+/** Wie schnell das Fenster mit der Schwierigkeit schrumpft (Exponent: unter 1 wird es schon in der Mitte knapp). */
+export const TELL_CURVE = 0.45;
 /** Ist sie locker (Druck unter der Zone), huscht es nur so kurz vorbei (Anteil am Fenster, leicht bis schwer). */
 export const CALM_LEN = { easy: 0.5, hard: 0.3 };
 /** Gesten dauern so lange. */
@@ -42,6 +44,25 @@ export const ASK_TIME = 1.3;
 export const VERDICT_TIME = 1.8;
 /** Anteil der Zeichen, die du erwischen musst (leicht bis schwer, aufgerundet). */
 export const HITS_NEEDED = { easy: 0.5, hard: 0.75 };
+/**
+ * Zu wenig Druck verrät nichts (Auftrag 49, Teil E): Eine unauffällige Antwort zählt nur als gelesen, wenn die Person
+ * so lange angespannt war (Anteil der Antwort). Wer nie den Blick hält, weiß hinterher nichts.
+ */
+export const TENSE_NEEDED = 0.35;
+/**
+ * Schweigen aushalten (Auftrag 49, Teil E): Ist die Antwort zu Ende und die Person noch angespannt, kommt eine Pause
+ * (`window` Sekunden). Hältst du den Blick darin `hold` Sekunden in der Zone, rutscht ihr ein Nachsatz heraus, mit
+ * einem Zeichen mehr (zählt als Treffer, aber nicht zu den nötigen). Nur bei Antworten, die etwas verraten.
+ */
+export const SILENCE = { window: 2.4, hold: 1.1, tail: 0.4 };
+/** Nachsätze nach dem Schweigen (fest aus dem Seed je Frage). */
+export const AFTERWORDS: readonly string[] = [
+  '… na ja. Manchmal halt.',
+  '… aber das bleibt unter uns, ja?',
+  '… okay, öfter, als ich sollte.',
+  '… frag nicht weiter.',
+  '… ist doch normal, oder?',
+];
 /** So viele Fehlalarme in einer Runde darf man sich leisten. */
 export const FALSE_ALARMS_ALLOWED = 1;
 
@@ -102,6 +123,8 @@ export interface Cue {
   /** Beginn (Sekunden nach Beginn der Antwort) und Dauer, wenn die Person angespannt ist. */
   at: number;
   len: number;
+  /** Kam erst im Nachsatz (Schweigen ausgehalten): zählt als Treffer, aber nicht zu den nötigen. */
+  bonus?: boolean;
 }
 
 export interface Round {
@@ -116,6 +139,8 @@ export interface Round {
   /** Dauer der Antwort (Sekunden). */
   duration: number;
   cues: Cue[];
+  /** Nachsatz, wenn du das Schweigen aushältst (nur bei Antworten, die etwas verraten). */
+  afterword: { text: string; kind: TellKind } | null;
 }
 
 export interface InterviewPerson {
@@ -148,6 +173,8 @@ export interface RoundResult {
   falseAlarms: number;
   /** Die Person hat abgebrochen (zu viel Druck). */
   closed: boolean;
+  /** Du hast zu wenig Druck gemacht: Die Antwort sagt nichts (nur bei unauffälliger Antwort von Belang). */
+  soft: boolean;
   /** Richtig beurteilt: Zeichen erkannt (bzw. bei unauffälliger Antwort nicht getippt). */
   correct: boolean;
   /** Was in die Akte kommt (nur bei correct und einer Eigenschaft). */
@@ -174,6 +201,12 @@ export interface InterviewState {
   over: number;
   /** Zone beim letzten Schritt (für die Signale beim Wechsel). */
   zone: Zone;
+  /** Diese Runde: so lange war die Person angespannt (Sekunden in der Zone während der Antwort). */
+  tense: number;
+  /** Schweigen: Verlängerung nach der Antwort (0 = keins), so lange in der Zone gehalten, Nachsatz gekommen. */
+  extra: number;
+  silent: number;
+  afterword: boolean;
   results: RoundResult[];
 }
 
@@ -187,6 +220,8 @@ export type Signal =
   | 'warn'
   | 'closed'
   | 'miss'
+  | 'silence'
+  | 'afterword'
   | 'verdict'
   | 'round'
   | 'done';
@@ -241,13 +276,18 @@ export function answerDuration(answer: string): number {
  * Zeichen und Gesten einer Antwort, ohne Überlappung. Reicht die Antwort dafür nicht, redet die Person länger
  * (Pausen): Die Dauer wächst, bis alles hineinpasst.
  */
+/** So lange steht ein Zeichen, wenn die Person angespannt ist. */
+export function tellWindow(difficulty: number): number {
+  return lerp(TELL_WINDOW.easy, TELL_WINDOW.hard, difficulty ** TELL_CURVE);
+}
+
 function cuesFor(
   rng: () => number,
   answer: string,
   reveals: TraitId | 'none',
   difficulty: number,
 ): { cues: Cue[]; duration: number } {
-  const tellLen = lerp(TELL_WINDOW.easy, TELL_WINDOW.hard, difficulty);
+  const tellLen = tellWindow(difficulty);
   const tells = reveals === 'none' ? 0 : TELLS.min + Math.round(rng() * (TELLS.max - TELLS.min));
   const decoys = Math.round(lerp(DECOYS.easy, DECOYS.hard, difficulty)) + (reveals === 'none' ? 1 : 0);
   const kinds: Cue[] = [];
@@ -334,6 +374,10 @@ export function initInterview(setup: InterviewSetup): InterviewState {
     pressing: false,
     over: 0,
     zone: 'calm',
+    tense: 0,
+    extra: 0,
+    silent: 0,
+    afterword: false,
     results: [],
   };
   s.offer = offerFor(setup, s);
@@ -372,6 +416,14 @@ export function choose(setup: InterviewSetup, s: InterviewState, index: number):
   const rng = streamFor(setup.seed, `round:${q.id}`);
   const { reveals, answer } = answerFor(rng, q, setup.person, usedTraits(s));
   const { cues, duration } = cuesFor(rng, answer, reveals, setup.difficulty);
+  // Eigener Strom, damit der Nachsatz nichts an Antwort und Zeichen verschiebt.
+  const after = streamFor(setup.seed, `afterword:${q.id}`);
+  const used = new Set(cues.map((c) => c.kind));
+  const free = TELL_KINDS.filter((k) => !used.has(k));
+  const afterword =
+    reveals === 'none'
+      ? null
+      : { text: pickOne(after, AFTERWORDS), kind: pickOne(after, free.length > 0 ? free : TELL_KINDS) };
   s.rounds.push({
     questionId: q.id,
     topic: q.topic,
@@ -382,6 +434,7 @@ export function choose(setup: InterviewSetup, s: InterviewState, index: number):
     mood: reveals === 'none' ? 'neutral' : TRAIT_MOOD[reveals],
     duration,
     cues,
+    afterword,
   });
   s.asked.push(q.id);
   s.offer = [];
@@ -420,12 +473,13 @@ export function isDone(s: InterviewState): boolean {
 }
 
 function judge(setup: InterviewSetup, round: Round, s: InterviewState, closed: boolean): RoundResult {
-  const tells = round.cues.filter((c) => c.tell).length;
-  const hits = s.caught.filter((i) => round.cues[i]?.tell).length;
+  const tells = round.cues.filter((c) => c.tell && !c.bonus).length;
+  const hits = Math.min(tells, s.caught.filter((i) => round.cues[i]?.tell).length);
   const falseAlarms = s.falseAlarms;
+  const soft = s.tense < round.duration * TENSE_NEEDED - 1e-9;
   const correct =
     round.reveals === 'none'
-      ? falseAlarms <= FALSE_ALARMS_ALLOWED
+      ? falseAlarms <= FALSE_ALARMS_ALLOWED && !soft
       : hits >= neededHits(setup, tells) && falseAlarms <= FALSE_ALARMS_ALLOWED;
   return {
     questionId: round.questionId,
@@ -434,6 +488,7 @@ function judge(setup: InterviewSetup, round: Round, s: InterviewState, closed: b
     tells,
     falseAlarms,
     closed,
+    soft,
     correct,
     exposed: correct && round.reveals !== 'none' ? round.reveals : null,
   };
@@ -486,6 +541,10 @@ export function advance(setup: InterviewSetup, s: InterviewState, dt: number): S
       s.caught = [];
       s.falseAlarms = 0;
       s.over = 0;
+      s.tense = 0;
+      s.extra = 0;
+      s.silent = 0;
+      s.afterword = false;
       s.lens = round.cues.map(() => 0);
       out.push('answering');
     }
@@ -499,13 +558,29 @@ export function advance(setup: InterviewSetup, s: InterviewState, dt: number): S
       const len = s.lens[i] || cue.len;
       if (cue.tell && !s.caught.includes(i) && was < cue.at + len && s.t >= cue.at + len) out.push('miss');
     }
+    if (zone === 'tense') s.tense += dt;
+    // Schweigen: Wer den Blick in der Zone hält, bekommt den Nachsatz mit einem Zeichen mehr.
+    if (s.extra > 0 && s.t >= round.duration && round.afterword) {
+      if (zone === 'tense') s.silent += dt;
+      if (!s.afterword && s.silent >= SILENCE.hold) {
+        s.afterword = true;
+        const len = tellWindow(setup.difficulty);
+        round.cues.push({ kind: round.afterword.kind, tell: true, at: s.t, len, bonus: true });
+        s.lens.push(len);
+        s.extra = Math.max(s.extra, s.t - round.duration + len + SILENCE.tail);
+        out.push('afterword');
+      }
+    }
     // Zu viel Druck: Sie macht zu.
     s.over = zone === 'over' ? s.over + dt : Math.max(0, s.over - dt * 2);
     if (s.over >= setup.closeAfter) {
       out.push('closed');
       toVerdict(setup, round, s, true, out);
-    } else if (s.t >= round.duration) {
-      toVerdict(setup, round, s, false, out);
+    } else if (s.t >= round.duration + s.extra) {
+      if (s.extra === 0 && round.afterword && zone === 'tense') {
+        s.extra = SILENCE.window;
+        out.push('silence');
+      } else toVerdict(setup, round, s, false, out);
     }
   } else if (s.phase === 'verdict') {
     if (s.t >= VERDICT_TIME) {
@@ -556,7 +631,7 @@ export function discovered(s: InterviewState): TraitId[] {
 export function ruledOutBy(setup: InterviewSetup, s: InterviewState, index: number): TraitId[] {
   const r = s.results[index];
   const round = s.rounds[index];
-  if (!r || !round || r.reveals !== 'none') return [];
+  if (!r || !round || r.reveals !== 'none' || r.soft) return [];
   const shown = new Set(s.rounds.slice(0, index).flatMap((x) => (x.reveals === 'none' ? [] : [x.reveals])));
   const probes = questionById(round.questionId)?.probes ?? [];
   return probes.filter((t) => !setup.person.known.includes(t) && !shown.has(t));

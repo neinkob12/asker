@@ -15,6 +15,7 @@ import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
+import { Hands } from './Hands';
 import {
   activeCue,
   advance,
@@ -162,6 +163,9 @@ export function InterviewGame(props: MinigameViewProps) {
   const [hud, setHud] = useState<Hud>(() => snapshot(game.current as InterviewState, 'calm', null));
   const [cue, setCue] = useState<{ kind: CueKind; faint: boolean; key: number } | null>(null);
   const [closedLine, setClosedLine] = useState<string | null>(null);
+  /** Schweigen nach der Antwort läuft; Nachsatz, der dabei herausrutschte (Auftrag 49, Teil E). */
+  const [silence, setSilence] = useState(false);
+  const [afterword, setAfterword] = useState<string | null>(null);
 
   const state = () => game.current as InterviewState;
 
@@ -224,7 +228,23 @@ export function InterviewGame(props: MinigameViewProps) {
         }
         case 'answering': {
           const round = currentRound(setup, s);
+          setAfterword(null);
+          setSilence(false);
           if (round) speak(round.answer);
+          break;
+        }
+        case 'silence':
+          setSilence(true);
+          audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.25 });
+          haptic('light');
+          break;
+        case 'afterword': {
+          const round = currentRound(setup, s);
+          if (round?.afterword) {
+            setAfterword(round.afterword.text);
+            speak(round.afterword.text);
+          }
+          haptic('medium');
           break;
         }
         case 'tense':
@@ -245,6 +265,7 @@ export function InterviewGame(props: MinigameViewProps) {
           audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.35 });
           break;
         case 'verdict': {
+          setSilence(false);
           const last = s.results[s.results.length - 1];
           if (!last?.closed) stopSpeech();
           if (last?.correct) {
@@ -312,9 +333,10 @@ export function InterviewGame(props: MinigameViewProps) {
     }
     if (fill) fill.setAttribute('stroke-dasharray', `${(p * ARC).toFixed(2)} 100`);
     if (knob) knob.setAttribute('transform', `rotate(${(p * 270).toFixed(1)} 50 50)`);
-    if (root.current && Math.abs(p - fx.current.pressure) > 0.004) {
+    // In Stufen (2 %): Die Variable erbt der ganze Baum, jedes Setzen kostet Stil und Malen.
+    if (root.current && Math.abs(p - fx.current.pressure) >= 0.02) {
       fx.current.pressure = p;
-      root.current.style.setProperty('--iv-p', p.toFixed(3));
+      root.current.style.setProperty('--iv-p', p.toFixed(2));
     }
   };
 
@@ -506,8 +528,8 @@ export function InterviewGame(props: MinigameViewProps) {
           {cue && <TellMarks key={cue.key} kind={cue.kind} look={look} />}
         </button>
         {listening && (
-          <span class="iv-zone" aria-live="polite">
-            {ZONE_TEXT[hud.zone]}
+          <span class={`iv-zone${silence ? ' is-silence' : ''}`} aria-live="polite">
+            {silence && !afterword ? 'Schweigen … Blick halten' : ZONE_TEXT[hud.zone]}
           </span>
         )}
         {hud.flash && (
@@ -517,6 +539,8 @@ export function InterviewGame(props: MinigameViewProps) {
           </span>
         )}
       </div>
+
+      <Hands look={look} pose={listening ? hud.zone : 'idle'} cue={cue && !cue.faint ? cue.kind : null} />
 
       <div class="iv-table" aria-hidden="true">
         <svg class="iv-table__ashtray" viewBox="0 0 60 24" aria-hidden="true" focusable="false">
@@ -601,7 +625,10 @@ export function InterviewGame(props: MinigameViewProps) {
                   {closedLine ? (
                     <span class="iv-bubble__text">{closedLine}</span>
                   ) : (
-                    <span ref={typed} class="iv-bubble__text" />
+                    <span class="iv-bubble__text">
+                      <span ref={typed} />
+                      {afterword && <span class="iv-bubble__after"> {afterword}</span>}
+                    </span>
                   )}
                   {hud.phase === 'answer' && <span class="iv-bubble__caret" />}
                 </p>
@@ -698,19 +725,23 @@ export function InterviewGame(props: MinigameViewProps) {
                   : 'Richtig: Die Antwort war ehrlich.'
                 : last.closed
                   ? `Zu viel Druck: ${firstName} hat dichtgemacht.`
-                  : last.falseAlarms > 1
-                    ? 'Zu oft daneben getippt: Das waren nur Gesten.'
-                    : last.tells > 0
-                      ? `Verpasst: ${last.hits} von ${last.tells} Zeichen erwischt.`
-                      : 'Daneben.'}
+                  : last.soft && last.reveals === 'none'
+                    ? `Zu locker gefragt: ${firstName} war kaum angespannt.`
+                    : last.falseAlarms > 1
+                      ? 'Zu oft daneben getippt: Das waren nur Gesten.'
+                      : last.tells > 0
+                        ? `Verpasst: ${last.hits} von ${last.tells} Zeichen erwischt.`
+                        : 'Daneben.'}
             </p>
             <p class="iv-verdict__detail">
               {last.reveals !== 'none' && !last.correct
                 ? `Die Antwort verriet: ${traitName(last.reveals, person.name)}. ${lastKnown ? 'Steht schon in der Akte.' : 'Nicht in der Akte.'}`
                 : last.reveals === 'none'
-                  ? excluded.length > 0
-                    ? `Nichts davon: ${excluded.map((t) => traitName(t, person.name)).join(', ')}.`
-                    : 'Nichts Neues.'
+                  ? last.soft
+                    ? 'Ohne Druck sagt eine ruhige Antwort nichts. Halt den Blick, bis der Ring in der Zone ist.'
+                    : excluded.length > 0
+                      ? `Nichts davon: ${excluded.map((t) => traitName(t, person.name)).join(', ')}.`
+                      : 'Nichts Neues.'
                   : lastKnown
                     ? 'Steht schon in der Akte.'
                     : 'Kommt in die Akte.'}
