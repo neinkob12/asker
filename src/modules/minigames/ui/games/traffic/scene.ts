@@ -402,7 +402,7 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
   interior.add(handle);
   const switchLed = new Mesh(
     new BoxGeometry(0.02, 0.006, 0.03),
-    new MeshStandardMaterial({ color: 0x111111, emissive: 0xff9a3a, emissiveIntensity: 1.6 }),
+    new MeshStandardMaterial({ color: 0x111111, emissive: 0xff9a3a, emissiveIntensity: 0.45 }),
   );
   switchLed.position.set(doorX + 0.14, sill - 0.16, 0.25);
   interior.add(switchLed);
