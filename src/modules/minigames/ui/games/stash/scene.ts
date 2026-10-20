@@ -940,6 +940,16 @@ export function createStashScene(
     climb += (wantClimb - climb) * Math.min(1, dt * 16);
     const strain = state.carry !== null ? (setup.packages[state.carry]?.size ?? 1) / 3 : 0;
     poseFigure(me, { stride, run, carry: carryK, bend, reach, strain });
+    // Leben im Stand: atmen (schneller, je näher die Streife), Gewicht verlagern, beim Klopfen zum Tor schauen.
+    if (!reduced && !action && speed < 0.3 && fx.clearT < 0) {
+      const pace = 1.6 + 2.4 * fx.alarm;
+      me.torso.rotation.x += Math.sin(t * pace) * 0.025;
+      me.torso.rotation.z = Math.sin(t * 0.7) * 0.03;
+      me.head.rotation.y = fx.knock > 0.2 ? -0.6 * state.facing : Math.sin(t * 0.45) * 0.25 * fx.alarm;
+    } else {
+      me.torso.rotation.z = 0;
+      me.head.rotation.y = 0;
+    }
     // Zur Seite drehen, beim Verstauen bzw. Greifen zur Wand.
     const facingWall = (stowHide && stowHide.id !== 'drain' && stowHide.id !== 'floor') || (pickPkg && action);
     const wantTurn = facingWall ? Math.PI : state.facing > 0 ? Math.PI / 2 - 0.25 : -Math.PI / 2 + 0.25;

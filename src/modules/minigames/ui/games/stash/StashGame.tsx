@@ -243,6 +243,26 @@ export function StashGame(props: MinigameViewProps) {
     [],
   );
 
+  /**
+   * Hinweis am Ort (die ersten Sekunden bringen das Spiel bei): Mit leeren Händen leuchtet das nächste lose Paket, mit
+   * einem Paket in der Hand das nächste Versteck, in das es passt (trockene zuerst).
+   */
+  function hintFocus(s: typeof game.current): StashFx['focus'] {
+    if (s.done) return null;
+    if (s.carry === null) {
+      let best: number | null = null;
+      for (const p of setup.packages) {
+        if (!isLoose(s, p.id)) continue;
+        if (best === null || Math.abs(s.items[p.id].x - s.x) < Math.abs(s.items[best].x - s.x)) best = p.id;
+      }
+      return best === null ? null : { kind: 'package', id: best };
+    }
+    const carried = s.carry;
+    const fits = setup.hides.filter((h) => canHide(setup, s, carried, h.id) === 'ok');
+    fits.sort((a, b) => Number(a.wet) - Number(b.wet) || Math.abs(hideCenter(a) - s.x) - Math.abs(hideCenter(b) - s.x));
+    return fits[0] ? { kind: 'hide', id: fits[0].id } : null;
+  }
+
   function draw(dt: number) {
     const st = stage.current;
     if (!st) return;
@@ -263,8 +283,10 @@ export function StashGame(props: MinigameViewProps) {
           ? { kind: 'package', id: ctx.id }
           : ctx.kind === 'stow'
             ? { kind: 'hide', id: ctx.hide }
-            : s.goal;
+            : (s.goal ?? hintFocus(s));
     }
+    // Trägst du etwas und hast noch kein Ziel: das nächste Versteck, in das es passt, leuchtet.
+    if (s.carry !== null && !f.focus) f.focus = hintFocus(s);
     scene.update(s, f, dt);
     scene.render(st);
     // Beschriftungen der Verstecke über der Szene; außerhalb des Bilds am Rand. Überlappen sie sich, rückt die

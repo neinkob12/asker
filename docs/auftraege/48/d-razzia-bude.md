@@ -26,13 +26,71 @@ Vorschau startet sauber (`?minispiel=stash`, `npm run screenshot:minigames -- --
 - Schwierigkeit gemessen nur als mittlerer Score eines perfekten Bots, nicht als Gewinnrate (Score ≥ 0,5) für guten,
   schwachen und keinen Spieler.
 
-## Plan
+## Was neu ist
 
-1. `kit/indoor3d.ts`: gemeinsame Bausteine für Innenräume (Partikel, Staub, Taschenlampe mit Kegel, Licht durch
-   Ritzen, Blaulicht-Takt), beide Szenen nutzen sie.
-2. Bude: Klick trifft, was im Licht ist (Hover jedes Bild neu, Totzone in der Mitte, Ersatz: Ding im Kegel), weicher
-   Kegel und Restlicht, Glanz an durchsuchbaren Dingen, Hit-Stop beim Fund, Schritte werden lauter.
-3. Razzia: Meldungen verschwinden von selbst, Nacht lesbar (Straßenlaterne, Licht am Wagen), Handy-Kamera näher,
-   Hit-Stop beim Verstauen und am Tor.
-4. Schwierigkeit als Simulation (guter, schwacher, kein Spieler bei 0,2/0,5/0,9) im Test, Zahlen hier und im PR.
-5. Leistung: Szenen `razzia` und `bude` in `scripts/perf-browser.mjs`.
+- **`kit/indoor3d.ts`** (Baukasten für Innenräume, beide Spiele nutzen ihn): `ParticlePool` (ein Punkt-System für
+  Funken, Staub, Spritzer; nichts wird pro Bild angelegt, ohne lebende Teilchen kein Hochladen), `softDotTexture`,
+  `createFlashlight` (SpotLight mit Schatten, sichtbarer Kegel, Staub im Strahl; `aim`, `setPower`, `update`),
+  `createCrackLight` (Licht unter Tür oder Tor), `policeBlink`/`policeColor` (Takt wie `setBlueLight`), `HitStop`
+  (40–90 ms Stillstand, bei reduzierter Bewegung halb so lang; kann nach `kit/juice.ts`, sobald es den gibt).
+- **Bude:** Die Kamera dreht erst außerhalb der Bildmitte mit (`DEAD_ZONE` 0,4); was unter dem Zeiger liegt, wird
+  jedes Bild neu bestimmt; ein Klick daneben nimmt das Ding im Licht, sonst kurzer Klick-Ton und einmal ein Satz.
+  Kegel breiter und weicher (`BEAM_ANGLE` 0,5, Halbschatten 0,85, `BEAM_POWER` 12), mehr Restlicht (`AMBIENT`),
+  Streulicht um dich (`SPILL`). Hit-Stop bei Fund (85 ms) und Lärm (50 ms), Schritte im Treppenhaus wiederholen sich
+  und werden lauter und schneller, Herzschlag in den letzten 5 s, ein Satz zum Einstieg.
+- **Razzia:** Meldungen stehen 2,6 s (`MESSAGE_MS`, auch in der Bude). Hinweis am Ort: Mit leeren Händen leuchtet das
+  nächste Paket, mit Paket das nächste passende Versteck (trockene zuerst). Aufhelllicht von vorn (`FILL`), nachts
+  sind Wagen und Figur lesbar. Hochkant näher und tiefer (`viewW` 5,4 m). Hit-Stop beim Verstauen, Tor runter und
+  Reinstürmen. Die Figur atmet im Stand (schneller, je näher die Streife) und schaut beim Klopfen über die Schulter.
+  Licht unter dem Tor als `createCrackLight`.
+- **Ruckler weg:** `scene.warm` zeichnet beim Aufbau (unter der Einleitung) einmal die ganze Strecke mit den Beamten:
+  Geometrie, Texturen und Shader sind fertig. Vorher stand das Bild bis zu 1 s, wenn die Kamera zum ersten Mal Richtung
+  Tor schwenkte, und beim Reinstürmen (die Lampen der Beamten ändern die Zahl der Lichter, three.js baut dann alle
+  Shader neu).
+
+## Schwierigkeit (Simulation, 40 Seeds, Gewinn = Score ≥ 0,5)
+
+Tests: `stash/model.balance.test.ts`, `search/model.balance.test.ts` (`BALANCE_PRINT=1 npx vitest run … --silent=false`
+druckt die Tabelle). Guter Spieler: bester Zug nach 0,5 s (Razzia) bzw. Spuren zuerst, 0,35 s pro Ding (Bude).
+Schwacher: 1 s bzw. 0,9 s, zufällige Wahl, jedes vierte Mal daneben (Razzia) bzw. übersieht Spuren (Bude).
+
+| Lage | Spieler | leicht 0,2 | mittel 0,5 | schwer 0,9 |
+| --- | --- | --- | --- | --- |
+| Razzia, Lager ohne Ausbau, vorher | gut / schwach | 85 / 65 % | 95 / 40 % | 45 / 8 % |
+| Razzia, Lager ohne Ausbau, nachher | gut / schwach | 100 / 80 % | 100 / 30 % | 73 / 3 % |
+| Razzia, Lager mit Tresor, vorher | gut / schwach | 100 / 95 % | 100 / 73 % | 100 / 20 % |
+| Razzia, Lager mit Tresor, nachher | gut / schwach | 100 / 95 % | 100 / 55 % | 100 / 3 % |
+| Razzia am Spot, vorher | gut / schwach | 100 / 100 % | 100 / 95 % | 100 / 68 % |
+| Razzia am Spot, nachher | gut / schwach | 100 / 93 % | 100 / 53 % | 100 / 10 % |
+| Bude (unverändert) | gut / schwach | 100 / 57 % | 95 / 48 % | 75 / 30 % |
+
+Keine Eingabe gewinnt nie. Stellschrauben der Razzia: im Lager 4 bis 9 Pakete (vorher 8), am Spot 3 bis 6 (vorher 5),
+`DURATION_HARD` 23 s (vorher 25), `STREET_TIME` 0,56 (vorher 0,7), doppelter Boden ohne Ausbau 4 Plätze (vorher 3).
+Der Tresor-Ausbau macht es bewusst leichter. Dauer: Lager 24 bis 32 s, am Spot 13 bis 18 s (kurz, kleine Mengen),
+Bude 30 s.
+
+## Leistung
+
+`node scripts/perf-browser.mjs --scenes=razzia,bude [--mobile --throttle=4]` (neue Szenen; headless mit SwiftShader,
+Bilder pro Sekunde sind deshalb nicht aussagekräftig, die Rechenzeit pro Bild schon):
+
+| Szene | Zeichnen pro Bild (Mittel / schlimmstes) | Long Tasks |
+| --- | --- | --- |
+| Razzia, Desktop, vorher | 19,1 / 650 ms | 2 (bis 653 ms) |
+| Razzia, Desktop, nachher | 4,4 / 12 ms | 0 |
+| Razzia, Handy 4× gedrosselt, vorher | 26,9 / 605 ms | 9 (bis 625 ms) |
+| Razzia, Handy 4× gedrosselt, nachher | 12,7 / 32 ms | 6 (bis 75 ms) |
+| Bude, Desktop | 2,2 / 14 ms | 0 |
+| Bude, Handy 4× gedrosselt | 6,4 / 29 ms | 2 (bis 73 ms) |
+
+## Für die Integration
+
+- `kit/indoor3d.ts` ist neu; `HitStop` kann in einen gemeinsamen `kit/juice.ts` wandern.
+- Messhilfe: Beide Spiele schreiben in `window.__mgPerf` (nur, wenn das Skript es anlegt).
+- Doku für `CLAUDE.md`/`architektur.md`: Abschnitt „Was neu ist“ und die Stellschrauben oben.
+
+## Offen
+
+- Echtes Handy messen (Ziel 30 Bilder/s); headless gibt es nur Software-Grafik.
+- Bude: Gang durch die Wohnung statt Leiste; Razzia: unter dem Boden bleibt am Handy ein dunkler Streifen (dort liegt
+  das Versteckte im Hohlraum).

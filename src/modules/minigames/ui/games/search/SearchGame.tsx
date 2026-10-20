@@ -443,6 +443,9 @@ export function SearchGame(props: MinigameViewProps) {
   useEffect(() => {
     // Pause mitten im Spiel: angefangenen Tipp vergessen; weiter geht es genau dort.
     if (!running) fx.current.press = null;
+    // Erster Start: ein Satz, wie es geht (Spuren sieht man nur im Licht).
+    if (running && fx.current.t === 0 && !game.current.done)
+      say('Leuchte die Möbel ab. Was schief steht oder Kratzer hat, lohnt sich.');
     draw(0);
   }, [running]);
 
