@@ -366,6 +366,9 @@ Rang-Widget mehr (der Rang wird weiter berechnet); oben links am Startbildschirm
 gegen Schwarzgeld je Art, Ort per `ui.pickLocation`, `spots.found`), daneben breiter Ruf und Reviere. Die Reviere sind eine
 Seite: Kacheln Ruf (Slot `'territory.tiles'`, Tipp zeigt die letzten Gründe) und Fortschritt, darunter die Veedel als
 Tabelle (Einfluss, Spots, Heat); Spots stehen in den Veedel-Seiten, Stadtleben und Polizei-Karte sind weg.
+Karte weit draußen (14.10.2026): Unter `OVERVIEW_ZOOM` (9,5, `src/map/style.ts`) ist die Grundkarte ein Atlas: nur
+Autobahnen (schmaler), Flüsse, Wald, Städte als Flächen mit Namen, Landes- und Staatsgrenzen; Köln im Überblick und
+näher bleibt wie bisher. Details: `src/map/README.md`, Abschnitt "Städte und Deutschland-Ansicht".
 Feedback 16.10.2026 (Ruckeln bei vielen Bestellungen, Hamburg): Lieferungen fahren auf der Karte als Konvoi, ein
 Fahrzeug je Lieferant und Ziel mit Etikett „3 Lieferungen · 62 %“ (`shipmentConvoys` in `suppliers/ui/convoys.ts`), und
 nur die der aktiven Stadt; Fahrten der Logistik nur, wenn sie die aktive Stadt berühren (`tripTouchesCity`). Die Flotte
