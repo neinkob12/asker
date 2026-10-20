@@ -112,6 +112,15 @@ describe('Container packen: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, goodScore: good.mean, weak: weak.rate, weakScore: weak.mean, none: none.rate };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
+    // Gemessen (Auftrag 48, Teil E; vorher gut 100 / 100 / 100 %, schwach 100 / 100 / 92 %):
+    // gut 100 / 94 / 78 % (Score 0,96 / 0,78 / 0,61), schwach 100 / 50 / 7 %, ohne Eingabe nie.
+    const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);
+    expect(easy.good).toBeGreaterThanOrEqual(0.95);
+    expect(mid.good).toBeGreaterThanOrEqual(0.85);
+    expect(hard.good).toBeGreaterThanOrEqual(0.6);
+    expect(hard.good).toBeLessThanOrEqual(0.85);
+    expect(mid.weak).toBeGreaterThanOrEqual(0.3);
+    expect(mid.weak).toBeLessThanOrEqual(0.65);
   }, 60000);
 });

@@ -26,6 +26,7 @@ import {
   packLayout,
   spawnDust,
   stepDust,
+  stepGlints,
   toScreen,
   warmSprites,
 } from './draw';
@@ -40,6 +41,7 @@ import {
   cycle,
   FLAG_AT,
   finishPacking,
+  fullColumns,
   hiddenGoods,
   initPacking,
   isPlaced,
@@ -54,8 +56,10 @@ import {
   pieceAt,
   place,
   rotate,
+  SNUG_AT,
   scannerNear,
   select,
+  snugness,
   stackCount,
   step,
   timeLeft,
@@ -63,7 +67,7 @@ import {
   turn,
   undo,
 } from './model';
-import { PACK_SOUNDS } from './sounds';
+import { PACK_SOUNDS, snugSound } from './sounds';
 
 const KEYS = [
   'ArrowLeft',
@@ -112,7 +116,7 @@ function swatch(piece: Pick<PackPiece, 'kind' | 'productId'>, cover: CoverKind):
   return cover === 'bananas' ? 'var(--hud-gold)' : cover === 'tiles' ? 'var(--hud-ink-2)' : 'var(--cat-goods)';
 }
 
-/** Kleine Form aus Kästchen (Leiste, Auswahl). */
+/** Kleine Form aus Kästchen (Leiste, Auswahl), mit Material wie im Container (Folie, Karton, Palette; CSS). */
 function MiniShape(props: { piece: PackPiece; rot: number; cover: CoverKind; size?: number }) {
   const cells = rotate(props.piece.shape, props.rot);
   const w = Math.max(...cells.map((c) => c[0])) + 1;
@@ -120,7 +124,7 @@ function MiniShape(props: { piece: PackPiece; rot: number; cover: CoverKind; siz
   const s = props.size ?? 11;
   return (
     <span
-      class="pack__mini"
+      class={`pack__mini is-${props.piece.kind} is-cover-${props.cover}`}
       style={{
         gridTemplateColumns: `repeat(${w}, ${s}px)`,
         gridTemplateRows: `repeat(${h}, ${s}px)`,
@@ -182,7 +186,10 @@ export function ContainerGame(props: MinigameViewProps) {
       scanT: number;
       beeped: number;
       /** Teil im Fallen: wann es aufsetzt (Staub, Ruck, Ton), welche Zellen, wie schwer. */
-      landing: { at: number; cells: [number, number][]; cells0: number; goods: boolean } | null;
+      landing: { at: number; id: number; cells: [number, number][]; cells0: number; goods: boolean } | null;
+      /** Serie dicht gesetzter Teile und schon dichte Reihen (für das Lob). */
+      combo: number;
+      rows: Set<number>;
       /** Ganze Sekunden, zu denen die Rundumleuchte zuletzt gepiept hat. */
       beacon: number;
       rolling: boolean;
@@ -199,6 +206,10 @@ export function ContainerGame(props: MinigameViewProps) {
     kick: { at: -10, power: 0 },
     dust: [],
     sealed: new Map(),
+    glints: [],
+    pops: [],
+    combo: 0,
+    rows: new Set(),
     lastHud: -1,
     sent: false,
     scanT: -1,
@@ -309,6 +320,7 @@ export function ContainerGame(props: MinigameViewProps) {
     // Fällt kurz, setzt dann mit Staub, Ruck und Ton auf (im Bild-Takt, siehe useFrameLoop).
     f.landing = {
       at: f.t + (reduced ? 0 : FALL_TIME),
+      id: piece.id,
       cells: rotate(piece.shape, s.rot).map(([cx, cy]) => [x + cx, y + cy]),
       cells0: piece.shape.length,
       goods: piece.kind === 'goods',
@@ -326,6 +338,44 @@ export function ContainerGame(props: MinigameViewProps) {
     }
     const a = analysis.current;
     if (a.placedGoodsPieces === goodsTotal && a.cover >= 0.999) say('Sauber. Nichts zu sehen.', 'good');
+  };
+
+  /** Lob beim Aufsetzen (Teil E): Teil sitzt dicht (Serie mit steigendem Ton), Reihe von Wand zu Wand dicht. */
+  const praise = (land: { id: number; cells: [number, number][] }) => {
+    const s = game.current;
+    const f = fx.current;
+    const l = layoutRef.current;
+    if (!l || !isPlaced(s, land.id)) return;
+    const center = (cells: [number, number][]) => ({
+      mx: l.ox + (cells.reduce((sum, [x]) => sum + x, 0) / cells.length + 0.5) * l.cell,
+      my: l.oy + (cells.reduce((sum, [, y]) => sum + y, 0) / cells.length + 0.5) * l.cell,
+    });
+    if (snugness(setup, s, land.id) >= SNUG_AT) {
+      f.combo += 1;
+      f.glints.push({ cells: land.cells, at: f.t, strong: false });
+      f.pops.push({
+        text: f.combo >= 2 ? `Passt! ×${f.combo}` : 'Passt!',
+        ...center(land.cells),
+        at: f.t,
+        strong: false,
+      });
+      audio.play(snugSound(f.combo), { volume: 0.55 });
+    } else f.combo = 0;
+    const full = fullColumns(setup, s);
+    const fresh = full.filter((x) => !f.rows.has(x));
+    f.rows = new Set(full);
+    if (fresh.length > 0) {
+      const cells = fresh.flatMap((x) => Array.from({ length: setup.rows }, (_, y) => [x, y] as [number, number]));
+      f.glints.push({ cells, at: f.t + 0.08, strong: true });
+      f.pops.push({
+        text: fresh.length > 1 ? `${fresh.length} Reihen dicht!` : 'Reihe dicht!',
+        ...center(cells),
+        at: f.t + 0.08,
+        strong: true,
+      });
+      audio.play(PACK_SOUNDS.row, { volume: 0.6, delay: 0.08 });
+      haptic('success');
+    }
   };
 
   const choose = (pieceId: number) => {
@@ -427,6 +477,7 @@ export function ContainerGame(props: MinigameViewProps) {
     f.t += dt;
     if (!s.done && step(setup, s, dt)) startScan(true);
     stepDust(f, dt);
+    stepGlints(f);
     // Aufsetzen: Staub, Ruck (schwerer = stärker), Ton und Vibration.
     const land = f.landing;
     if (land && f.t >= land.at) {
@@ -436,6 +487,7 @@ export function ContainerGame(props: MinigameViewProps) {
       f.kick = { at: f.t, power: Math.min(3.5, 0.8 + land.cells0 * 0.55) };
       audio.play(land.goods ? PACK_SOUNDS.wrap : PACK_SOUNDS.drop, { volume: Math.min(1, 0.55 + land.cells0 * 0.1) });
       haptic(land.cells0 >= 4 ? 'medium' : 'light');
+      praise(land);
     }
     // Druck am Ende: Der Scanner rollt heran, die Leuchte piept jede Sekunde.
     if (!s.done) {
@@ -498,6 +550,15 @@ export function ContainerGame(props: MinigameViewProps) {
         pack: (steps?: number) => {
           const n = autoPack(setup, game.current, steps);
           changed();
+          // Lob für das zuletzt gesetzte Teil wie beim Aufsetzen (für Bilder der Serie).
+          const last = game.current.placed.at(-1);
+          if (last && n > 0) {
+            const piece = setup.pieces[last.pieceId];
+            praise({
+              id: last.pieceId,
+              cells: rotate(piece.shape, last.rot).map(([cx, cy]) => [last.x + cx, last.y + cy]),
+            });
+          }
           return n;
         },
       },
