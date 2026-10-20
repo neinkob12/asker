@@ -8,6 +8,7 @@ import {
   type ChaseState,
   chasePicks,
   chaseScore,
+  chaseStats,
   createChase,
   dist,
   dumpGoods,
@@ -474,6 +475,22 @@ describe('Verfolgungsjagd: Auftrag 48 (parken, knapp vorbei, Warnung)', () => {
     });
     expect(warnedAt).toBeGreaterThanOrEqual(0);
     if (rammedAt >= 0) expect(rammedAt).toBeGreaterThan(warnedAt);
+  });
+});
+
+describe('Verfolgungsjagd: Ergebnis-Werte', () => {
+  it('Zeit und Schaden immer, Knapp vorbei und zerlegte Streifen nur, wenn es sie gab', () => {
+    const setup = createChase({ seed: 5, difficulty: 0.5 });
+    const state = initChase(setup);
+    state.player.damage = 0.7;
+    state.tally.nearMisses = 2;
+    state.tally.blocksPassed = 1;
+    forceEnd(state, 'caught');
+    const stats = chaseStats(state);
+    expect(stats.map((s) => s.label)).toEqual(['Zeit', 'Schaden', 'Knapp vorbei']);
+    expect(stats[1]).toMatchObject({ value: '70 %', tone: 'bad' });
+    expect(stats[2].value).toBe('3');
+    expect(stats.length).toBeLessThanOrEqual(4);
   });
 });
 
