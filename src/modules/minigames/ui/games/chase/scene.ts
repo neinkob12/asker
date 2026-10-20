@@ -23,7 +23,9 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  OrthographicCamera,
   PerspectiveCamera,
+  PlaneGeometry,
   PointLight,
   Points,
   PointsMaterial,
@@ -36,6 +38,7 @@ import {
   type Texture,
   Vector2,
   Vector3,
+  WebGLRenderTarget,
 } from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -82,7 +85,8 @@ export interface SceneOptions {
 
 /** Farben der Verkehrswagen (Index aus dem Modell). */
 const TRAFFIC_COLORS = [0xc8ccd2, 0x2a2f36, 0x8d1f1f, 0x1f3f7a, 0xd9c48a, 0x3a5a3a, 0x6b6f75, 0xe8e6e0];
-const PLAYER_COLOR = 0x23272e;
+/** Lack deiner Karre: tiefes Rot mit Metallic, hebt sich von Asphalt und Fassaden ab (schwarz las sich als Block). */
+const PLAYER_COLOR = 0x7a1016;
 const PLAYER_ACCENT = 0xc9a23c;
 /** Kennzeichen je Stadt. */
 const PLATES: Record<string, string> = {
@@ -100,6 +104,10 @@ const CAM_BACK: [number, number] = [5.6, 7.3];
 const CAM_HEIGHT: [number, number] = [2.35, 2.0];
 const FOV: [number, number] = [62, 76];
 const FOV_TURBO = 10;
+/** Rückspiegel: Streife höchstens so weit hinter dir (Meter), Blickwinkel, Sichtweite. */
+const MIRROR_RANGE = 120;
+const MIRROR_FOV = 16;
+const MIRROR_FAR = 170;
 
 interface CarEntry {
   parts: CarParts;
@@ -119,6 +127,10 @@ export interface ChaseScene {
   screenOf(x: number, y: number, z: number): { x: number; y: number; behind: boolean };
   /** Blickrichtung der Kamera (Heading wie im Modell). */
   viewHeading(): number;
+  /** Rückspiegel: Rechteck im Canvas (CSS-Pixel, von oben links) oder null (kein Platz dafür). */
+  setMirror(rect: { x: number; y: number; width: number; height: number } | null): void;
+  /** Ist eine Streife dicht hinter dir (dann zeigt der Spiegel etwas und wird gezeichnet)? */
+  mirrorOn(): boolean;
   /** Zahlen für die Messung (Draw Calls, Dreiecke). */
   info(stage: Stage3d | null): Record<string, number>;
   /** Entwicklung: Innereien zum Nachsehen in der Konsole. */
@@ -276,6 +288,21 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
   scene.add(skids.mesh);
   const speedLines = createSpeedLines(hi ? 70 : 36);
   camera.add(speedLines.lines);
+  // Rückspiegel: zweite Kamera über dem Dach, Blick nach hinten. Gezeichnet nur, solange eine Streife dicht hinter
+  // dir ist, direkt in ein Rechteck des Canvas (ohne Bloom und Linse, damit er billig bleibt).
+  const mirrorCam = new PerspectiveCamera(MIRROR_FOV, 3, 0.5, MIRROR_FAR);
+  let mirrorRect: { x: number; y: number; width: number; height: number } | null = null;
+  let mirrorActive = false;
+  const mirrorSky = new Color(SKY[phase].fog);
+  // Der Spiegel rendert in eine kleine Textur (am Handy nur jedes dritte Bild) und wird jedes Bild mit einem Rechteck
+  // ins Canvas kopiert: Das Hauptbild überschreibt das ganze Canvas, der Spiegel kostet so am Handy ein Drittel.
+  const mirrorTarget = new WebGLRenderTarget(1, 1, { depthBuffer: true });
+  const mirrorBlitMat = new MeshBasicMaterial({ map: mirrorTarget.texture, depthTest: false, depthWrite: false });
+  const mirrorBlit = new Scene();
+  mirrorBlit.add(new Mesh(new PlaneGeometry(2, 2), mirrorBlitMat));
+  const mirrorBlitCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  let mirrorFrame = 0;
+  let mirrorFresh = false;
   const carLights = createStreaks(120, fog, true);
   carLights.material.uniforms.intensity.value = rain ? 1.1 : night ? 0.45 : phase === 'dusk' ? 0.3 : 0.12;
   scene.add(carLights.mesh);
@@ -333,6 +360,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     );
     composer.addPass(bloom);
     lens = new ShaderPass(LENS_SHADER);
+    // Am Handy keine Radial-Unschärfe (3 Abtastungen sahen wie Geisterbilder aus und kosten Füllrate), siehe uBlur.
     lens.uniforms.uTaps.value = hi ? 7 : 3;
     lens.uniforms.uGrain.value = hi ? 0.03 : 0.02;
     composer.addPass(lens);
@@ -745,7 +773,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     if (lens) {
       const u = lens.uniforms;
       const turboK = p.turboOn ? 1 : 0;
-      u.uBlur.value = reduced ? 0 : Math.max(0, speedF - 0.75) * 1.2 + turboK * 0.9;
+      u.uBlur.value = reduced || !hi ? 0 : Math.max(0, speedF - 0.75) * 1.2 + turboK * 0.9;
       u.uAberration.value = reduced ? 0 : turboK * 0.5 + cam.shake * 0.8;
       u.uTime.value = (t * 60) % 1000;
       const near = state.nearest;
@@ -755,6 +783,80 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
       u.uVignette.value = 0.38 + close * 0.15 + (ended === 'caught' ? 0.3 : 0);
     }
     if (ended === 'caught' && bloom) bloom.strength = Math.min(1.3, bloom.strength + dt * 0.4);
+
+    // Rückspiegel: an, solange eine Streife hinter dir in Reichweite ist.
+    const nose = forward(p.heading);
+    mirrorActive = false;
+    if (!ended) {
+      for (const c of state.cops) {
+        if (!c.active || c.state === 'wrecked') continue;
+        const dx = c.x - p.x;
+        const dz = c.z - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d < MIRROR_RANGE && d > 3 && (dx * nose.x + dz * nose.z) / d < -0.35) {
+          mirrorActive = true;
+          break;
+        }
+      }
+    }
+    if (mirrorActive) {
+      mirrorCam.position.set(p.x - nose.x * 0.6, 1.7, p.z - nose.z * 0.6);
+      look.set(p.x - nose.x * 40, 1.1, p.z - nose.z * 40);
+      mirrorCam.up.copy(UP);
+      mirrorCam.lookAt(look);
+    }
+  };
+
+  const renderMirror = (stage: Stage3d) => {
+    const r = mirrorRect;
+    if (!mirrorActive || !r || r.width < 40 || r.height < 16) {
+      mirrorFresh = false;
+      return;
+    }
+    const renderer = stage.renderer;
+    // Textur: am Desktop in voller, am Handy in halber Auflösung.
+    const scale = hi ? stage.dpr : stage.dpr * 0.5;
+    const w = Math.max(16, Math.round(r.width * scale));
+    const h = Math.max(8, Math.round(r.height * scale));
+    if (mirrorTarget.width !== w || mirrorTarget.height !== h) {
+      mirrorTarget.setSize(w, h);
+      mirrorFresh = false;
+    }
+    mirrorFrame++;
+    if (!mirrorFresh || hi || mirrorFrame % 3 === 0) {
+      const aspect = r.width / r.height;
+      if (Math.abs(mirrorCam.aspect - aspect) > 0.01) {
+        mirrorCam.aspect = aspect;
+        mirrorCam.updateProjectionMatrix();
+      }
+      // Deine Karre und die Tempo-Linien (hängen an der Hauptkamera) gehören nicht in den Spiegel; die Schatten aus
+      // dem Hauptbild gelten weiter. Der Himmel hängt an der Hauptkamera und liegt hinter der kurzen Sichtweite:
+      // dahinter Nebelfarbe.
+      playerGroup.visible = false;
+      speedLines.lines.visible = false;
+      const autoShadow = renderer.shadowMap.autoUpdate;
+      renderer.shadowMap.autoUpdate = false;
+      const background = scene.background;
+      scene.background = mirrorSky;
+      renderer.setRenderTarget(mirrorTarget);
+      renderer.render(scene, mirrorCam);
+      renderer.setRenderTarget(null);
+      scene.background = background;
+      renderer.shadowMap.autoUpdate = autoShadow;
+      playerGroup.visible = true;
+      speedLines.lines.visible = true;
+      mirrorFresh = true;
+    }
+    const y = stage.height - r.y - r.height;
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setViewport(r.x, y, r.width, r.height);
+    renderer.setScissor(r.x, y, r.width, r.height);
+    renderer.setScissorTest(true);
+    renderer.render(mirrorBlit, mirrorBlitCam);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, stage.width, stage.height);
+    renderer.autoClear = autoClear;
   };
 
   const render = (stage: Stage3d) => {
@@ -769,9 +871,11 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
         scene.environment = envTex;
       }
       stage.renderer.render(scene, camera);
+      renderMirror(stage);
       return;
     }
     ensure(stage).render();
+    renderMirror(stage);
   };
 
   const resize = (width: number, height: number) => {
@@ -798,6 +902,8 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     footMat.dispose();
     beamMat.dispose();
     disposeObject(scene);
+    mirrorTarget.dispose();
+    disposeObject(mirrorBlit);
   };
 
   return {
@@ -815,6 +921,10 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
       return { x: (proj.x + 1) / 2, y: (1 - proj.y) / 2, behind };
     },
     viewHeading: () => cam.yaw,
+    setMirror: (rect) => {
+      mirrorRect = rect;
+    },
+    mirrorOn: () => mirrorActive,
     info: (stage) => {
       const r = stage?.renderer.info;
       return {
