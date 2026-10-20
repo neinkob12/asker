@@ -72,8 +72,8 @@ Rahmen und Baukasten. Jeder Teil ist eine eigene Cloud-Session mit eigenem Branc
 - **E Container, Zivi, Bewerbung:** Zivi oder Kunde mit ganzer Figur statt Porträt plus Unterkörper, Bewerbungsgespräch
   mit „Schweigen aushalten“ als zweiter Stufe des Drucks, Container mit frischen Augen.
 - **F Rahmen:** Spielhalle in den Einstellungen (jedes Minispiel als Vorschau, mit Schwierigkeit, nichts zählt, mit
-  Bestwert pro Gerät), gemeinsamer Baukasten für Wackeln, Hit-Stop, Zeitlupe und aufploppende Zahlen (`kit/juice.ts`),
-  Übergänge mit Gefühl, Doku am Ende.
+  Bestwert pro Gerät), Pause mit Esc und Pause-Knopf für das Handy, „Zurück“ und „Aufhören“ in der Vorschau, Doku am
+  Ende.
 
 ## Befunde der steuernden Session (main vom 20.10.2026, Handy 390 × 844)
 
@@ -93,8 +93,11 @@ entscheidet.
 - **E Zivi:** Porträt in der Karte und Beine darunter wirken getrennt (bekannt: ganze Figur); der Hinweis „Zu lange
   gezögert“ kommt schon nach wenigen Sekunden. Container und Bewerbung am Handy gut lesbar.
 - **Alle:** Esc hält jetzt jedes Minispiel an (Rahmen, PR #142). Wer Esc selbst braucht, fängt die Taste mit
-  `useGameKeys` ab (wie die Papiere). In der Spielhalle (Einstellungen › Minispiele) lässt sich jedes Spiel mit neuer
-  Lage und Bestwert spielen.
+  `useGameKeys` ab (wie die Papiere). Am Handy gibt es keine Taste: Bitte `<PauseButton />` aus `kit/pause.tsx` dort
+  in die eigene HUD-Leiste setzen, wo er passt (z.B. als erstes Kind von `HudBar`); er zeigt sich nur, solange das
+  Spiel läuft. Das geht, sobald PR #142 in `main` ist. In der Spielhalle (Einstellungen › Minispiele) lässt sich jedes
+  Spiel mit neuer Lage und Bestwert spielen.
+- **Baukasten `kit/juice.ts`** fällt weg: Jedes Spiel hat seit Auftrag 48 eigenes Wackeln, Hit-Stop und Zeitlupe.
 
 ## Stand
 
