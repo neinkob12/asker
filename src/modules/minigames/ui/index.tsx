@@ -37,6 +37,7 @@ import './minigames.css';
 import './arcade';
 
 export { HudBar, HudMeter, HudTimer, type MeterColor, ResultStamp } from './kit/hud';
+export { PauseButton, PauseContext } from './kit/pause';
 export { MINIGAME_SOUNDS, type MinigameSoundId, playSound, registerMinigameSounds } from './kit/sounds';
 export { capture, type TouchButton, TouchControls, type TouchDirection, useSwipe } from './kit/TouchControls';
 export { MAX_DT, useFrameLoop } from './kit/useFrameLoop';

@@ -12,6 +12,7 @@ import { ARCADE_ORIGIN, backToArcade } from './arcade';
 import { restoreDialog, setDevFinish } from './flow';
 import { HudBar, ResultStamp } from './kit/hud';
 import { useMapTakeover } from './kit/mapTakeover';
+import { PauseContext } from './kit/pause';
 import { MINIGAME_SOUNDS, playSound } from './kit/sounds';
 import { useFrameLoop } from './kit/useFrameLoop';
 import { nextArcadeSeed, recordResult } from './records';
@@ -353,6 +354,9 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
     send();
     restoreDialog(ui);
   };
+  const pauseNow = () => {
+    if (!finished.current) setPhase('paused');
+  };
   /** Vorschau verlassen, ohne Ergebnis (aus der Spielhalle zurück dorthin). */
   const quit = () => {
     ui.closeDialog();
@@ -383,7 +387,10 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
   return (
     <div class={`mg-run is-${phase}`}>
       <div class="mg-stage" aria-hidden={phase !== 'play'} inert={phase !== 'play' ? true : undefined}>
-        <Game challenge={challenge} preview={preview} running={phase === 'play'} onFinish={onFinish} />
+        {/* Pause-Knopf in der HUD-Leiste der Spiele (kit/pause.tsx): nur, solange das Spiel läuft. */}
+        <PauseContext.Provider value={phase === 'play' ? pauseNow : null}>
+          <Game challenge={challenge} preview={preview} running={phase === 'play'} onFinish={onFinish} />
+        </PauseContext.Provider>
       </div>
       {phase === 'intro' && (
         <Intro
