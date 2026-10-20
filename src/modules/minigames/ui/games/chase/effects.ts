@@ -344,7 +344,7 @@ export function createSpeedLines(count: number): SpeedLines {
   const pos = new Float32Array(count * 6);
   const seed = (i: number, far: boolean) => {
     const a = Math.random() * Math.PI * 2;
-    const r = 2.2 + Math.random() * 5;
+    const r = 3.2 + Math.random() * 5;
     const z = far ? -30 - Math.random() * 30 : -Math.random() * 60;
     pos.set([Math.cos(a) * r, Math.sin(a) * r * 0.7, z, Math.cos(a) * r, Math.sin(a) * r * 0.7, z - 3], i * 6);
   };
@@ -365,13 +365,13 @@ export function createSpeedLines(count: number): SpeedLines {
   return {
     lines,
     update(dt, speed, strength) {
-      material.opacity = Math.min(0.5, strength * 0.5);
+      material.opacity = Math.min(0.32, strength * 0.32);
       lines.visible = strength > 0.02;
       if (!lines.visible) return;
       const move = speed * 1.6 * dt;
       for (let i = 0; i < count; i++) {
         pos[i * 6 + 2] += move;
-        pos[i * 6 + 5] = pos[i * 6 + 2] - 2 - strength * 6;
+        pos[i * 6 + 5] = pos[i * 6 + 2] - 0.8 - strength * 2.6;
         if (pos[i * 6 + 2] > 1) seed(i, true);
       }
       (geo.getAttribute('position') as BufferAttribute).needsUpdate = true;

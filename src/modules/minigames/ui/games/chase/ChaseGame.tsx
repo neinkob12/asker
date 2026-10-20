@@ -173,16 +173,21 @@ export function ChaseGame(props: MinigameViewProps) {
     v.scene ??= createChaseScene(setup, { cityId, phase, rain, reduced, hi: !coarse });
     return v.scene;
   };
-  const stage = useStage3d(canvas, (st) => {
-    sceneFor().resize(st.width, st.height);
-    draw(0);
-  });
-  const draw = (dt: number) => {
+  // Am Handy höchstens 1,5 Pixel je CSS-Pixel: Bloom und Linse kosten Füllrate, 30 Bilder reichen.
+  const stage = useStage3d(
+    canvas,
+    (st) => {
+      sceneFor().resize(st.width, st.height);
+      draw(0);
+    },
+    { maxDpr: coarse ? 1.5 : undefined },
+  );
+  const draw = (dt: number, render = true) => {
     const st = stage.current;
     if (!st) return;
     const scene = sceneFor();
     scene.update(game.current, dt);
-    scene.render(st);
+    if (render) scene.render(st);
   };
   useEffect(
     () => () => {
@@ -579,7 +584,8 @@ export function ChaseGame(props: MinigameViewProps) {
   };
 
   // ------------------------------------------------------------------ Schleife
-  useFrameLoop((dt) => {
+  /** Ein Bild: rechnen, Ton, HUD, zeichnen (render false: nur nachführen, für den Dev-Haken sim). */
+  const frame = (dt: number, render = true) => {
     const v = view.current;
     const g = game.current;
     const started = performance.now();
@@ -604,7 +610,7 @@ export function ChaseGame(props: MinigameViewProps) {
       v.nextRadio = v.t + RADIO_EVERY;
       say(radioLine(g, g.near ? 'heading' : 'search', veedelName, v.radioCount));
     }
-    draw(dt * slow);
+    draw(dt * slow, render);
     drawPins();
     if (v.t - v.lastMap > 1 / 15) {
       v.lastMap = v.t;
@@ -630,7 +636,8 @@ export function ChaseGame(props: MinigameViewProps) {
     v.perf.frames += 1;
     v.perf.total += took;
     v.perf.max = Math.max(v.perf.max, took);
-  }, running);
+  };
+  useFrameLoop((dt) => frame(dt), running);
 
   // Ton aus, wenn das Spiel pausiert oder zugeht; erstes Bild hinter der Einleitung.
   useEffect(() => {
@@ -653,10 +660,15 @@ export function ChaseGame(props: MinigameViewProps) {
       drawMinimap();
     };
     const info = () => view.current.scene?.info(stage.current) ?? null;
+    // Vorspulen mit festen Schritten, gezeichnet wird nur am Ende (Bilder ohne echte Bildrate).
+    const sim = (seconds: number, step = 1 / 30) => {
+      for (let t = 0; t < seconds; t += step) frame(step, t + step >= seconds);
+      refreshHud(true);
+    };
     const autopilot = (on = true) => {
       view.current.pilot = on ? createPilot() : null;
     };
-    (window as unknown as { chase?: unknown }).chase = { game, view, setup, advance, forceEnd, info, autopilot };
+    (window as unknown as { chase?: unknown }).chase = { game, view, setup, advance, forceEnd, info, autopilot, sim };
     return () => {
       delete (window as unknown as { chase?: unknown }).chase;
     };

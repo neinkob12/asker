@@ -380,6 +380,24 @@ describe('Verfolgungsjagd: Auftrag 48 (parken, knapp vorbei, Warnung)', () => {
     expect(createChase({ seed: 3, difficulty: 0.5 }).city.parked).toEqual(parked);
   });
 
+  it('Laternen, Bäume und Ampeln stehen auf dem Gehweg, nie vor der Blockmitte, und sind kleine Wände', () => {
+    const setup = createChase({ seed: 4, difficulty: 0.5 });
+    const posts = setup.city.posts;
+    expect(posts.filter((p) => p.kind === 'lamp').length).toBeGreaterThan(200);
+    expect(posts.some((p) => p.kind === 'tree')).toBe(true);
+    expect(posts.some((p) => p.kind === 'signal')).toBe(true);
+    for (const p of posts) {
+      if (p.kind === 'signal') continue;
+      const along = p.axis === 'x' ? p.x : p.z;
+      const across = p.axis === 'x' ? p.z : p.x;
+      // Außerhalb der Fahrbahn (die geht bis ROAD_W / 2), aber vor den Häusern.
+      expect(Math.abs(across - lineAt(across) * PITCH)).toBeGreaterThan(6);
+      const mid = (Math.floor(along / PITCH) + 0.5) * PITCH;
+      expect(Math.abs(along - mid)).toBeGreaterThanOrEqual(PARKING.clearMid);
+    }
+    expect(setup.city.walls.filter((w) => w.kind === 'post').length).toBe(posts.length);
+  });
+
   it('auf ein parkendes Auto: weniger Schaden als gegen ein Haus, Alarm', () => {
     const setup = createChase({ seed: 3, difficulty: 0.5 });
     const state = initChase(setup);

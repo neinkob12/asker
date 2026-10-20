@@ -94,6 +94,7 @@ const PLATES: Record<string, string> = {
 };
 /** So viele Blaulicht-Lampen gibt es (die nächsten Streifen bzw. Sperren bekommen sie). */
 const BLUE_LAMPS = 3;
+const BLUE_LAMPS_LOW = 2;
 /** Kamera: Abstand und Höhe hinter dem Wagen (langsam → schnell). */
 const CAM_BACK: [number, number] = [5.6, 7.3];
 const CAM_HEIGHT: [number, number] = [2.35, 2.0];
@@ -120,6 +121,8 @@ export interface ChaseScene {
   viewHeading(): number;
   /** Zahlen für die Messung (Draw Calls, Dreiecke). */
   info(stage: Stage3d | null): Record<string, number>;
+  /** Entwicklung: Innereien zum Nachsehen in der Konsole. */
+  debug: Record<string, unknown>;
   dispose(): void;
 }
 
@@ -246,9 +249,11 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     headlights.push(light);
   }
   // Weiches Licht über deiner Karre, damit der Lack auch nachts Kanten zeigt.
-  const fill = new PointLight(0xdce6ff, night ? 7 : 3, 12, 1.6);
-  fill.position.set(2.2, 2.6, -1.5);
-  playerGroup.add(fill);
+  if (hi) {
+    const fill = new PointLight(0xdce6ff, night ? 7 : 3, 12, 1.6);
+    fill.position.set(2.2, 2.6, -1.5);
+    playerGroup.add(fill);
+  }
 
   // Licht von hinten (wie die Scheinwerfer der Verfolger): zeigt nachts Lack und Kanten deines Hecks.
   const rim = new SpotLight(0xc8d6ff, night ? 38 : phase === 'dusk' ? 18 : 0, 26, 0.32, 0.8, 1.2);
@@ -256,7 +261,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
 
   // ------------------------------------------------------------------ Blaulicht-Lampen (fester Satz)
   const blueLamps: PointLight[] = [];
-  for (let k = 0; k < BLUE_LAMPS; k++) {
+  for (let k = 0; k < (hi ? BLUE_LAMPS : BLUE_LAMPS_LOW); k++) {
     const l = new PointLight(0x3a7bff, 0, 48, 1.4);
     l.position.set(-999, 3, -999);
     scene.add(l);
@@ -536,8 +541,9 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
           -fw.z * speed * 0.15 + (Math.random() - 0.5) * 2,
         );
       }
-      if (p.damage > 0.45 && Math.random() < (p.damage - 0.35) * dt * 30) {
-        smoke.emit(DARK_SMOKE, p.x + fw.x * 1.6, 1.0, p.z + fw.z * 1.6, -fw.x * speed * 0.3, 1.5, -fw.z * speed * 0.3);
+      // Kaputte Karre qualmt aus der Haube (ab halbem Schaden, je kaputter, desto mehr).
+      if (p.damage > 0.45 && Math.random() < (p.damage - 0.3) * dt * 40) {
+        smoke.emit(DARK_SMOKE, p.x + fw.x * 1.4, 1.1, p.z + fw.z * 1.4, fw.x * p.v * 0.75, 1.8, fw.z * p.v * 0.75);
       }
     }
 
@@ -547,8 +553,8 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
       carLights.set(lightN++, x, 1, z, c, w, len);
     };
     brakeLight.copy(lightColor.tail).multiplyScalar(p.braking ? 1.6 : 0.6);
-    lamp(p.x - fw.x * 2.3, p.z - fw.z * 2.3, brakeLight, 1.1, 5);
-    if (dark) lamp(p.x + fw.x * 2.4, p.z + fw.z * 2.4, lightColor.head, 1.3, 7);
+    // Nur das Heck: Der Streifen zeigt zur Kamera, einer vom Bug läge über der eigenen Karre.
+    lamp(p.x - fw.x * 2.3, p.z - fw.z * 2.3, brakeLight, 1.1, 4);
 
     // Verkehr.
     const aliveT = new Set<number>();
@@ -637,7 +643,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
       blocks.delete(id);
     }
     sources.sort((a, b) => a.d - b.d);
-    for (let k = 0; k < BLUE_LAMPS; k++) {
+    for (let k = 0; k < blueLamps.length; k++) {
       const l = blueLamps[k];
       const s = sources[k];
       if (!s || s.d > 160) {
@@ -739,8 +745,8 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     if (lens) {
       const u = lens.uniforms;
       const turboK = p.turboOn ? 1 : 0;
-      u.uBlur.value = reduced ? 0 : Math.max(0, speedF - 0.6) * 1.6 + turboK * 1.4;
-      u.uAberration.value = reduced ? 0 : turboK * 0.8 + cam.shake * 0.8;
+      u.uBlur.value = reduced ? 0 : Math.max(0, speedF - 0.75) * 1.2 + turboK * 0.9;
+      u.uAberration.value = reduced ? 0 : turboK * 0.5 + cam.shake * 0.8;
       u.uTime.value = (t * 60) % 1000;
       const near = state.nearest;
       const close = Number.isFinite(near) ? Math.max(0, 1 - near / 40) : 0;
@@ -819,6 +825,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
         programs: r?.programs?.length ?? 0,
       };
     },
+    debug: { scene, camera, smoke, sparkFx, skids },
     dispose,
   };
 }
