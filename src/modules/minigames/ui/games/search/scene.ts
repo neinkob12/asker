@@ -6,14 +6,9 @@
 
 import {
   AdditiveBlending,
-  BufferAttribute,
-  BufferGeometry,
   CanvasTexture,
   Color,
-  ConeGeometry,
   DirectionalLight,
-  DoubleSide,
-  Group,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
@@ -21,14 +16,19 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   PointLight,
-  Points,
-  PointsMaterial,
   Raycaster,
   Scene,
-  SpotLight,
   Vector2,
   Vector3,
 } from 'three';
+import {
+  createFlashlight,
+  ParticlePool,
+  POLICE_BLUE,
+  POLICE_RED,
+  policeBlink,
+  softDotTexture,
+} from '../../kit/indoor3d';
 import { type DayPhase, disposeObject } from '../../kit/scene3d';
 import type { Stage3d } from '../../kit/stage3d';
 import { ROOMS, type RoomId, type SearchSetup, type SearchState } from './model';
@@ -66,7 +66,19 @@ export interface ScreenPoint {
 
 export interface SearchScene {
   /** Raum wechseln (sofort; das Überblenden macht die Komponente). */
-  setRoom(room: RoomId): void;
+  setRoom(room: RoomId, from?: RoomId): void;
+  /**
+   * Gang (Auftrag 49): ein paar Schritte auf die Tür in einen Raum zu (aus dem Flur) bzw. zurück (in den Flur), über
+   * seconds Sekunden. Den Raum wechselt danach setRoom.
+   */
+  walk(to: RoomId, seconds: number): void;
+  /** Tür unter dem Bildschirmpunkt (nur im Flur), sonst null. */
+  pickExit(px: number, py: number): RoomId | null;
+  /**
+   * Bildschirmlage der Tür in einen Raum (nach update); unsichtbar, wenn es im aktuellen Raum keine gibt. Liegt sie
+   * außerhalb des Bilds (auch hinter dir), sagt side, an welchem Rand (−1 links, 1 rechts, 0 im Bild).
+   */
+  exitScreen(to: RoomId): ScreenPoint & { side: -1 | 0 | 1; exists: boolean };
   /** Wohin die Lampe zeigt: Bildschirmpunkt (Maus, Finger) bzw. ein Ding (Tastatur). */
   aimAt(px: number, py: number): void;
   aimItem(index: number): void;
@@ -90,51 +102,23 @@ const YAW_WIDE = 0.55;
 const YAW_TALL = 0.95;
 const PITCH = 0.32;
 /** Taschenlampe: Öffnungswinkel, Reichweite, Helligkeit. */
-const BEAM_ANGLE = 0.42;
+const BEAM_ANGLE = 0.5;
 const BEAM_LEN = 5.5;
-const BEAM_POWER = 26;
+const BEAM_POWER = 12;
+/** Streulicht der Lampe um dich herum (damit man Möbel am Rand des Kegels noch ahnt). */
+const SPILL = 1.1;
+/** Mitte des Bilds, in der die Kamera nicht mitdreht (Anteil der halben Breite bzw. Höhe): Was du anleuchtest, bleibt
+ * unter dem Zeiger. Erst zum Rand hin schaut die Kamera mit. */
+const DEAD_ZONE = 0.4;
 
 const AMBIENT: Record<
   DayPhase,
   { sky: number; ground: number; hemi: number; moon: number; moonI: number; pane: number }
 > = {
-  day: { sky: 0xd8dde6, ground: 0x4a4036, hemi: 0.45, moon: 0xfff0d8, moonI: 1, pane: 0.9 },
-  dusk: { sky: 0x8a7894, ground: 0x2c2420, hemi: 0.24, moon: 0xffa66a, moonI: 0.6, pane: 0.55 },
-  night: { sky: 0x3a4a78, ground: 0x15130f, hemi: 0.14, moon: 0x8aa4ff, moonI: 0.4, pane: 0.35 },
+  day: { sky: 0xd8dde6, ground: 0x4a4036, hemi: 0.55, moon: 0xfff0d8, moonI: 1, pane: 0.9 },
+  dusk: { sky: 0x8a7894, ground: 0x2c2420, hemi: 0.38, moon: 0xffa66a, moonI: 0.6, pane: 0.55 },
+  night: { sky: 0x3a4a78, ground: 0x15130f, hemi: 0.3, moon: 0x8aa4ff, moonI: 0.45, pane: 0.35 },
 };
-
-function softDot(): CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 64;
-  const g = c.getContext('2d');
-  if (g) {
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.4, 'rgba(255,255,255,0.45)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-  }
-  return new CanvasTexture(c);
-}
-
-/** Lichtkegel: an der Spitze hell, nach vorn auslaufend. */
-function beamTexture(): CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 4;
-  c.height = 128;
-  const g = c.getContext('2d');
-  if (g) {
-    const grad = g.createLinearGradient(0, 0, 0, 128);
-    grad.addColorStop(0, 'rgba(255,255,255,0)');
-    grad.addColorStop(0.15, 'rgba(255,255,255,0.8)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 4, 128);
-  }
-  return new CanvasTexture(c);
-}
 
 /** Streifen der Jalousie auf dem Boden. */
 function blindsTexture(): CanvasTexture {
@@ -158,8 +142,6 @@ function blindsTexture(): CanvasTexture {
   return new CanvasTexture(c);
 }
 
-const DUST = 90;
-const SPARKS = 160;
 const BILLS = 14;
 
 export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: boolean): SearchScene {
@@ -168,10 +150,9 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
   const camera = new PerspectiveCamera(62, 1, 0.05, 30);
   const amb = AMBIENT[phase];
   const m = createMaterials();
-  const dot = softDot();
-  const beamTex = beamTexture();
+  const dot = softDotTexture();
   const blinds = blindsTexture();
-  m.textures.push(dot, beamTex, blinds);
+  m.textures.push(dot, blinds);
 
   // ------------------------------------------------------------ Räume und Dinge
   const roomViews = new Map<RoomId, RoomView>();
@@ -215,109 +196,30 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
   moon.position.set(8, 3, -1);
   scene.add(moon);
   scene.add(moon.target);
-  const lamp = new SpotLight(0xfff0d6, BEAM_POWER, BEAM_LEN * 1.6, BEAM_ANGLE, 0.62, 1.3);
-  lamp.castShadow = true;
-  lamp.shadow.mapSize.set(1024, 1024);
-  lamp.shadow.camera.near = 0.1;
-  lamp.shadow.camera.far = 10;
-  lamp.shadow.bias = -0.0004;
-  lamp.shadow.normalBias = 0.015;
+  const torch = createFlashlight({
+    angle: BEAM_ANGLE,
+    range: BEAM_LEN,
+    cone: 3.6,
+    power: BEAM_POWER,
+    penumbra: 0.85,
+    shadow: 1024,
+    reduced,
+  });
+  const lamp = torch.light;
   scene.add(lamp);
   scene.add(lamp.target);
-  const spill = new PointLight(0xffe9c8, 0.5, 3, 2);
+  scene.add(torch.beam);
+  const spill = new PointLight(0xffe9c8, SPILL, 3.2, 2);
   scene.add(spill);
   const police = new PointLight(0x3a7bff, 0, 8, 1.4);
   scene.add(police);
   const flash = new PointLight(0xffd36a, 0, 3, 1.6);
   scene.add(flash);
 
-  // Sichtbarer Kegel und Staub im Strahl (hängen an einer Gruppe, die in Strahlrichtung zeigt).
-  const beam = new Group();
-  scene.add(beam);
-  const coneLen = 3.6;
-  const coneGeo = new ConeGeometry(Math.tan(BEAM_ANGLE) * coneLen, coneLen, 24, 1, true);
-  coneGeo.translate(0, -coneLen / 2, 0);
-  coneGeo.rotateX(-Math.PI / 2);
-  const coneMat = new MeshBasicMaterial({
-    map: beamTex,
-    color: 0xfff0d6,
-    transparent: true,
-    opacity: reduced ? 0.03 : 0.055,
-    depthWrite: false,
-    blending: AdditiveBlending,
-    side: DoubleSide,
-  });
-  const cone = new Mesh(coneGeo, coneMat);
-  beam.add(cone);
-  const dustPos = new Float32Array(DUST * 3);
-  const dustSeed = new Float32Array(DUST * 3);
-  for (let i = 0; i < DUST; i++) dustSeed.set([Math.random(), Math.random() * Math.PI * 2, Math.random()], i * 3);
-  const dustGeo = new BufferGeometry();
-  dustGeo.setAttribute('position', new BufferAttribute(dustPos, 3));
-  const dust = new Points(
-    dustGeo,
-    new PointsMaterial({
-      size: 0.016,
-      map: dot,
-      color: 0xfff3dc,
-      transparent: true,
-      opacity: 0.8,
-      depthWrite: false,
-      blending: AdditiveBlending,
-    }),
-  );
-  dust.frustumCulled = false;
-  beam.add(dust);
-
   // Funken, Staubwolken, Brösel (ein Punkt-System für alles).
-  const sp = new Float32Array(SPARKS * 3);
-  const sc = new Float32Array(SPARKS * 3);
-  const sv = new Float32Array(SPARKS * 3);
-  const sl = new Float32Array(SPARKS);
-  const sg = new Float32Array(SPARKS);
-  let spNext = 0;
-  const sparkGeo = new BufferGeometry();
-  sparkGeo.setAttribute('position', new BufferAttribute(sp, 3));
-  sparkGeo.setAttribute('color', new BufferAttribute(sc, 3));
-  for (let i = 0; i < SPARKS; i++) sp[i * 3 + 1] = -99;
-  const sparks = new Points(
-    sparkGeo,
-    new PointsMaterial({
-      size: 0.05,
-      map: dot,
-      vertexColors: true,
-      transparent: true,
-      depthWrite: false,
-      blending: AdditiveBlending,
-    }),
-  );
-  sparks.frustumCulled = false;
-  scene.add(sparks);
-  const emit = (
-    x: number,
-    y: number,
-    z: number,
-    n: number,
-    color: number,
-    speed: number,
-    grav: number,
-    life: number,
-  ) => {
-    const col = new Color(color);
-    for (let k = 0; k < n; k++) {
-      const i = spNext;
-      spNext = (spNext + 1) % SPARKS;
-      sp.set(
-        [x + (Math.random() - 0.5) * 0.2, y + (Math.random() - 0.5) * 0.1, z + (Math.random() - 0.5) * 0.2],
-        i * 3,
-      );
-      const a = Math.random() * Math.PI * 2;
-      sv.set([Math.cos(a) * speed * 0.6, (0.3 + Math.random()) * speed, Math.sin(a) * speed * 0.6], i * 3);
-      sc.set([col.r, col.g, col.b], i * 3);
-      sl[i] = life * (0.6 + Math.random() * 0.6);
-      sg[i] = grav;
-    }
-  };
+  const sparks = new ParticlePool(dot, { count: 160, size: 0.05 });
+  scene.add(sparks.points);
+  const emit = sparks.emit.bind(sparks);
 
   // Scheine, die dir entgegenfliegen.
   const bills: { mesh: Mesh; v: Vector3; spin: Vector3; life: number }[] = [];
@@ -368,8 +270,36 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     return out.set(view.center[0] + ox, view.center[1], view.center[2]);
   };
 
-  const setRoom = (id: RoomId) => {
+  // Gang: Richtung (Raumkoordinaten x, z) und Fortschritt.
+  const stroll = { k: 1, seconds: 0, dx: 0, dz: 0, yaw: 0 };
+  const exitOf = (to: RoomId) => roomViews.get(room)?.exits.find((e) => e.to === to);
+  const walk = (to: RoomId, seconds: number) => {
+    const exit = exitOf(to);
+    stroll.k = 0;
+    stroll.seconds = Math.max(0.05, seconds);
+    if (exit) {
+      // Auf die Tür zu, den Blick hin.
+      const dx = exit.center[0];
+      const dz = exit.center[2] - STAND_Z;
+      const len = Math.hypot(dx, dz) || 1;
+      const step = Math.min(1.4, len * 0.6);
+      stroll.dx = (dx / len) * step;
+      stroll.dz = (dz / len) * step;
+      stroll.yaw = Math.max(-1.2, Math.min(1.2, Math.atan2(-dx, -dz)));
+    } else {
+      // Zurück durch die Tür hinter dir: ein Schritt rückwärts.
+      stroll.dx = 0;
+      stroll.dz = 0.7;
+      stroll.yaw = 0;
+    }
+  };
+  const setRoom = (id: RoomId, from?: RoomId) => {
+    const prev = room;
     room = id;
+    stroll.k = 1;
+    stroll.dx = 0;
+    stroll.dz = 0;
+    sparks.clear();
     for (const [rid, view] of roomViews) view.group.visible = rid === id;
     for (const b of bills) {
       b.life = 0;
@@ -378,6 +308,10 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     yaw = 0;
     pitch = -0.15;
     aim.item = -1;
+    // Zurück im Flur: Du schaust erst noch zur Tür, aus der du kommst.
+    const back = from ?? prev;
+    const exit = id === 'hall' && back !== 'hall' ? roomViews.get('hall')?.exits.find((e) => e.to === back) : undefined;
+    if (exit) yaw = Math.max(-yawMax, Math.min(yawMax, Math.atan2(-exit.center[0], -(exit.center[2] - STAND_Z))));
   };
 
   const update = (state: SearchState, fx: SearchFx, dt: number) => {
@@ -389,53 +323,53 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
       aim.x += (p.x / width - aim.x) * Math.min(1, dt * 8);
       aim.y += (p.y / height - aim.y) * Math.min(1, dt * 8);
     }
-    const nx = Math.max(-1, Math.min(1, aim.x * 2 - 1));
-    const ny = Math.max(-1, Math.min(1, aim.y * 2 - 1));
+    const edge = (v: number) => (Math.sign(v) * Math.max(0, Math.abs(v) - DEAD_ZONE)) / (1 - DEAD_ZONE);
+    const nx = edge(Math.max(-1, Math.min(1, aim.x * 2 - 1)));
+    const ny = edge(Math.max(-1, Math.min(1, aim.y * 2 - 1)));
     // Kamera schaut mit (weich), stärker zum Rand hin.
-    const wantYaw = -Math.sign(nx) * Math.abs(nx) ** 1.4 * yawMax;
-    const wantPitch = -0.15 - Math.sign(ny) * Math.abs(ny) ** 1.4 * PITCH;
+    const wantYaw = -Math.sign(nx) * Math.abs(nx) ** 1.1 * yawMax;
+    const wantPitch = -0.15 - Math.sign(ny) * Math.abs(ny) ** 1.1 * PITCH;
     yaw += (wantYaw - yaw) * Math.min(1, dt * 2.6);
+    // Gang zur Tür: weich hin, Blick dreht mit.
+    let walkX = 0;
+    let walkZ = 0;
+    let walkYaw = 0;
+    if (stroll.k < 1) {
+      stroll.k = Math.min(1, stroll.k + dt / stroll.seconds);
+      const e = stroll.k * stroll.k * (3 - 2 * stroll.k);
+      walkX = stroll.dx * e;
+      walkZ = stroll.dz * e;
+      walkYaw = (stroll.yaw - yaw) * Math.min(1, e * 1.4);
+    }
+    const bob = reduced || stroll.k >= 1 ? 0 : Math.abs(Math.sin(stroll.k * Math.PI * 3)) * 0.03;
     pitch += (wantPitch - pitch) * Math.min(1, dt * 2.6);
     const shake = (reduced ? 0.25 : 1) * fx.shake;
     const sx = shake > 0.01 ? Math.sin(t * 63) * 0.03 * shake : 0;
     const sy = shake > 0.01 ? Math.cos(t * 51) * 0.02 * shake : 0;
     // Atmen: leichtes Wiegen.
     const breathe = reduced ? 0 : Math.sin(t * 1.3) * 0.006;
-    camera.position.set(ox + sx, EYE + breathe + sy, STAND_Z);
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    camera.position.set(ox + sx + walkX, EYE + breathe + sy - bob, STAND_Z + walkZ);
+    camera.rotation.set(pitch, yaw + walkYaw, 0, 'YXZ');
     camera.updateMatrixWorld();
     // Lampe: aus der rechten Hand in Richtung des Zeigers.
     ndc.set(aim.x * 2 - 1, -(aim.y * 2 - 1));
     raycaster.setFromCamera(ndc, camera);
     const dir = raycaster.ray.direction;
     const hand = v3.set(0.22, -0.28, -0.1).applyMatrix4(camera.matrixWorld);
-    lamp.position.copy(hand);
     const target = raycaster.ray.origin.clone().addScaledVector(dir, 4);
     aimTarget.lerp(target, Math.min(1, dt * 18));
-    lamp.target.position.copy(aimTarget);
-    lamp.target.updateMatrixWorld();
+    torch.aim(hand, aimTarget);
     spill.position.copy(camera.position);
-    beam.position.copy(hand);
-    beam.lookAt(aimTarget);
     // Lampe flackert am Ende und geht aus (bzw. aus, wenn alles gefunden ist).
     let power = 1;
     if (fx.keyT >= 0) {
       const k = fx.keyT;
       power = k < 0.6 ? 1 : k < 1.4 ? (Math.sin(k * 60) > 0.2 ? 0.9 : 0.15) : Math.max(0, 1 - (k - 1.4) * 3);
     } else if (fx.clearT >= 0) power = Math.max(0.35, 1 - fx.clearT * 0.6);
-    lamp.intensity = BEAM_POWER * power;
-    coneMat.opacity = (reduced ? 0.03 : 0.055) * power;
-    spill.intensity = 0.5 * power;
+    torch.setPower(power);
+    spill.intensity = SPILL * power;
     // Staub im Strahl (Kamera-nah, treibt langsam).
-    const tanA = Math.tan(BEAM_ANGLE) * 0.9;
-    for (let i = 0; i < DUST; i++) {
-      const [r0, a0, z0] = [dustSeed[i * 3], dustSeed[i * 3 + 1], dustSeed[i * 3 + 2]];
-      const z = 0.4 + ((z0 * 3.2 + t * 0.05) % 3.2);
-      const a = a0 + t * 0.15 * (i % 2 ? 1 : -1);
-      const r = Math.sqrt(r0) * z * tanA;
-      dustPos.set([Math.cos(a) * r, Math.sin(a) * r + Math.sin(t * 0.7 + i) * 0.02, z], i * 3);
-    }
-    dustGeo.attributes.position.needsUpdate = true;
+    torch.update(t);
     // Dinge: auf beim Suchen (mit Wackeln), offen nach dem Suchen; Lärm lässt alles zittern.
     const current = state.current;
     for (const view of items) {
@@ -457,12 +391,12 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
       view.group.position.y = wob > 0 ? Math.abs(Math.cos(t * 39 + view.index)) * wob * 0.5 : 0;
     }
     // Fenster: Mondlicht bzw. nach dem Alarm Blaulicht.
-    const blink = (t * 2.2) % 1 < 0.5;
+    const blink = policeBlink(t);
     const alarm = fx.alertT >= 0 ? Math.min(1, fx.alertT / 1.5) : 0;
     const view = roomViews.get(room);
     for (const pane of view?.windows ?? []) {
       if (alarm > 0) {
-        pane.emissive.setHex(blink ? 0x3a7bff : 0xff4a3a);
+        pane.emissive.setHex(blink ? POLICE_BLUE : POLICE_RED);
         pane.emissiveIntensity = 0.6 + 1.4 * alarm;
       } else {
         pane.emissive.setHex(0x6f86b8);
@@ -470,7 +404,7 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
       }
     }
     police.intensity = alarm * (blink ? 9 : 5);
-    police.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+    police.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
     police.position.set(ox + 1.9, 1.6, -0.6);
     // Treppenhaus: Licht unter der Tür, Schatten von Füßen, die näher kommen.
     if (view?.doorGap) {
@@ -480,24 +414,7 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     if (view?.door) view.door.rotation.y = fx.keyT > 0.8 ? -Math.min(1.2, (fx.keyT - 0.8) * 1.4) : 0;
     // Aufblitzen bei Fund, Funken, Scheine.
     flash.intensity = Math.max(0, flash.intensity - dt * 18);
-    for (let i = 0; i < SPARKS; i++) {
-      if (sl[i] <= 0) continue;
-      sl[i] -= dt;
-      const j = i * 3;
-      if (sl[i] <= 0) {
-        sp[j + 1] = -99;
-        continue;
-      }
-      sv[j + 1] -= sg[i] * dt;
-      sp[j] += sv[j] * dt;
-      sp[j + 1] = Math.max(0.01, sp[j + 1] + sv[j + 1] * dt);
-      sp[j + 2] += sv[j + 2] * dt;
-      sc[j] *= 0.97;
-      sc[j + 1] *= 0.97;
-      sc[j + 2] *= 0.97;
-    }
-    sparkGeo.attributes.position.needsUpdate = true;
-    sparkGeo.attributes.color.needsUpdate = true;
+    sparks.update(dt);
     for (const b of bills) {
       if (b.life <= 0) continue;
       b.life -= dt;
@@ -516,9 +433,9 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     const groups: Object3D[] = items.filter((v) => v.room === room).map((v) => v.group);
     const hit = raycaster.intersectObjects(groups, true)[0];
     if (hit) return hit.object.userData.index as number;
-    // Knapp daneben: das nächste Ding im Umkreis von 48 px.
+    // Knapp daneben: das nächste Ding im Umkreis (am Handy mit dem Finger großzügiger).
     let best = -1;
-    let bestD = 48;
+    let bestD = Math.max(56, Math.min(width, height) * 0.1);
     for (const view of items) {
       if (view.room !== room) continue;
       const p = project(...(worldCenter(view.index, v3).toArray() as [number, number, number]));
@@ -574,6 +491,18 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     }
   };
 
+  const pickExit = (px: number, py: number): RoomId | null => {
+    const exits = roomViews.get(room)?.exits ?? [];
+    if (exits.length === 0) return null;
+    ndc.set((px / width) * 2 - 1, -(py / height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObjects(
+      exits.map((e) => e.hit),
+      false,
+    )[0];
+    return hit ? (hit.object.userData.exit as RoomId) : null;
+  };
+
   setRoom('hall');
 
   return {
@@ -590,12 +519,25 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     render: (stage) => stage.renderer.render(scene, camera),
     resize,
     pick,
+    walk,
+    pickExit,
+    exitScreen: (to) => {
+      const exit = exitOf(to);
+      if (!exit) return { x: 0, y: 0, visible: false, side: 0, exists: false };
+      const ox = origin.get(room) ?? 0;
+      const p = project(exit.center[0] + ox, exit.center[1], exit.center[2]);
+      v3.set(exit.center[0] + ox, exit.center[1], exit.center[2]).applyMatrix4(camera.matrixWorldInverse);
+      const inFront = v3.z < -0.05;
+      if (inFront && p.visible) return { ...p, side: 0, exists: true };
+      const side = (inFront ? (p.x < width / 2 ? -1 : 1) : v3.x < 0 ? -1 : 1) as -1 | 1;
+      return { x: side < 0 ? 0 : width, y: inFront ? p.y : height / 2, visible: false, side, exists: true };
+    },
     itemScreen: (index) => project(...(worldCenter(index, v3).toArray() as [number, number, number])),
     burst,
     dispose: () => {
       disposeObject(scene);
       for (const tex of m.textures) tex.dispose();
-      lamp.shadow.map?.dispose();
+      torch.dispose();
     },
   };
 }

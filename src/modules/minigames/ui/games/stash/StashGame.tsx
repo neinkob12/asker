@@ -9,6 +9,7 @@ import { formatAmount, formatEuro } from '../../../../../core';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { productColor, readGoodsPalette } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
+import { HitStop } from '../../kit/indoor3d';
 import { phaseOf } from '../../kit/scene3d';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useStage3d } from '../../kit/stage3d';
@@ -75,6 +76,13 @@ const SIREN_EVERY = 1.25;
 /** So viele Sekunden vor Schluss klopft es (im Lager erst, wenn das Tor zu ist). */
 const KNOCK_FROM = 6;
 const KNOCK_EVERY = 1.15;
+/** In den letzten Sekunden kommt der Rammbock (nur im Lager): so oft (s). */
+const RAM_FROM = 3.2;
+const RAM_EVERY = 0.78;
+/** Verstaut in den letzten Sekunden: knappe Rettung (Zeitlupe, „Knapp!“). */
+const CLOSE_CALL = 1.5;
+/** So lange steht eine Meldung (ms). */
+const MESSAGE_MS = 2600;
 
 /** params aus police (StashParams) lesen, ohne sich auf ihre Form zu verlassen (alte Stände, Vorschau). */
 export function inputFrom(params: Record<string, unknown>): StashInput {
@@ -152,6 +160,7 @@ export function StashGame(props: MinigameViewProps) {
   const phase = phaseOf(challenge.params.phase ?? (challenge.seed % 3 === 0 ? 'night' : 'day'));
   const game = useRef(initStash(setup));
   const reduced = useMemo(prefersReducedMotion, []);
+  const stop = useMemo(() => new HitStop(reduced), [reduced]);
   const goods = useMemo(readGoodsPalette, []);
   const canvas = useRef<HTMLCanvasElement>(null);
   const labels = useRef<Partial<Record<HideId, HTMLElement | null>>>({});
@@ -173,6 +182,7 @@ export function StashGame(props: MinigameViewProps) {
       floats: number;
       pendingDt: number;
       drawQueued: boolean;
+      warmed: boolean;
     }
   >({
     t: 0,
@@ -180,6 +190,7 @@ export function StashGame(props: MinigameViewProps) {
     breachT: -1,
     clearT: -1,
     knock: 0,
+    ram: 0,
     shake: 0,
     alarm: 0,
     focus: null,
@@ -195,6 +206,7 @@ export function StashGame(props: MinigameViewProps) {
     floats: 0,
     pendingDt: 0,
     drawQueued: false,
+    warmed: false,
   });
   const [floats, setFloats] = useState<Floater[]>([]);
   const snapshot = (h: Partial<Hud> = {}): Hud => {
@@ -237,12 +249,39 @@ export function StashGame(props: MinigameViewProps) {
     [],
   );
 
+  /**
+   * Hinweis am Ort (die ersten Sekunden bringen das Spiel bei): Mit leeren Händen leuchtet das nächste lose Paket, mit
+   * einem Paket in der Hand das nächste Versteck, in das es passt (trockene zuerst).
+   */
+  function hintFocus(s: typeof game.current): StashFx['focus'] {
+    if (s.done) return null;
+    if (s.carry === null) {
+      let best: number | null = null;
+      for (const p of setup.packages) {
+        if (!isLoose(s, p.id)) continue;
+        if (best === null || Math.abs(s.items[p.id].x - s.x) < Math.abs(s.items[best].x - s.x)) best = p.id;
+      }
+      return best === null ? null : { kind: 'package', id: best };
+    }
+    const carried = s.carry;
+    const fits = setup.hides.filter((h) => canHide(setup, s, carried, h.id) === 'ok');
+    fits.sort((a, b) => Number(a.wet) - Number(b.wet) || Math.abs(hideCenter(a) - s.x) - Math.abs(hideCenter(b) - s.x));
+    return fits[0] ? { kind: 'hide', id: fits[0].id } : null;
+  }
+
   function draw(dt: number) {
     const st = stage.current;
     if (!st) return;
+    // Messhilfe für scripts/perf-browser.mjs (--scenes=razzia,bude): nur, wenn das Skript sie anlegt.
+    const perfHook = (window as { __mgPerf?: { frames: number; total: number; max: number } }).__mgPerf;
+    const perfStart = perfHook ? performance.now() : 0;
     const scene = sceneFor();
     const s = game.current;
     const f = fx.current;
+    if (!f.warmed) {
+      f.warmed = true;
+      scene.warm(st);
+    }
     const ctx = contextOf(setup, s);
     if (f.focus?.kind !== 'hide' || s.carry === null) {
       f.focus =
@@ -250,8 +289,10 @@ export function StashGame(props: MinigameViewProps) {
           ? { kind: 'package', id: ctx.id }
           : ctx.kind === 'stow'
             ? { kind: 'hide', id: ctx.hide }
-            : s.goal;
+            : (s.goal ?? hintFocus(s));
     }
+    // Trägst du etwas und hast noch kein Ziel: das nächste Versteck, in das es passt, leuchtet.
+    if (s.carry !== null && !f.focus) f.focus = hintFocus(s);
     scene.update(s, f, dt);
     scene.render(st);
     // Beschriftungen der Verstecke über der Szene; außerhalb des Bilds am Rand. Überlappen sie sich, rückt die
@@ -290,6 +331,12 @@ export function StashGame(props: MinigameViewProps) {
     }
     const me = strip.current;
     if (me) me.style.left = `${((s.x / setup.length) * 100).toFixed(2)}%`;
+    if (perfHook) {
+      const ms = performance.now() - perfStart;
+      perfHook.frames += 1;
+      perfHook.total += ms;
+      perfHook.max = Math.max(perfHook.max, ms);
+    }
   }
 
   const finish = () => {
@@ -343,6 +390,7 @@ export function StashGame(props: MinigameViewProps) {
         audio.play(hide?.wet ? STASH_SOUNDS.splash : STASH_SOUNDS.stow, { volume: 0.9 });
         haptic(hide?.wet ? 'light' : 'success');
         f.shake = Math.max(f.shake, 0.18);
+        stop.hold(hide?.wet ? 0.04 : 0.07);
         if (hide && scene) {
           scene.burst(hide.wet ? 'splash' : 'stow', hideCenter(hide), hide.y, 0);
           const sp = scene.hideScreen[e.hide];
@@ -356,6 +404,12 @@ export function StashGame(props: MinigameViewProps) {
           }
         }
         if (hide?.wet) say('Im Gully. Nass, aber weg.', 'warn');
+        else if (timeLeft(setup, game.current) <= CLOSE_CALL && !game.current.done) {
+          // Knappe Rettung: kurz anhalten, der Moment soll sitzen.
+          stop.hold(0.14);
+          haptic('success');
+          say('Knapp!', 'good');
+        }
       } else if (e.type === 'dropped') {
         audio.play(STASH_SOUNDS.step, { volume: 0.8 });
       } else if (e.type === 'refused') {
@@ -363,6 +417,7 @@ export function StashGame(props: MinigameViewProps) {
       } else if (e.type === 'closed') {
         f.closedT = 0;
         f.shake = 0.8;
+        stop.hold(0.09);
         audio.play(STASH_SOUNDS.slam, { volume: 1 });
         playSound(MINIGAME_SOUNDS.alarm, 0.4);
         haptic('warning');
@@ -372,6 +427,7 @@ export function StashGame(props: MinigameViewProps) {
       } else if (e.type === 'timeUp') {
         f.breachT = 0;
         f.shake = 1;
+        stop.hold(0.09);
         f.endAt = f.t + (reduced ? 1.6 : 2.4);
         audio.play(STASH_SOUNDS.breach, { volume: 1 });
         haptic('error');
@@ -425,18 +481,20 @@ export function StashGame(props: MinigameViewProps) {
   useFrameLoop((rawDt) => {
     const s = game.current;
     const f = fx.current;
-    // Zeitlupe, wenn sie reinstürmen.
-    const dt = f.breachT >= 0 && !reduced ? rawDt * 0.55 : rawDt;
-    f.t += rawDt;
+    // Hit-Stop: kurz steht alles (Lauf, Uhr, Licht); danach Zeitlupe, wenn sie reinstürmen.
+    const live = stop.filter(rawDt);
+    const dt = f.breachT >= 0 && !reduced ? live * 0.55 : live;
+    f.t += live;
     const left = keys.isDown('ArrowLeft') || keys.isDown('KeyA') || held.current.left;
     const right = keys.isDown('ArrowRight') || keys.isDown('KeyD') || held.current.right;
     const move: -1 | 0 | 1 = left === right ? 0 : left ? -1 : 1;
-    if (!s.done) onEvents(step(setup, s, rawDt, move));
+    if (!s.done && live > 0) onEvents(step(setup, s, live, move));
     if (f.closedT >= 0) f.closedT += dt;
     if (f.breachT >= 0) f.breachT += dt;
     if (f.clearT >= 0) f.clearT += dt;
     f.alarm = Math.min(1, (s.time / setup.duration) ** 1.3);
     f.knock = Math.max(0, f.knock - rawDt * 4);
+    f.ram = Math.max(0, f.ram - rawDt * 1.6);
     f.shake = Math.max(0, f.shake - rawDt * 2.2);
     // Schritte im Takt (schwer: dumpfer, langsamer).
     const speed = Math.abs(s.v);
@@ -453,12 +511,24 @@ export function StashGame(props: MinigameViewProps) {
     const remaining = timeLeft(setup, s);
     // Klopfen am Tor (Lager: erst, wenn es zu ist), Herzschlag in den letzten Sekunden.
     const knocking = !s.done && remaining <= KNOCK_FROM && (setup.gate === null || f.closedT >= 0);
-    if (knocking && f.t - f.lastKnock >= KNOCK_EVERY) {
+    // Zum Schluss der Rammbock: schneller, härter, das Tor beult sich (Lager).
+    const ramming = setup.gate !== null && remaining <= RAM_FROM;
+    if (knocking && f.t - f.lastKnock >= (ramming ? RAM_EVERY : KNOCK_EVERY)) {
       f.lastKnock = f.t;
       f.knock = 1;
-      f.shake = Math.max(f.shake, setup.gate === null ? 0.1 : 0.3);
-      if (setup.gate !== null) audio.play(STASH_SOUNDS.knock, { volume: 0.9 });
-      haptic('light');
+      if (ramming && setup.gate !== null) {
+        f.ram = 1;
+        f.shake = Math.max(f.shake, 0.6);
+        stop.hold(0.05);
+        audio.play(STASH_SOUNDS.slam, { volume: 0.75 });
+        audio.play(STASH_SOUNDS.knock, { volume: 1 });
+        haptic('medium');
+        f.scene?.burst('dust', setup.gate - 0.3, 3, 0);
+      } else {
+        f.shake = Math.max(f.shake, setup.gate === null ? 0.1 : 0.3);
+        if (setup.gate !== null) audio.play(STASH_SOUNDS.knock, { volume: 0.9 });
+        haptic('light');
+      }
       if (!f.warned) {
         f.warned = true;
         say(setup.gate !== null ? '„Polizei! Aufmachen!“' : 'Da vorne biegt die Streife ein!', 'bad');
@@ -484,6 +554,17 @@ export function StashGame(props: MinigameViewProps) {
     }
     if (f.endAt >= 0 && f.t >= f.endAt) finish();
   }, running);
+
+  // Meldungen verschwinden von selbst (sonst stand „Hier liegt nichts“ bis zur nächsten Meldung da).
+  useEffect(() => {
+    if (!hud.message || hud.done) return;
+    const key = hud.key;
+    const id = window.setTimeout(
+      () => setHud((h) => (h.key === key ? { ...h, message: null, tone: null } : h)),
+      MESSAGE_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [hud.key, hud.message, hud.done]);
 
   // Breite der Beschriftungen messen, wenn sich ihr Inhalt ändern kann (für das Ausweichen am Rand).
   useEffect(() => {

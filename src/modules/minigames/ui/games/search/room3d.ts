@@ -194,6 +194,55 @@ export interface RoomView {
   doorGap: MeshBasicMaterial | null;
   /** Die Wohnungstür (dreht am Ende auf). */
   door: Group | null;
+  /** Türen in andere Räume (nur im Flur; aus den Räumen geht es hinter dir zurück in den Flur). */
+  exits: RoomExit[];
+}
+
+/** Eine Tür in einen anderen Raum: Ziel, Mitte (für Beschriftung und Gang) und die Fläche, die Klicks fängt. */
+export interface RoomExit {
+  to: RoomId;
+  center: [number, number, number];
+  hit: Mesh;
+}
+
+/** Breite und Höhe einer Zimmertür. */
+const INNER_DOOR_W = 0.82;
+const INNER_DOOR_H = 2.0;
+
+/**
+ * Zimmertür in einer Wand, halb offen in den Flur: Zarge, Blatt mit Klinke, dahinter dunkel. x, z: Mitte der Öffnung
+ * an der Wand; turn: Drehung um y (0 Rückwand, π/2 linke Wand, −π/2 rechte Wand).
+ */
+function innerDoor(
+  parent: Group,
+  m: Materials,
+  leaf: MeshStandardMaterial,
+  dark: MeshBasicMaterial,
+  to: RoomId,
+  x: number,
+  z: number,
+  turn: number,
+): RoomExit {
+  const g = new Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = turn;
+  parent.add(g);
+  const W = INNER_DOOR_W;
+  const H = INNER_DOOR_H;
+  const hit = new Mesh(new PlaneGeometry(W, H), dark);
+  hit.position.set(0, H / 2, 0.006);
+  hit.userData.exit = to;
+  g.add(hit);
+  box(g, 0.06, H + 0.06, 0.08, m.white, -W / 2 - 0.03, (H + 0.06) / 2, 0.02);
+  box(g, 0.06, H + 0.06, 0.08, m.white, W / 2 + 0.03, (H + 0.06) / 2, 0.02);
+  box(g, W + 0.12, 0.06, 0.08, m.white, 0, H + 0.03, 0.02);
+  // Das Blatt steht halb offen in den Flur (an der linken Zarge angeschlagen).
+  const hingeL = hinge(g, -W / 2, 0, 0.04);
+  hingeL.rotation.y = -1.05;
+  box(hingeL, W - 0.02, H - 0.02, 0.04, leaf, W / 2, H / 2, 0);
+  cyl(hingeL, 0.02, 0.12, m.metal, W - 0.1, 1.0, 0.04).rotation.z = Math.PI / 2;
+  // Mitte der Öffnung, etwas vor der Wand (in Raumkoordinaten).
+  return { to, center: [x + 0.05 * Math.sin(turn), 1.25, z + 0.05 * Math.cos(turn)], hit };
 }
 
 export interface Materials {
@@ -358,6 +407,7 @@ export function buildRoom(id: RoomId, m: Materials): RoomView {
   }
   let doorGap: MeshBasicMaterial | null = null;
   let door: Group | null = null;
+  const exits: RoomExit[] = [];
   if (id === 'living') {
     box(group, 2.4, 0.42, 0.95, m.fabric, -0.2, 0.25, -1.55);
     box(group, 2.4, 0.6, 0.22, m.fabric, -0.2, 0.62, -1.95);
@@ -436,8 +486,17 @@ export function buildRoom(id: RoomId, m: Materials): RoomView {
     gap.position.set(0.6, 0.012, -HD + 0.08);
     group.add(gap);
     box(group, 0.8, 1.1, 0.03, m.metal, 1.6, 1.4, -HD + 0.02);
+    // Türen in die Zimmer (Auftrag 49): geradeaus das Schlafzimmer, links das Wohnzimmer, rechts Küche und Bad.
+    const leaf = new MeshStandardMaterial({ color: 0xe9e4da, roughness: 0.55 });
+    const dark = new MeshBasicMaterial({ color: 0x050506 });
+    exits.push(
+      innerDoor(group, m, leaf, dark, 'bedroom', -0.85, -HD + 0.001, 0),
+      innerDoor(group, m, leaf, dark, 'living', -HW + 0.001, -1.6, Math.PI / 2),
+      innerDoor(group, m, leaf, dark, 'kitchen', HW - 0.001, -1.65, -Math.PI / 2),
+      innerDoor(group, m, leaf, dark, 'bath', HW - 0.001, 0.4, -Math.PI / 2),
+    );
   }
-  return { id, group, windows, doorGap, door };
+  return { id, group, windows, doorGap, door, exits };
 }
 
 // ---------------------------------------------------------------------------------------------- Dinge
@@ -667,12 +726,13 @@ function buildItem(id: ItemId, g: Group, m: Materials): Built {
       return { lid, open: { axis: 'y', angle: 1.4 }, center: [HW - 0.1, 1.75, -1.0] };
     }
     case 'umbrella': {
-      cyl(g, 0.13, 0.5, m.black, -1.5, 0.25, -1.75);
-      const lid = hinge(g, -1.5, 0.45, -1.75);
+      // Unter dem Spiegel neben der Wohnungstür (links ist die Tür zum Schlafzimmer).
+      cyl(g, 0.13, 0.5, m.black, 1.45, 0.25, -1.8);
+      const lid = hinge(g, 1.45, 0.45, -1.8);
       cyl(lid, 0.02, 0.6, new MeshStandardMaterial({ color: 0x7a2a2a, roughness: 0.6 }), 0.03, 0.3, 0).rotation.z =
         0.12;
       cyl(lid, 0.02, 0.55, m.darkWood, -0.04, 0.28, 0.03).rotation.z = -0.1;
-      return { lid, open: { axis: 'z', angle: 0.5, lift: 0.2 }, center: [-1.5, 0.6, -1.75] };
+      return { lid, open: { axis: 'z', angle: 0.5, lift: 0.2 }, center: [1.45, 0.6, -1.8] };
     }
   }
 }

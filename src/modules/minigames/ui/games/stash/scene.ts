@@ -36,6 +36,15 @@ import {
   Vector3,
 } from 'three';
 import { drawGoodsGlyph, type GoodsPalette, packageLook } from '../../kit/goods';
+import {
+  type CrackLight,
+  createCrackLight,
+  ParticlePool,
+  POLICE_BLUE,
+  POLICE_RED,
+  policeBlink,
+  softDotTexture,
+} from '../../kit/indoor3d';
 import { buildCar, type CarParts, type DayPhase, disposeObject, setBlueLight } from '../../kit/scene3d';
 import type { Stage3d } from '../../kit/stage3d';
 import { buildFigure, type Figure, poseFigure } from './figure';
@@ -57,7 +66,6 @@ import {
   labelTexture,
   shutterTexture,
   skyTexture,
-  softDot,
   streetTexture,
   wallTexture,
   woodTexture,
@@ -75,6 +83,8 @@ export interface StashFx {
   clearT: number;
   /** Klopfen am Tor (Stoß, klingt ab). */
   knock: number;
+  /** Rammbock am Tor (Stoß, klingt ab): Das Tor beult sich nach innen. */
+  ram: number;
   /** Wackeln der Kamera (0 bis 1, klingt ab). */
   shake: number;
   /** Wie nah die Sirenen sind (0 bis 1). */
@@ -93,6 +103,12 @@ export interface ScreenPoint {
 export interface StashScene {
   update(state: StashState, fx: StashFx, dt: number): void;
   render(stage: Stage3d): void;
+  /**
+   * Shader vorab bauen, auch für den Schluss (Beamte mit Taschenlampen, Licht unter dem Tor): Sonst baut three.js
+   * alle Materialien neu, sobald die Lampen der Beamten dazukommen, und das Bild steht genau beim Reinstürmen. Dazu
+   * Geometrie und Texturen hochladen (sonst hakt es, wenn die Kamera zum ersten Mal Richtung Tor schwenkt).
+   */
+  warm(stage: Stage3d): void;
   resize(width: number, height: number): void;
   /** Wohin ein Tipp zeigt: Paket, Versteck oder ein Punkt auf der Strecke. */
   pick(px: number, py: number, state: StashState): StashGoal | null;
@@ -148,6 +164,9 @@ const LIGHT: Record<DayPhase, { sun: number; sunI: number; sky: number; ground: 
   night: { sun: 0x8aa4ff, sunI: 0.7, sky: 0x2c3a66, ground: 0x15161c, hemiI: 0.2, bg: 0x07080c },
 };
 
+/** Stärke des Aufhelllichts von vorn je Tageszeit. */
+const FILL: Record<DayPhase, number> = { day: 0.35, dusk: 0.5, night: 0.6 };
+
 function std(color: number, rough = 0.85, metal = 0.05): MeshStandardMaterial {
   return new MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 }
@@ -169,74 +188,6 @@ function box(
   mesh.receiveShadow = shadow === 'receive' || shadow === 'both';
   parent.add(mesh);
   return mesh;
-}
-
-// ---------------------------------------------------------------------------------------------- Partikel
-
-const PARTICLES = 220;
-
-class Particles {
-  readonly points: Points;
-  private readonly pos = new Float32Array(PARTICLES * 3);
-  private readonly col = new Float32Array(PARTICLES * 3);
-  private readonly vel = new Float32Array(PARTICLES * 3);
-  private readonly life = new Float32Array(PARTICLES);
-  private readonly max = new Float32Array(PARTICLES);
-  private readonly gravity = new Float32Array(PARTICLES);
-  private next = 0;
-  constructor(texture: CanvasTexture) {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(this.pos, 3));
-    geometry.setAttribute('color', new BufferAttribute(this.col, 3));
-    this.points = new Points(
-      geometry,
-      new PointsMaterial({
-        size: 0.14,
-        map: texture,
-        vertexColors: true,
-        transparent: true,
-        depthWrite: false,
-        blending: AdditiveBlending,
-      }),
-    );
-    this.points.frustumCulled = false;
-    for (let i = 0; i < PARTICLES; i++) this.pos[i * 3 + 1] = -99;
-  }
-  emit(x: number, y: number, z: number, n: number, color: Color, speed: number, gravity: number, life: number): void {
-    for (let k = 0; k < n; k++) {
-      const i = this.next;
-      this.next = (this.next + 1) % PARTICLES;
-      this.pos.set([x + (Math.random() - 0.5) * 0.2, y, z + (Math.random() - 0.5) * 0.2], i * 3);
-      const a = Math.random() * Math.PI * 2;
-      const up = 0.4 + Math.random() * 0.8;
-      this.vel.set([Math.cos(a) * speed * 0.7, up * speed, Math.sin(a) * speed * 0.4], i * 3);
-      this.col.set([color.r, color.g, color.b], i * 3);
-      this.life[i] = life * (0.6 + Math.random() * 0.6);
-      this.max[i] = this.life[i];
-      this.gravity[i] = gravity;
-    }
-  }
-  update(dt: number): void {
-    for (let i = 0; i < PARTICLES; i++) {
-      if (this.life[i] <= 0) continue;
-      this.life[i] -= dt;
-      const j = i * 3;
-      if (this.life[i] <= 0) {
-        this.pos[j + 1] = -99;
-        continue;
-      }
-      this.vel[j + 1] -= this.gravity[i] * dt;
-      this.pos[j] += this.vel[j] * dt;
-      this.pos[j + 1] = Math.max(0.02, this.pos[j + 1] + this.vel[j + 1] * dt);
-      this.pos[j + 2] += this.vel[j + 2] * dt;
-      const fade = this.life[i] / this.max[i];
-      this.col[j] *= 0.985 + 0.015 * fade;
-      this.col[j + 1] *= 0.985 + 0.015 * fade;
-      this.col[j + 2] *= 0.985 + 0.015 * fade;
-    }
-    this.points.geometry.attributes.position.needsUpdate = true;
-    this.points.geometry.attributes.color.needsUpdate = true;
-  }
 }
 
 // ---------------------------------------------------------------------------------------------- Verstecke
@@ -396,7 +347,7 @@ export function createStashScene(
     textures.push(t);
     return t;
   };
-  const dot = keep(softDot());
+  const dot = keep(softDotTexture());
   const L = setup.length;
   const gate = setup.gate;
   const inside = gate ?? L;
@@ -441,6 +392,11 @@ export function createStashScene(
   const policeIn = new PointLight(0x3a7bff, 0, 14, 1.3);
   policeIn.position.set(warehouse ? (gate as number) - 2.5 : L - 3, 3.4, -1.2);
   scene.add(policeIn);
+  // Aufhelllicht von vorn (von der Kamera): Im Schnitt sieht man die Seite, die der Sonne abgewandt ist; ohne
+  // dieses Licht wären Wagen, Figur und Regale nachts nur Umrisse.
+  const fill = new DirectionalLight(phase === 'night' ? 0xb8c6ff : 0xfff2e0, FILL[phase]);
+  fill.position.set(0, 4, 20);
+  scene.add(fill);
   // Gegenlicht von hinten oben: Kanten der Figuren heben sich ab.
   const rim = new DirectionalLight(0xa9c0ff, phase === 'night' ? 0.9 : 0.6);
   rim.position.set(6, 9, -14);
@@ -685,7 +641,7 @@ export function createStashScene(
 
   // ------------------------------------------------------------ Tor und Straße
   let shutter: Mesh | null = null;
-  let gapGlow: Mesh | null = null;
+  let gapGlow: CrackLight | null = null;
   let ourCar: CarParts | null = null;
   let trunkLid: Group | null = null;
   const copCar = buildCar('police', 0xe8ecef);
@@ -718,20 +674,11 @@ export function createStashScene(
     shutter.scale.y = 0.02;
     shutter.castShadow = true;
     scene.add(shutter);
-    gapGlow = new Mesh(
-      new PlaneGeometry(2.6, FRONT - BACK),
-      new MeshBasicMaterial({
-        map: dot,
-        color: 0x3a7bff,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: AdditiveBlending,
-      }),
-    );
-    gapGlow.rotation.x = -Math.PI / 2;
-    gapGlow.position.set(g - 0.9, 0.01, (FRONT + BACK) / 2);
-    scene.add(gapGlow);
+    // Licht von draußen unter dem Tor (Blaulicht, sobald es zu ist).
+    gapGlow = createCrackLight(FRONT - BACK, 2.2);
+    gapGlow.mesh.rotation.z = -Math.PI / 2;
+    gapGlow.mesh.position.set(g - 1.1, 0.012, (FRONT + BACK) / 2);
+    scene.add(gapGlow.mesh);
     // Draußen: Asphalt, Gehweg, Hauswand gegenüber, Laterne.
     const outside = L - g + 10;
     const asphalt = keep(streetTexture('asphalt'));
@@ -913,7 +860,7 @@ export function createStashScene(
     copLights.push(torch);
   }
 
-  const particles = new Particles(dot);
+  const particles = new ParticlePool(dot, { count: 220, size: 0.14, floor: 0.02 });
   scene.add(particles.points);
   const stowLight = new PointLight(0xffc94a, 0, 4, 1.5);
   scene.add(stowLight);
@@ -941,8 +888,9 @@ export function createStashScene(
     height = Math.max(1, h);
     const aspect = width / height;
     camera.aspect = aspect;
-    // Hochkant (Handy) sieht man weniger Strecke, dafür größer; breit bis zu 19 m.
-    viewW = aspect < 0.6 ? 6.4 : aspect < 0.8 ? 7.4 : aspect < 1.2 ? 9 : Math.min(16, 5 + aspect * 4.4);
+    // Hochkant (Handy) sieht man weniger Strecke, dafür größer (die Leiste oben zeigt die ganze Strecke); breit bis
+    // zu 19 m.
+    viewW = aspect < 0.6 ? 5.4 : aspect < 0.8 ? 6.8 : aspect < 1.2 ? 9 : Math.min(16, 5 + aspect * 4.4);
     const tanHalf = Math.tan((camera.fov * Math.PI) / 360);
     const forWidth = viewW / 2 / (tanHalf * aspect);
     const forHeight = 3.3 / tanHalf;
@@ -994,6 +942,16 @@ export function createStashScene(
     climb += (wantClimb - climb) * Math.min(1, dt * 16);
     const strain = state.carry !== null ? (setup.packages[state.carry]?.size ?? 1) / 3 : 0;
     poseFigure(me, { stride, run, carry: carryK, bend, reach, strain });
+    // Leben im Stand: atmen (schneller, je näher die Streife), Gewicht verlagern, beim Klopfen zum Tor schauen.
+    if (!reduced && !action && speed < 0.3 && fx.clearT < 0) {
+      const pace = 1.6 + 2.4 * fx.alarm;
+      me.torso.rotation.x += Math.sin(t * pace) * 0.025;
+      me.torso.rotation.z = Math.sin(t * 0.7) * 0.03;
+      me.head.rotation.y = fx.knock > 0.2 ? -0.6 * state.facing : Math.sin(t * 0.45) * 0.25 * fx.alarm;
+    } else {
+      me.torso.rotation.z = 0;
+      me.head.rotation.y = 0;
+    }
     // Zur Seite drehen, beim Verstauen bzw. Greifen zur Wand.
     const facingWall = (stowHide && stowHide.id !== 'drain' && stowHide.id !== 'floor') || (pickPkg && action);
     const wantTurn = facingWall ? Math.PI : state.facing > 0 ? Math.PI / 2 - 0.25 : -Math.PI / 2 + 0.25;
@@ -1080,28 +1038,31 @@ export function createStashScene(
     }
 
     // --- Tor, Streife, Blaulicht, Klopfen, Reinstürmen.
-    const blink = (t * 2.2) % 1 < 0.5;
+    const blink = policeBlink(t);
     const copOn = fx.closedT >= 0 || fx.breachT >= 0 ? 1 : Math.max(0, (fx.alarm - 0.55) / 0.45) * 0.5;
     if (shutter && gate !== null) {
       const down =
         fx.breachT >= 0 ? Math.max(0, 1 - fx.breachT * 3) : fx.closedT >= 0 ? Math.min(1, fx.closedT / 0.35) : 0;
       shutter.scale.y = Math.max(0.02, down);
-      shutter.position.x = gate + (fx.knock > 0 ? Math.sin(t * 90) * 0.03 * fx.knock : 0);
+      // Beim Rammen beult es sich nach innen (zur Halle) und federt zurück.
+      const bulge = fx.ram > 0 ? -0.16 * fx.ram ** 2 : 0;
+      shutter.position.x = gate + bulge + (fx.knock > 0 ? Math.sin(t * 90) * 0.03 * fx.knock : 0);
+      shutter.scale.z = 1 - 0.04 * fx.ram;
     }
     if (gapGlow) {
-      const mat = gapGlow.material as MeshBasicMaterial;
-      mat.opacity = fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.55 : 0.18) : 0;
-      mat.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+      // Licht unter dem Tor; bei jedem Stoß des Rammbocks springt der Spalt auf.
+      const leak = fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.75 : 0.3) + 0.9 * fx.ram : 0;
+      gapGlow.set(leak, fx.ram > 0.5 ? 0xe8f0ff : blink ? POLICE_BLUE : POLICE_RED);
     }
     police.intensity = copOn * (blink ? 26 : 18) * (fx.closedT >= 0 ? 1 : 0.6);
-    police.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+    police.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
     // Das Blaulicht fällt durch die Fenster dort, wo du gerade bist.
     policeIn.position.x = camX + (blink ? 2 : -2);
     policeIn.intensity = copOn * (blink ? 34 : 18) * (fx.breachT >= 0 ? 0.5 : 1);
-    policeIn.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+    policeIn.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
     for (const w of windows) {
       if (copOn > 0) {
-        w.emissive.setHex(blink ? 0x3a7bff : 0xff4a3a);
+        w.emissive.setHex(blink ? POLICE_BLUE : POLICE_RED);
         w.emissiveIntensity = 0.6 + 1.6 * copOn * (blink ? 1 : 0.6);
       } else {
         w.emissive.setHex(light.sun);
@@ -1152,7 +1113,7 @@ export function createStashScene(
       }
       pos.needsUpdate = true;
     }
-    if (speed > 3.5 && Math.random() < dt * 8) particles.emit(state.x, 0.05, 0, 1, new Color(0x5a5248), 0.5, 1.2, 0.5);
+    if (speed > 3.5 && Math.random() < dt * 8) particles.emit(state.x, 0.05, 0, 1, 0x5a5248, 0.5, 1.2, 0.5);
 
     // --- Kamera: folgt dir mit Vorlauf in Blickrichtung, bleibt in der Szene; wackelt bei Stößen.
     const lead = state.facing * Math.min(1.6, viewW * 0.12);
@@ -1166,12 +1127,15 @@ export function createStashScene(
       wantX += (door - wantX) * ease(Math.min(1, fx.breachT * 1.6));
     }
     camX += (wantX - camX) * Math.min(1, dt * (fx.breachT >= 0 ? 5 : 3.2));
-    const wantY = 2.25 + climb * 0.6;
+    // Hochkant tiefer: Dach und Himmel nehmen sonst das obere Drittel ein.
+    const wantY = (width / height < 0.8 ? 1.75 : 2.25) + climb * 0.6;
     camY += (wantY - camY) * Math.min(1, dt * 4);
     const shake = reduced ? fx.shake * 0.2 : fx.shake;
     const sx = shake > 0.01 ? Math.sin(t * 71) * 0.12 * shake : 0;
     const sy = shake > 0.01 ? Math.cos(t * 53) * 0.08 * shake : 0;
-    camera.position.set(camX + sx, camY + 2.1 + sy, dist * 0.98);
+    // Zum Schluss rückt die Kamera näher (Enge), bis sie reinstürmen.
+    const tight = fx.breachT >= 0 || fx.clearT >= 0 ? 0 : Math.max(0, (fx.alarm - 0.78) / 0.22);
+    camera.position.set(camX + sx, camY + 2.1 + sy, dist * (0.98 - 0.12 * tight));
     camera.lookAt(camX + sx * 0.5, camY + 0.5, -0.7);
     camera.updateMatrixWorld();
     // Schatten folgen der Kamera.
@@ -1242,21 +1206,44 @@ export function createStashScene(
     if (kind === 'stow') {
       stowGlow = 1;
       stowLight.position.set(x, y + 0.6, z + 0.6);
-      particles.emit(x, y + 0.2, z + 0.3, n, new Color(0xffd36a), 1.8, 3, 0.7);
+      particles.emit(x, y + 0.2, z + 0.3, n, 0xffd36a, 1.8, 3, 0.7);
     } else if (kind === 'splash') {
-      particles.emit(x, 0.05, z, n + 10, new Color(0x7fb8ff), 2.4, 7, 0.8);
+      particles.emit(x, 0.05, z, n + 10, 0x7fb8ff, 2.4, 7, 0.8);
     } else if (kind === 'refuse') {
-      particles.emit(x, y + 0.3, z + 0.3, Math.round(n / 2), new Color(0xff4a3a), 1.2, 1, 0.45);
+      particles.emit(x, y + 0.3, z + 0.3, Math.round(n / 2), 0xff4a3a, 1.2, 1, 0.45);
     } else if (kind === 'pick') {
-      particles.emit(x, y, z, Math.round(n / 3), new Color(0xbfae94), 0.9, 2, 0.5);
+      particles.emit(x, y, z, Math.round(n / 3), 0xbfae94, 0.9, 2, 0.5);
     } else {
-      particles.emit(x, 0.05, z, n, new Color(0x8a7f70), 1.4, 1.5, 0.9);
+      // Staub, z.B. oben vom Tor, wenn der Rammbock trifft.
+      particles.emit(x, y, z, n, 0x8a7f70, 1.4, 1.5, 0.9);
     }
   };
 
   return {
     update,
     render: (stage) => stage.renderer.render(scene, camera),
+    warm: (stage) => {
+      // Einmal alles zeichnen, mit einer Kamera, die die ganze Strecke sieht: lädt Geometrie und Texturen hoch und baut
+      // die Shader (auch für den Schluss). Das nächste Bild zeichnet ohnehin neu.
+      for (const cop of cops) cop.root.visible = true;
+      if (gapGlow) gapGlow.mesh.visible = true;
+      const fov = camera.fov;
+      camera.fov = 70;
+      camera.updateProjectionMatrix();
+      // So weit weg, dass die ganze Strecke samt Straße auch hochkant ins Bild passt.
+      const far = (L / 2 + 6) / (Math.tan((35 * Math.PI) / 180) * Math.min(1, camera.aspect));
+      camera.far = far + 60;
+      camera.position.set(L / 2 + 2, 3, far);
+      camera.lookAt(L / 2 + 2, 1, 0);
+      camera.updateMatrixWorld();
+      stage.renderer.render(scene, camera);
+      for (const cop of cops) cop.root.visible = false;
+      if (gapGlow) gapGlow.mesh.visible = false;
+      stage.renderer.render(scene, camera);
+      camera.fov = fov;
+      camera.far = dist + 60;
+      camera.updateProjectionMatrix();
+    },
     resize,
     pick,
     hideScreen,
@@ -1269,6 +1256,7 @@ export function createStashScene(
       proxyMat.dispose();
       for (const t of textures) t.dispose();
       particles.points.geometry.dispose();
+      gapGlow?.dispose();
     },
   };
 }

@@ -29,9 +29,9 @@ export const REACH = 0.75;
 export const STREET_CLOSES_BEFORE = 7;
 /** Spielzeit in Sekunden: leicht bzw. schwer. */
 export const DURATION_EASY = 34;
-export const DURATION_HARD = 25;
+export const DURATION_HARD = 23;
 /** Am Spot ist die Strecke kurz: so viel der Zeit im Lager. */
-export const STREET_TIME = 0.7;
+export const STREET_TIME = 0.56;
 
 export type StashSetting = 'warehouse' | 'street';
 export type HideId = 'vault' | 'floor' | 'vent' | 'trunk' | 'drain' | 'planter' | 'mailbox' | 'bin';
@@ -205,7 +205,7 @@ function warehouseHides(vault: number, cover: number): StashHide[] {
       w: 1.5,
       y: 0,
       h: 0.15,
-      capacity: [3, 4, 6][Math.min(2, Math.max(0, cover))],
+      capacity: [4, 5, 6][Math.min(2, Math.max(0, cover))],
       maxSize: 2,
       stow: 1,
       wet: false,
@@ -330,7 +330,7 @@ function slotsFor(setting: StashSetting): { x: number; shelf: Shelf }[] {
 
 /**
  * Szene aus Seed, Schwierigkeit und Lage. Mehr Pakete und weniger Zeit, je schwerer: DURATION_EASY bis DURATION_HARD
- * Sekunden (am Spot STREET_TIME davon), im Lager 4 bis 8 Pakete, am Spot 3 bis 5. Jede Partie wird nach ihrem Wert auf Pakete verteilt (mindestens
+ * Sekunden (am Spot STREET_TIME davon), im Lager 4 bis 9 Pakete, am Spot 3 bis 6. Jede Partie wird nach ihrem Wert auf Pakete verteilt (mindestens
  * eins), Schwarzgeld ist ein eigenes Bündel. Größe nach Rang im Gewicht (schwerstes Drittel groß, leichtestes klein).
  * Große Pakete liegen nie oben im Regal.
  */
@@ -339,7 +339,7 @@ export function createStash(seed: number, difficulty: number, input: StashInput)
   const d = clamp01(difficulty);
   const setting: StashSetting = input.setting === 'street' ? 'street' : 'warehouse';
   const maxPackages = setting === 'warehouse' ? 9 : 6;
-  const target = setting === 'warehouse' ? Math.round(4 + 4 * d) : Math.round(3 + 2 * d);
+  const target = setting === 'warehouse' ? Math.round(4 + 5 * d) : Math.round(3 + 3 * d);
   const lots = input.lots.filter((l) => l.value > 0 && l.amount > 0);
   const money = Math.max(0, Math.round(input.money || 0));
   const total = lots.reduce((s, l) => s + l.value, 0) + money;
