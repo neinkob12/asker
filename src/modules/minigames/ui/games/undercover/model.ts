@@ -43,7 +43,7 @@ export interface Person {
   shoes: 'new' | 'worn' | 'plain';
   /** Ab wann (Sekunden seit die Karte offen ist) ein Merkmal zu sehen ist. */
   reveal: Record<string, number>;
-  /** So lange bleibt diese Karte (Auftrag 48, Teil E: wird im Lauf der Schicht kürzer). */
+  /** So lange bleibt diese Karte (Auftrag 49, Teil E: wird im Lauf der Schicht kürzer). */
   seconds: number;
   productId: string;
   amount: number;
@@ -52,7 +52,7 @@ export interface Person {
 
 export interface Shift {
   people: Person[];
-  /** Sekunden für die erste Karte (danach je Person `seconds`). */
+  /** Sekunden je Karte zu Beginn der Schicht (cardSeconds); jede Person hat ihre eigene Zeit (`seconds`). */
   perCard: number;
   /** Pause zwischen zwei Karten (der Nächste kommt heran). */
   gap: number;
@@ -91,12 +91,14 @@ export function revealMargin(difficulty: number): number {
 export const LINE_SECONDS = 0.8;
 
 /**
- * Tempo steigt (Auftrag 48, Teil E): Die letzte Karte hat nur noch so viel der Zeit der ersten (leicht bis schwer),
+ * Tempo steigt (Auftrag 49, Teil E): Die letzte Karte hat nur noch so viel der Zeit der ersten (leicht bis schwer),
  * dazwischen gleichmäßig. Gemessen in model.balance.test.ts.
  */
 export const TEMPO_END = { easy: 0.85, hard: 0.6 };
 /** Wie stark sich Merkmale schwer zum Ende der Karte hin zeigen (0: gleich verteilt). */
 export const REVEAL_LATE = 0.6;
+/** Die erste Karte (immer ein echter Kunde) bleibt länger: zum Reinkommen, ohne gleich „zu lange gezögert“. */
+export const FIRST_CARD = 1.5;
 /** Bis der Nächste heran ist (Sekunden). */
 export const NEXT_GAP = 0.8;
 
@@ -247,7 +249,7 @@ export function createShift(seed: number, difficulty: number, input: UndercoverI
       unit: good.unit,
     });
   }
-  return { people, perCard: people[0]?.seconds ?? cardSeconds(d), gap: NEXT_GAP, zivis: input.zivis };
+  return { people, perCard: cardSeconds(d), gap: NEXT_GAP, zivis: input.zivis };
 }
 
 /** Zeit der Karte an Stelle index von n: von cardSeconds bis TEMPO_END davon. */
@@ -257,7 +259,8 @@ export function cardSecondsAt(difficulty: number, index: number, n: number): num
   const k = n > 1 ? index / (n - 1) : 0;
   // Nie so kurz, dass nach dem Satz keine Luft mehr bliebe.
   const floor = Math.ceil((LINE_SECONDS + 0.2 + revealMargin(d)) * 10) / 10;
-  return Math.max(floor, Math.round(cardSeconds(d) * (1 - (1 - end) * k) * 10) / 10);
+  const first = index === 0 ? FIRST_CARD : 1;
+  return Math.max(floor, Math.round(cardSeconds(d) * first * (1 - (1 - end) * k) * 10) / 10);
 }
 
 /** Zeit der Karte, die gerade dran ist. */
@@ -281,7 +284,13 @@ export function isRevealed(person: Person, id: string, elapsed: number): boolean
 }
 
 export function initShift(shift: Shift): ShiftState {
-  return { index: 0, cardLeft: shift.perCard, gapLeft: 0, decisions: [], done: shift.people.length === 0 };
+  return {
+    index: 0,
+    cardLeft: shift.people[0]?.seconds ?? shift.perCard,
+    gapLeft: 0,
+    decisions: [],
+    done: shift.people.length === 0,
+  };
 }
 
 /** Was eine Entscheidung bei dieser Person bedeutet. */

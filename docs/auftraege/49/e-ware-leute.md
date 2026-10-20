@@ -1,8 +1,9 @@
-# Auftrag 48, Teil E: Container packen, Zivi oder Kunde, Bewerbungsgespräch
+# Auftrag 49, Teil E: Container packen, Zivi oder Kunde, Bewerbungsgespräch
 
 Branch `claude/auftrag-48-ware-leute`. Ordner: `minigames/ui/games/container/`, `games/undercover/`,
 `games/interview/`, `minigames/kinds/container.ts`, `kinds/undercover.ts`, `kinds/interview.ts`. Grundlage ist der
-Stand nach der ersten Runde von Auftrag 48 (`48-minispiele-schreibtisch.md`, `-kampf.md`, `-gespraeche.md`).
+Stand nach Auftrag 48 in `main` (`48-minispiele-schreibtisch.md`, `-kampf.md`, `-gespraeche.md`); Plan der zweiten
+Runde in `49-minispiele-runde-2.md`.
 
 ## Bestandsaufnahme (vorher)
 
@@ -66,7 +67,12 @@ Software-Rendering, ganze Seite mit Karte; Abstand zweier Bilder in ms, Mittel /
   angespannt beisammen, macht zu: verschränkt), Gesten mit Händen (Finger trommeln beim Zappeln, Schulterzucken,
   Vorbeugen; beim Kratzen und Schluck fehlt die Hand, die oben am Porträt ist). Die Person sitzt hinter dem Tisch
   (Porträt unter der Tischkante abgeschnitten, `--iv-under`). Handy: Akte und Gespräch unter den Händen, keine Lücke.
-- **Schwierigkeit:** Zeichenfenster schrumpft schon zur Mitte (`TELL_CURVE` 0,5, `TELL_WINDOW.hard` 0,55), auf schwer
+- **Schweigen aushalten** (zweite Stufe des Drucks, „Offen“ aus Auftrag 48): Ist eine Antwort, die etwas verrät, zu
+  Ende und die Person noch angespannt, kommt eine Pause (`SILENCE.window` 2,4 s, Hinweis „Schweigen … Blick halten“).
+  Hält man den Blick darin `SILENCE.hold` (1,1 s) in der Zone, rutscht ein Nachsatz heraus (`AFTERWORDS`, gesprochen,
+  kursiv in der Blase) mit einem Zeichen mehr (`Cue.bonus`: zählt als Treffer, nicht zu den nötigen). Eigener
+  Zufallsstrom je Frage, Antworten und Zeichen bleiben gleich.
+- **Schwierigkeit:** Zeichenfenster schrumpft schon zur Mitte (`TELL_CURVE` 0,45, `TELL_WINDOW.hard` 0,5), auf schwer
   bis zu vier Gesten (`DECOYS.hard`).
 - **Leistung:** kein Filter mehr auf dem atmenden Porträt (Schatten als eigene Fläche), Rauch ohne `blur`, Lampe ohne
   `brightness`-Filter, `--iv-p` nur in 2-%-Stufen.
@@ -80,7 +86,9 @@ Software-Rendering, ganze Seite mit Karte; Abstand zweier Bilder in ms, Mittel /
   (`TellShow` um `beer`, `phone`, `coins`, `bag`, `dog`, `scooter`, `feet`, `shaky`; die Würfe bleiben gleich).
 - **Tempo steigt:** Jede Person hat `seconds`; die letzte Karte hat nur noch `TEMPO_END` (85 % leicht bis 62 % schwer)
   der ersten (`cardSecondsAt`, `currentSeconds`). Luft nach dem letzten Merkmal nach Schwierigkeit (`revealMargin`,
-  1,8 bis 1,1 s), schwer zeigt sich das meiste später (`REVEAL_LATE`). Der Nächste braucht `NEXT_GAP` (0,8 s) zum
+  1,8 bis 1,1 s), schwer zeigt sich das meiste später (`REVEAL_LATE`). Die erste Karte (immer ein echter Kunde) hat
+  `FIRST_CARD` (1,5-mal) so viel Zeit, damit „Zu lange gezögert“ nicht gleich am Anfang kommt (Befund der steuernden
+  Session). Der Nächste braucht `NEXT_GAP` (0,8 s) zum
   Herankommen. HUD zeigt „Voller“, sobald es schneller wird.
 - **Straße gemalt:** Häuser aus Backstein und Putz mit Gesims, Band und Sockel, Fenster mit Rahmen, Sprossen, Bank und
   Vorhang (hell warm, dunkel mit Spiegelung), Kiosk mit Markise, Fugen im Gehweg, Körnung. Was sich bewegt (Passanten,
@@ -103,8 +111,8 @@ Software-Rendering, ganze Seite mit Karte; Abstand zweier Bilder in ms, Mittel /
 | Spiel | gut 0,2 / 0,5 / 0,9 | schwach 0,2 / 0,5 / 0,9 | keine Eingabe | Dauer |
 | --- | --- | --- | --- | --- |
 | Container | 100 / 94 / 78 % (vorher 100 / 100 / 100) | 100 / 50 / 7 % (vorher 100 / 100 / 92) | 0 % | Zeit des Containers |
-| Zivi oder Kunde | 94 / 98 / 86 % (vorher 94 / 98 / 95) | 63 / 33 / 7 % (vorher 28 / 34 / 39) | 0 % | 19 bis 21 s |
-| Bewerbungsgespräch | 100 / 98 / 68 % (vorher 100 / 100 / 98) | 95 / 58 / 30 % (vorher 98 / 98 / 47) | 0 % (vorher 47) | 38 bis 43 s |
+| Zivi oder Kunde | 94 / 98 / 86 % (vorher 94 / 98 / 95) | 63 / 33 / 7 % (vorher 28 / 34 / 39) | 0 % | 20 bis 22 s |
+| Bewerbungsgespräch | 100 / 100 / 73 % (vorher 100 / 100 / 98) | 98 / 57 / 27 % (vorher 98 / 98 / 47) | 0 % (vorher 47) | 41 bis 47 s |
 
 Zivi oder Kunde bleibt kurz: police schickt 6 bis 10 Leute; länger machen hieße mehr Leute, das gehört police.
 
@@ -122,13 +130,13 @@ Bildrate (Handy, CPU 4×, Software-Rendering, Mittel / p95 / längstes in ms):
 - Container: Bei gleicher Packweise ist der Score jetzt auf mittel und schwer niedriger (schärferer Scanner); das
   Zollrisiko in `trade/packing.ts` steigt dadurch für mittelmäßiges Packen.
 - Bewerbungsgespräch: Wer gar nicht drückt, deckt nichts mehr auf (vorher galten ruhige Antworten als richtig).
+- Pause-Knopf (`<PauseButton />` aus `kit/pause.tsx`, PR #142) setze ich in die HUD-Leisten, sobald #142 in `main` ist.
 - `npm run e2e` läuft (mit Minispielen aus prüft er nur, dass kein Gespräch startet).
 - CLAUDE.md / Architektur: Stellschrauben oben (`TENSE_NEEDED`, `TELL_CURVE`, `TEMPO_END`, `revealMargin`,
-  `REVEAL_LATE`, `NEXT_GAP`, `SNUG_AT`, `SCANNER_STRENGTH`, `DIFFICULTY_CURVE`), Simulationen in
+  `REVEAL_LATE`, `NEXT_GAP`, `FIRST_CARD`, `SILENCE`, `SNUG_AT`, `SCANNER_STRENGTH`, `DIFFICULTY_CURVE`), Simulationen in
   `model.balance.test.ts` je Spiel (`BALANCE_REPORT=1` druckt die Tabelle).
 
 ## Offen
 
-- Bewerbungsgespräch: „Schweigen aushalten“ (nach der Antwort weiter Blick halten, dann ein Nachsatz mit Zeichen).
 - Zivi oder Kunde: Figur verlässt die Karte nach dem Wischen zu Fuß (geht zum Auto bzw. mit der Ware weg).
 - Container: Bildrate am echten Handy messen; headless ist sie von der Seite dahinter bestimmt.

@@ -1,4 +1,4 @@
-// Container packen (Auftrag 48, Teil E): Schwierigkeit als Simulation. Ein Spieler legt Teil für Teil ab und braucht
+// Container packen (Auftrag 49, Teil E): Schwierigkeit als Simulation. Ein Spieler legt Teil für Teil ab und braucht
 // für jedes `pace` Sekunden (wählen, drehen, ziehen). Er sieht die guten Plätze, nimmt aber nicht immer den besten:
 // `sloppy` ist der Anteil der Züge, bei denen er irgendeinen aus den besseren `pool` nimmt. Erst die Ware, dann
 // Deckladung, solange sie hilft. Geschafft ab Score 0,5 (winAt der Art).
@@ -112,7 +112,7 @@ describe('Container packen: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, goodScore: good.mean, weak: weak.rate, weakScore: weak.mean, none: none.rate };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
-    // Gemessen (Auftrag 48, Teil E; vorher gut 100 / 100 / 100 %, schwach 100 / 100 / 92 %):
+    // Gemessen (Auftrag 49, Teil E; vorher gut 100 / 100 / 100 %, schwach 100 / 100 / 92 %):
     // gut 100 / 94 / 78 % (Score 0,96 / 0,78 / 0,61), schwach 100 / 50 / 7 %, ohne Eingabe nie.
     const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);

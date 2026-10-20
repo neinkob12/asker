@@ -449,7 +449,7 @@ export function UndercoverGame(props: MinigameViewProps) {
 
   const [index, setIndex] = useState(0);
   const [live, setLive] = useState(true);
-  const [left, setLeft] = useState(shift.perCard);
+  const [left, setLeft] = useState(shift.people[0]?.seconds ?? shift.perCard);
   const [tally, setTally] = useState<ShiftOutcome>(() => shiftOutcome(shift, game.current));
   const [flyers, setFlyers] = useState<Flyer[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);

@@ -45,7 +45,7 @@ export interface PackSetup {
   clusterMax: number;
   duration: number;
   /**
-   * Wie scharf der Scanner Lücken und Blöcke sieht (Auftrag 48, Teil E): Faktor auf EXPOSURE.gap und .cluster, leicht
+   * Wie scharf der Scanner Lücken und Blöcke sieht (Auftrag 49, Teil E): Faktor auf EXPOSURE.gap und .cluster, leicht
    * unter 1, schwer darüber. Fehlt er (alte Aufbauten, Tests), gilt 1.
    */
   scanner?: number;
@@ -641,7 +641,7 @@ export function hiddenGoods(setup: PackSetup, state: PackState, analysis: PackAn
 }
 
 /**
- * Wie dicht ein abgelegtes Teil sitzt (Auftrag 48, Teil E, nur für Lob und Serie): Anteil seiner Außenkanten, die an
+ * Wie dicht ein abgelegtes Teil sitzt (Auftrag 49, Teil E, nur für Lob und Serie): Anteil seiner Außenkanten, die an
  * einer Wand oder einem anderen Teil liegen (0 bis 1). Ab SNUG_AT heißt es „Passt!“.
  */
 export function snugness(setup: PackSetup, state: PackState, pieceId: number): number {

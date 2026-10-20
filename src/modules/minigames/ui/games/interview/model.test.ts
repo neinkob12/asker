@@ -375,3 +375,40 @@ describe('Bewerbungsgespräch: Werte fürs Ergebnis', () => {
     expect(stats[0].tone).toBe('good');
   });
 });
+
+describe('Bewerbungsgespräch: Schweigen aushalten', () => {
+  /** Eine Runde mit einer Antwort, die etwas verrät; Druck nach Wunsch bis zum Ende. */
+  function silentRound(keep: boolean) {
+    const setup = createInterview(4, 0.5, { traits: ['drinker'] });
+    const s = initInterview(setup);
+    const index = s.offer.findIndex((id) => questionById(id)?.probes.includes('drinker'));
+    choose(setup, s, Math.max(0, index));
+    const signals = step(setup, s, 40, () => {
+      if (keep) keepPressure(setup, s);
+      else {
+        const round = currentRound(setup, s);
+        // Bis zum Ende der Antwort halten, danach loslassen.
+        if (round && s.phase === 'answer' && s.t < round.duration) keepPressure(setup, s);
+        else press(s, false);
+      }
+    });
+    return { setup, s, signals };
+  }
+
+  it('wer nach der Antwort den Blick hält, bekommt den Nachsatz mit einem Zeichen mehr', () => {
+    const { s, signals } = silentRound(true);
+    expect(signals).toContain('silence');
+    expect(signals).toContain('afterword');
+    const round = s.rounds[0];
+    expect(round.afterword).not.toBeNull();
+    expect(round.cues.filter((c) => c.bonus)).toHaveLength(1);
+    // Das Zeichen im Nachsatz zählt nicht zu den nötigen.
+    expect(s.results[0].tells).toBe(round.cues.filter((c) => c.tell && !c.bonus).length);
+  });
+
+  it('wer loslässt, bekommt keinen Nachsatz', () => {
+    const { s, signals } = silentRound(false);
+    expect(signals).not.toContain('afterword');
+    expect(s.rounds[0].cues.some((c) => c.bonus)).toBe(false);
+  });
+});

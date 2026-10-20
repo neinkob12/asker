@@ -163,6 +163,9 @@ export function InterviewGame(props: MinigameViewProps) {
   const [hud, setHud] = useState<Hud>(() => snapshot(game.current as InterviewState, 'calm', null));
   const [cue, setCue] = useState<{ kind: CueKind; faint: boolean; key: number } | null>(null);
   const [closedLine, setClosedLine] = useState<string | null>(null);
+  /** Schweigen nach der Antwort läuft; Nachsatz, der dabei herausrutschte (Auftrag 49, Teil E). */
+  const [silence, setSilence] = useState(false);
+  const [afterword, setAfterword] = useState<string | null>(null);
 
   const state = () => game.current as InterviewState;
 
@@ -225,7 +228,23 @@ export function InterviewGame(props: MinigameViewProps) {
         }
         case 'answering': {
           const round = currentRound(setup, s);
+          setAfterword(null);
+          setSilence(false);
           if (round) speak(round.answer);
+          break;
+        }
+        case 'silence':
+          setSilence(true);
+          audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.25 });
+          haptic('light');
+          break;
+        case 'afterword': {
+          const round = currentRound(setup, s);
+          if (round?.afterword) {
+            setAfterword(round.afterword.text);
+            speak(round.afterword.text);
+          }
+          haptic('medium');
           break;
         }
         case 'tense':
@@ -246,6 +265,7 @@ export function InterviewGame(props: MinigameViewProps) {
           audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.35 });
           break;
         case 'verdict': {
+          setSilence(false);
           const last = s.results[s.results.length - 1];
           if (!last?.closed) stopSpeech();
           if (last?.correct) {
@@ -508,8 +528,8 @@ export function InterviewGame(props: MinigameViewProps) {
           {cue && <TellMarks key={cue.key} kind={cue.kind} look={look} />}
         </button>
         {listening && (
-          <span class="iv-zone" aria-live="polite">
-            {ZONE_TEXT[hud.zone]}
+          <span class={`iv-zone${silence ? ' is-silence' : ''}`} aria-live="polite">
+            {silence && !afterword ? 'Schweigen … Blick halten' : ZONE_TEXT[hud.zone]}
           </span>
         )}
         {hud.flash && (
@@ -605,7 +625,10 @@ export function InterviewGame(props: MinigameViewProps) {
                   {closedLine ? (
                     <span class="iv-bubble__text">{closedLine}</span>
                   ) : (
-                    <span ref={typed} class="iv-bubble__text" />
+                    <span class="iv-bubble__text">
+                      <span ref={typed} />
+                      {afterword && <span class="iv-bubble__after"> {afterword}</span>}
+                    </span>
                   )}
                   {hud.phase === 'answer' && <span class="iv-bubble__caret" />}
                 </p>

@@ -3,7 +3,7 @@
 // sprechen. Jedes Merkmal steht als Text auf der Karte; die mit `show` sieht man auch im Bild (seit Teil E fast alle).
 
 /** Wo man ein Merkmal im Bild sieht: Ohr, Kragen und Kopfhörer am Kopf, Gürtel, Schuhe, Hände und was jemand dabei
- * hat an der Figur (Auftrag 48, Teil E: ganze Figur), das Auto gegenüber auf der Bühne, der Satz in der Sprechblase. */
+ * hat an der Figur (Auftrag 49, Teil E: ganze Figur), das Auto gegenüber auf der Bühne, der Satz in der Sprechblase. */
 export type TellShow =
   | 'ear'
   | 'collar'

@@ -1,4 +1,4 @@
-// Bewerbungsgespräch (Auftrag 48, Teil E): Unterarme und Hände der Person auf dem Tisch, dazu ihr Becher. Die Haltung
+// Bewerbungsgespräch (Auftrag 49, Teil E): Unterarme und Hände der Person auf dem Tisch, dazu ihr Becher. Die Haltung
 // zeigt den Druck (locker auseinander, angespannt näher beisammen, macht zu: Arme verschränkt) und die Gesten: Finger
 // trommeln (Zappeln), Schulterzucken (Hände hoch, offen), Vorbeugen (Arme nach vorn); beim Kratzen am Hals und beim
 // Schluck ist die rechte Hand oben am Porträt (Tells.tsx), dann fehlt sie hier bzw. der Becher.

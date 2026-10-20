@@ -1,4 +1,4 @@
-// Zivi oder Kunde (Auftrag 48, Teil E): Schwierigkeit als Simulation. Ein Mensch braucht Zeit zum Hinsehen (jedes neue
+// Zivi oder Kunde (Auftrag 49, Teil E): Schwierigkeit als Simulation. Ein Mensch braucht Zeit zum Hinsehen (jedes neue
 // Merkmal erst nach `notice` Sekunden bemerkt, was im Satz steckt, erst wenn er nach `read` Sekunden gelesen ist) und
 // macht unter Zeitdruck Fehler (je weniger Luft bis zum Ablaufen der Karte, desto öfter daneben). Geschafft ist eine Schicht ab Score 0,5 (winAt der Art).
 // BALANCE_REPORT=1 npx vitest run src/modules/minigames/ui/games/undercover/model.balance.test.ts druckt die Tabelle.
@@ -100,8 +100,8 @@ describe('Zivi oder Kunde: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, weak: weak.rate, none: none.rate, seconds: Math.round(good.time) };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
-    // Gemessen (Auftrag 48, Teil E; vorher gut 94 / 98 / 95 %, schwach 28 / 34 / 39 %):
-    // gut 94 / 98 / 86 %, schwach 63 / 33 / 7 %, ohne Eingabe nie, 19 bis 21 s (6 bis 10 Leute, police).
+    // Gemessen (Auftrag 49, Teil E; vorher gut 94 / 98 / 95 %, schwach 28 / 34 / 39 %):
+    // gut 94 / 98 / 86 %, schwach 63 / 33 / 7 %, ohne Eingabe nie, 20 bis 22 s (6 bis 10 Leute, police).
     const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);
     expect(mid.good).toBeGreaterThanOrEqual(0.85);

@@ -546,7 +546,7 @@
   height: 16px;
 }
 
-/* Die Person steht im Licht der Laterne (Auftrag 48, Teil E: ganze Figur statt Porträt und Beinen). Die Figur ist
+/* Die Person steht im Licht der Laterne (Auftrag 49, Teil E: ganze Figur statt Porträt und Beinen). Die Figur ist
    so hoch wie der Platz, Kopf (Face, 64er-Raster) oben, Körper (Body, viewBox -24 0 112 84) darunter. */
 .uc-card__person {
   position: relative;

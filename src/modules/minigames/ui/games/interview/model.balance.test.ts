@@ -1,4 +1,4 @@
-// Bewerbungsgespräch (Auftrag 48, Teil E): Schwierigkeit als Simulation. Ein Mensch schaut nur ab und zu auf den Ring
+// Bewerbungsgespräch (Auftrag 49, Teil E): Schwierigkeit als Simulation. Ein Mensch schaut nur ab und zu auf den Ring
 // (`glance`) und hält den Druck grob in der Zone, braucht etwa `reaction` Sekunden (mal 0,75 bis 1,35), bis er ein
 // Zeichen antippt, und hält manche Geste für ein Zeichen (`confuse`). Geschafft ab Score 0,5 (zwei von drei Runden richtig).
 // BALANCE_REPORT=1 npx vitest run src/modules/minigames/ui/games/interview/model.balance.test.ts druckt die Tabelle.
@@ -105,7 +105,8 @@ describe('Bewerbungsgespräch: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, weak: weak.rate, none: none.rate, seconds: Math.round(good.time) };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
-    // Gemessen (Auftrag 48, Teil E): gut 100 / 98 / 68 %, schwach 95 / 58 / 30 %, ohne Eingabe nie, 38 bis 43 s.
+    // Gemessen (Auftrag 49, Teil E, mit Schweigen aushalten): gut 100 / 100 / 73 %, schwach 98 / 57 / 27 %, ohne
+    // Eingabe nie, 41 bis 47 s (vorher gut 100 / 100 / 98 %, schwach 98 / 98 / 47 %, ohne Eingabe 47 %).
     const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);
     expect(easy.good).toBeGreaterThanOrEqual(0.95);

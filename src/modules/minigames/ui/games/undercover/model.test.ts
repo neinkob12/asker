@@ -92,12 +92,14 @@ describe('Zivi oder Kunde: Modell', () => {
       const shift = createShift(3, d, input);
       expect(shift.perCard).toBe(cardSeconds(d));
       const times = shift.people.map((p) => p.seconds);
-      for (let i = 1; i < times.length; i++) expect(times[i]).toBeLessThanOrEqual(times[i - 1]);
+      // Die erste Karte bleibt länger (FIRST_CARD), danach wird es stetig schneller.
+      expect(times[0]).toBeGreaterThan(times[1]);
+      for (let i = 2; i < times.length; i++) expect(times[i]).toBeLessThanOrEqual(times[i - 1]);
       expect(times.at(-1)).toBeLessThan(times[0]);
     }
     const easy = createShift(3, 0.2, input).people;
     const hard = createShift(3, 0.9, input).people;
-    expect((hard.at(-1)?.seconds ?? 0) / hard[0].seconds).toBeLessThan((easy.at(-1)?.seconds ?? 0) / easy[0].seconds);
+    expect((hard.at(-1)?.seconds ?? 0) / hard[1].seconds).toBeLessThan((easy.at(-1)?.seconds ?? 0) / easy[1].seconds);
   });
 
   it('alles richtig: Score 1, alle Zivis erkannt', () => {
@@ -112,7 +114,7 @@ describe('Zivi oder Kunde: Modell', () => {
   it('zu lange gezögert: der Kunde geht, ein Zivi gilt nicht als erkannt', () => {
     const shift = createShift(5, 0.5, input);
     const state = initShift(shift);
-    const events = step(shift, state, shift.perCard + 0.01);
+    const events = step(shift, state, shift.people[0].seconds + 0.01);
     expect(events[0]).toMatchObject({ type: 'decided', decision: 'timeout', verdict: 'turnedAway' });
     expect(verdictOf({ zivi: true }, 'timeout')).toBe('missed');
     // In der Pause nimmt die nächste Karte noch nichts an.
