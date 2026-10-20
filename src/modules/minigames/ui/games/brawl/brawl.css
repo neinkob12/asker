@@ -203,6 +203,17 @@
 .brawl__chip.is-people {
   color: var(--cat-people);
 }
+.brawl__chip.is-combo {
+  color: var(--hud-gold);
+  font-family: var(--font-hud-display);
+  font-variant-numeric: tabular-nums;
+  animation: brawl-pop 0.22s ease-out both;
+}
+@keyframes brawl-pop {
+  from {
+    transform: scale(1.35);
+  }
+}
 
 /* ---------------------------------------------------------------- Spezialzüge der Crew */
 .brawl__specials {
