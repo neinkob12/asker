@@ -115,6 +115,8 @@ export function PapersGame(props: MinigameViewProps) {
   const reduced = useMemo(prefersReducedMotion, []);
   const deskCanvas = useRef<HTMLCanvasElement>(null);
   const readBar = useRef<HTMLSpanElement>(null);
+  /** Rest-Zeit einer Stichprobe (Balken am Papier, das er sich greift). */
+  const peekBar = useRef<HTMLSpanElement>(null);
   const fx = useRef({
     sent: false,
     shake: 0,
@@ -169,11 +171,16 @@ export function PapersGame(props: MinigameViewProps) {
         case 'nextPaper':
           audio.play(PAPERS_SOUNDS.rustle, { volume: 0.8 });
           break;
-        case 'peek':
-          // Stichprobe: Er greift sich ein anderes Papier, das Papier springt sichtbar nach vorn.
+        case 'peek': {
+          // Stichprobe: Er greift sich ein anderes Papier, das Papier springt sichtbar nach vorn. Am Handy kommt der
+          // Reiter dieses Papiers nach vorn, damit man noch umschreiben kann.
           audio.play(PAPERS_SOUNDS.rustle, { volume: 1 });
+          playSound(MINIGAME_SOUNDS.alarm, 0.25);
           haptic('warning');
+          const paper = setup.slots[s.cursor]?.paper;
+          if (paper !== undefined) setTab(paper);
           break;
+        }
         case 'write':
           audio.play(PAPERS_SOUNDS.scribble, { volume: 0.8 });
           haptic('light');
@@ -334,11 +341,17 @@ export function PapersGame(props: MinigameViewProps) {
         const share = fingerOn(st) && st.phaseLen > 0 ? Math.min(1, st.phaseT / st.phaseLen) : 0;
         readBar.current.style.transform = `scaleX(${share.toFixed(3)})`;
       }
+      if (peekBar.current) {
+        const left = st.resume !== null && st.phase === 'turn' ? 1 - st.phaseT / Math.max(0.01, st.phaseLen) : 0;
+        peekBar.current.style.transform = `scaleX(${Math.max(0, left).toFixed(3)})`;
+      }
       if (isDone(st)) finish();
     });
   }, running);
 
   const reading = readingPaper(setup, s);
+  // Stichprobe: Er blättert gerade zu einem anderen Papier (dort zählt gleich die Zeile am Finger).
+  const peekSlot = s.resume !== null && s.phase === 'turn' ? setup.slots[s.cursor] : undefined;
   const cursorSlot = setup.slots[s.cursor];
   const finger = fingerOn(s) && cursorSlot ? cursorSlot : null;
   const done = s.phase === 'end';
@@ -389,9 +402,18 @@ export function PapersGame(props: MinigameViewProps) {
     return (
       <article
         key={p.def.id}
-        class={`pp-sheet pp-sheet--${paper} ${state}${paper === reading && f.shake % 2 ? ' is-shake-a' : paper === reading && f.shake ? ' is-shake-b' : ''}`}
+        class={`pp-sheet pp-sheet--${paper} ${state}${peekSlot?.paper === paper ? ' is-peeked' : ''}${paper === reading && f.shake % 2 ? ' is-shake-a' : paper === reading && f.shake ? ' is-shake-b' : ''}`}
         aria-label={p.def.title}
       >
+        {peekSlot?.paper === paper && (
+          <p class="pp-sheet__peek" role="alert">
+            <Icon name="eye" />
+            {`Stichprobe: ${fieldLabel(peekSlot.key, setup.setting)}`}
+            <span class="pp-sheet__peek-bar">
+              <span ref={peekBar} />
+            </span>
+          </p>
+        )}
         <header class="pp-sheet__head">
           <span class="pp-sheet__title">{p.def.title}</span>
           <span class="pp-sheet__sub">{p.def.sub}</span>
@@ -413,6 +435,7 @@ export function PapersGame(props: MinigameViewProps) {
               f.keyboard && sel === index && running ? 'is-selected' : '',
               picker === slot.id ? 'is-picking' : '',
               f.stampAt === slot.id ? 'is-stamped' : '',
+              peekSlot?.id === slot.id ? 'is-peek' : '',
               compares(slot.key) ? 'is-compare' : '',
             ]
               .filter(Boolean)
@@ -438,6 +461,11 @@ export function PapersGame(props: MinigameViewProps) {
                     <FieldValue key={value} slot={slot} value={value} />
                   </span>
                   {seen && <Icon name={seen === 'ok' ? 'check' : 'xCircle'} class={`pp-field__mark is-${seen}`} />}
+                  {seen === 'hit' && (
+                    <svg class="pp-field__circle" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+                      <path d="M58 4 C 86 3, 98 12, 96 22 C 94 33, 64 38, 42 37 C 14 36, 2 29, 4 19 C 6 9, 26 3, 50 4 L 62 6" />
+                    </svg>
+                  )}
                   {f.stampAt === slot.id && !reduced && (
                     <span key={f.stampN} class="pp-press" aria-hidden="true">
                       <span class="pp-press__knob" />
@@ -500,7 +528,9 @@ export function PapersGame(props: MinigameViewProps) {
       </HudBar>
 
       <section class="papers__booth" aria-live="polite">
-        <div class={`papers__window${s.hits > 0 ? ' is-cross' : ''}${s.outcome === 'bribe' ? ' is-bribed' : ''}`}>
+        <div
+          class={`papers__window${s.hits > 0 ? ' is-cross' : ''}${peekSlot ? ' is-peek' : ''}${s.outcome === 'bribe' ? ' is-bribed' : ''}`}
+        >
           <CustomsOfficer look={look} mouth={mouthOf(s)} />
         </div>
         {s.say && (
@@ -555,6 +585,8 @@ export function PapersGame(props: MinigameViewProps) {
       <section class={`papers__docs${f.thump ? (f.thump % 2 ? ' is-thump-a' : ' is-thump-b') : ''}`}>
         {narrow ? sheet(Math.min(tab, setup.papers.length - 1)) : setup.papers.map((_, i) => sheet(i))}
       </section>
+
+      <div class="papers__light" aria-hidden="true" />
 
       <div class="papers__ways">
         {bribeCost > 0 && (

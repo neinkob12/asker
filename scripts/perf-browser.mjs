@@ -893,6 +893,7 @@ for (const [scene, kind, label] of [
       `\n######## "${label}" (${info.seconds.toFixed(0)} s, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${info.ended ? ', vorzeitig zu Ende' : ''}) ########`,
       `Bilder: ${info.fps.toFixed(1)} fps, längster Abstand ${info.worst.toFixed(0)} ms`,
       `Spiel pro Bild (Modell, Szene, Zeichnen): ${info.perf ? `${perFrame} ms im Mittel, schlimmstes ${info.perf.max.toFixed(1)} ms über ${info.perf.frames} Bilder` : '–'}`,
+      `Draw-Calls pro Bild (3D): ${info.perf?.calls ?? '–'}`,
       `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
     ].join('\n'),
   );

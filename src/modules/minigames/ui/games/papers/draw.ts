@@ -211,8 +211,17 @@ export function drawDesk(
   ctx.stroke();
   if (!options.narrow) {
     // Unter den Papieren: Stempelkissen mit Stempel und der Kuli.
-    drawInkPad(ctx, width * 0.36, height * 0.8, rnd);
-    drawPen(ctx, width * 0.7, height * 0.86, -0.22);
+    // Etwas größer als früher: Sie liegen am Rand des Lichts und sollen als Dinge auf dem Tisch lesbar sein.
+    ctx.save();
+    ctx.translate(width * 0.34, height * 0.82);
+    ctx.scale(1.35, 1.35);
+    drawInkPad(ctx, 0, 0, rnd);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(width * 0.72, height * 0.9);
+    ctx.scale(1.3, 1.3);
+    drawPen(ctx, 0, 0, -0.22);
+    ctx.restore();
   } else {
     drawPen(ctx, width * 0.12, height * 0.985, 0.08);
   }
@@ -324,6 +333,8 @@ function drawPen(ctx: CanvasRenderingContext2D, x: number, y: number, angle: num
 function drawLamp(ctx: CanvasRenderingContext2D, x: number, night: boolean): void {
   const c = DESK_COLORS;
   ctx.save();
+  // Ganz im Bild: Schirm etwas tiefer als der Rand.
+  ctx.translate(0, 28);
   // Arm aus dem Rand.
   ctx.strokeStyle = c.brass;
   ctx.lineWidth = 5;

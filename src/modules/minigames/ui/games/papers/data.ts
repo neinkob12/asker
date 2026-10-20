@@ -170,9 +170,9 @@ export type OfficerLine =
 export const OFFICER_LINES: Record<OfficerLine, readonly string[]> = {
   greet: ['Papiere bitte. Alle.', 'Alle Papiere auf den Tisch.', 'Dann zeigen Sie mal her.'],
   browse: ['Mal sehen …', 'Hm.', 'So, so.'],
-  nextPaper: ['Dann der {papier}.', 'Weiter. {papier}.', 'Jetzt der {papier}.'],
+  nextPaper: ['Weiter. {papier}.', 'Jetzt: {papier}.', 'Als Nächstes: {papier}.'],
   /** Stichprobe (Auftrag 48): Er springt zu einer späteren Zeile auf einem anderen Papier. */
-  peek: ['Moment. Zeigen Sie mal den {papier}.', 'Kurz mal hier: {papier}.', 'Und was steht im {papier}?'],
+  peek: ['Moment. Zeigen Sie mal her: {papier}.', 'Kurz mal hier: {papier}.', 'Noch mal zurück: {papier}.'],
   ok: ['Hm.', 'Gut.', 'Weiter.'],
   hit: [
     '{feld} passt nicht zu den anderen Papieren.',
