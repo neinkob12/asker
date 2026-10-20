@@ -110,8 +110,10 @@ Draw Calls und Dreiecke je Bild (`window.chase.info()`, alle Durchgänge, gemess
 | Desktop 960 × 600, Nacht mit Regen | 180 bis 200 | 380 000 bis 410 000 |
 | Handy 390 × 844, Nacht mit Regen | 175 | 330 000 |
 
-Vorher und nachher vergleichbar (WebGL-Aufrufe direkt gezählt, inklusive Karte darunter, Handy Nacht mit Regen,
-70 s): siehe PR-Beschreibung.
+Ein fairer Vorher-Nachher-Vergleich war headless nicht möglich: Mit Software-Grafik laufen beide Versionen mit 0,1 bis
+0,6 Bildern pro Sekunde, und WebGL-Zähler am Kontext erfassen die Karte darunter und den einmaligen Aufbau mit. Grob:
+ähnlich viele Draw Calls wie vorher, etwa doppelt so viele Dreiecke (die Stadt ist viel detaillierter), ein
+Verkehrsauto kostet ein Drittel der Draw Calls.
 
 Mit Software-Grafik (SwiftShader, keine GPU) ist die neue Szene langsamer als die alte (mehr Pixel-Arbeit: PBR mit
 Spiegelungen, Bloom, Linse). **Offen: auf einem echten Handy messen** (30 fps sind das Ziel); Stellschrauben dafür in
