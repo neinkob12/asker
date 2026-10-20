@@ -61,6 +61,14 @@ Teil der Runde „Minispiele sollen sich richtig gut anfühlen“ (20.10.2026). 
   Schein, Laterne mit Lichtkegel und Lichtfleck, nasser Gehweg mit Spiegelungen, Passanten im Hintergrund, Auto mit
   Glanz und Schatten. Farben über `--uc-*`-Variablen aus den Tokens, Tag und Nacht.
 
+## Für den Rahmen (PR #136)
+
+- Pause: `running` kann mitten im Spiel false und wieder true werden. Beide Spiele machen genau dort weiter: Die
+  Frame-Schleife hängt an `running`, die Ansage zu Beginn kommt nur einmal, keine Ton-Schleifen.
+- Ergebnis-Werte vorbereitet: `brawlStats(state)` (Am Boden, Beste Serie, Konter, Zeit; dazu `state.bestCombo` und
+  `state.counters`) und `shiftStats(shift, out)` (Zivis erkannt, Verkauft, Kunden verloren). Form wie `MinigameStat`;
+  als drittes Argument an `onFinish` hängen, sobald #136 in main ist.
+
 ## Messung Leistung
 
 Headless (Software-Rendering, ganze Seite mit Karte, Handy 390 × 844) Straßenkampf: vorher 2,8 bis 3,0 Bilder/s, nachher

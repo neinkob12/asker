@@ -231,6 +231,9 @@ export interface BrawlState {
   endT: number;
   /** Zufall aus dem Seed (Zustand des Generators lebt in der Funktion). */
   combo: number;
+  /** Längste Serie und Konter (für die Ergebnis-Werte). */
+  bestCombo: number;
+  counters: number;
   /** Dein letzter Angriff wurde gepuffert (kam zu früh): so lange gilt er noch (bis du frei bist plus ATTACK_BUFFER). */
   buffered: { attack: AttackId; until: number } | null;
   /**
@@ -516,6 +519,8 @@ export function initBrawl(setup: BrawlSetup): BrawlState {
     end: null,
     endT: 0,
     combo: 0,
+    bestCombo: 0,
+    counters: 0,
     buffered: null,
     held: null,
   };
@@ -756,7 +761,10 @@ function hit(
     x: t.x,
     depth: t.depth,
   });
-  if (f.kind === 'player' && !blocked) state.combo += 1;
+  if (f.kind === 'player' && !blocked) {
+    state.combo += 1;
+    state.bestCombo = Math.max(state.bestCombo, state.combo);
+  }
   if (t.kind === 'player' && !blocked) state.combo = 0;
   // Treffer-Stopp: kurz steht alles (schwer und Konter länger).
   state.hitStop = Math.max(state.hitStop, blocked ? 0.03 : attack === 'light' ? 0.05 : 0.1);
@@ -793,6 +801,7 @@ function hit(
 function counter(c: Ctx, t: Fighter, f: Fighter, how: 'block' | 'dodge'): void {
   const { state } = c;
   c.events.push({ type: 'parry', target: t.id, attacker: f.id, how });
+  state.counters += 1;
   setState(f, 'hit', 1.0);
   f.attack = null;
   f.vx = -f.facing * 1.2;
@@ -1268,4 +1277,29 @@ export function brawlPicks(state: BrawlState): string[] {
   if (state.grabbed) picks.push('grabbed');
   if (state.sirens) picks.push('sirens');
   return picks.slice(0, 20);
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface BrawlStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Werte fürs Ergebnis: Gegner am Boden, beste Serie, Konter, Zeit. */
+export function brawlStats(state: BrawlState): BrawlStat[] {
+  const foes = state.fighters.filter((f) => f.side === 'foe');
+  const down = foes.filter((f) => f.out === 'down').length;
+  return [
+    {
+      label: 'Am Boden',
+      value: `${down}/${foes.length}`,
+      icon: 'fist',
+      tone: down === foes.length ? 'good' : undefined,
+    },
+    { label: 'Beste Serie', value: String(state.bestCombo), icon: 'bolt' },
+    { label: 'Konter', value: String(state.counters), icon: 'shield', tone: state.counters > 0 ? 'good' : undefined },
+    { label: 'Zeit', value: `${Math.round(state.clock)} s`, icon: 'timer' },
+  ];
 }

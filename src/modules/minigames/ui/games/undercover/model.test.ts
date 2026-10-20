@@ -14,6 +14,7 @@ import {
   shiftOutcome,
   shiftPicks,
   shiftScore,
+  shiftStats,
   step,
   verdictOf,
   visibleTells,
@@ -95,6 +96,7 @@ describe('Zivi oder Kunde: Modell', () => {
     expect(out).toEqual({ soldZivi: 0, spotted: 2, turnedAway: 0, sold: 6, missed: 0 });
     expect(shiftScore(shift, out)).toBe(1);
     expect(shiftPicks(out)).toEqual(['spotted:2', 'sold:6']);
+    expect(shiftStats(shift, out)[0]).toMatchObject({ value: '2/2', tone: 'good' });
   });
 
   it('zu lange gezögert: der Kunde geht, ein Zivi gilt nicht als erkannt', () => {

@@ -339,3 +339,26 @@ export function countPick(picks: readonly string[], id: string): number {
   }
   return n;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface ShiftStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Werte fürs Ergebnis: Zivis erkannt, verkauft, Kunden verloren. */
+export function shiftStats(shift: Shift, out: ShiftOutcome): ShiftStat[] {
+  const lost = out.turnedAway;
+  return [
+    {
+      label: 'Zivis erkannt',
+      value: `${out.spotted}/${shift.zivis}`,
+      icon: 'eye',
+      tone: out.soldZivi > 0 ? 'bad' : out.spotted === shift.zivis ? 'good' : undefined,
+    },
+    { label: 'Verkauft', value: String(out.sold), icon: 'coins' },
+    { label: 'Kunden verloren', value: String(lost), icon: 'user', tone: lost > 0 ? 'bad' : undefined },
+  ];
+}

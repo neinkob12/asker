@@ -9,6 +9,7 @@ import {
   type BrawlState,
   brawlPicks,
   brawlScore,
+  brawlStats,
   createBrawl,
   type Fighter,
   FOE_TELL,
@@ -409,5 +410,14 @@ describe('Straßenkampf: Schwierigkeit (Test-Bot)', () => {
     expect(easy.won).toBeGreaterThanOrEqual(0.95);
     expect(easy.seconds).toBeGreaterThan(18);
     expect(measure(BOT_MASHER, 0.2).won).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('Ergebnis-Werte: Gegner am Boden, Serie, Konter, Zeit', () => {
+    const s = createBrawl(3, 0.5, FIGHT);
+    const state = initBrawl(s);
+    playBrawl(s, state, BOT_SKILLED);
+    const stats = brawlStats(state);
+    expect(stats.map((x) => x.label)).toEqual(['Am Boden', 'Beste Serie', 'Konter', 'Zeit']);
+    expect(state.bestCombo).toBeGreaterThan(0);
   });
 });
