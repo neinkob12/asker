@@ -75,8 +75,18 @@ export const BLOCK_AHEAD = { min: 70, max: 160 };
 
 /** Parkende Autos am Bordstein: Anteil der Straßenseiten mit Parkplätzen, Belegung, Abstand zur Straßenmitte (Meter). */
 export const PARKING = { sides: 0.45, fill: 0.6, slot: 6.2, offset: 5.25, clearNode: 13, clearMid: 9 };
+/** Laternen und Bäume am Gehweg, Ampeln an den Ecken (Abstand zur Straßenmitte bzw. Kreuzung, Meter). */
+export const POSTS = {
+  lamp: ROAD_W / 2 + 0.7,
+  tree: ROAD_W / 2 + 1.5,
+  signal: ROAD_W / 2 + 2,
+  treeChance: 0.5,
+  radius: 0.32,
+};
 /** Zusammenstoß mit einem parkenden Auto: so viel des Aufprall-Schadens (Blech gibt nach). */
 export const PARKED_DAMAGE = 0.55;
+/** Gegen Laterne, Baum, Ampel: so viel des Aufprall-Schadens. */
+export const POST_DAMAGE = 0.6;
 /** Knapp vorbei: ab diesem Tempo (m/s), so dicht am Verkehr (Meter Luft zwischen den Wagen), so viel Abhängen. */
 export const NEAR_MISS_SPEED = 24;
 export const NEAR_MISS_GAP = 1.5;
@@ -143,6 +153,8 @@ export interface City {
   walls: Wall[];
   /** Parkende Autos am Bordstein. */
   parked: ParkedCar[];
+  /** Laternen, Bäume, Ampeln. */
+  posts: Post[];
 }
 
 export interface Wall {
@@ -150,7 +162,17 @@ export interface Wall {
   z0: number;
   x1: number;
   z1: number;
-  kind: 'building' | 'water' | 'edge' | 'block' | 'parked';
+  kind: 'building' | 'water' | 'edge' | 'block' | 'parked' | 'post';
+}
+
+/** Laterne, Straßenbaum oder Ampel (Optik und kleine Wand). */
+export interface Post {
+  x: number;
+  z: number;
+  kind: 'lamp' | 'tree' | 'signal';
+  /** Laterne und Ampel: Achse der Straße, Seite (−1/1) zur Straßenmitte hin. */
+  axis: 'x' | 'z';
+  side: -1 | 1;
 }
 
 /** Ein parkendes Auto am Bordstein (Optik und Wand). */
@@ -480,7 +502,59 @@ export function buildCity(random: () => number): City {
   walls.push({ x0: -1000, z0: WORLD + m, x1: WORLD + 1000, z1: WORLD + 1000, kind: 'edge' });
   walls.push({ x0: -1000, z0: -1000, x1: -m, z1: WORLD + 1000, kind: 'edge' });
   walls.push({ x0: WORLD + m, z0: -1000, x1: WORLD + 1000, z1: WORLD + 1000, kind: 'edge' });
-  return { blocks, riverCol, walls, parked: [] };
+  return { blocks, riverCol, walls, parked: [], posts: [] };
+}
+
+/**
+ * Laternen (alle 36 m, beide Seiten), Straßenbäume (zwischen den Laternen, nie vor der Blockmitte) und Ampeln (zwei
+ * Ecken je Kreuzung), fest aus einem eigenen Zufall. Jede ist eine kleine Wand: Wer über den Gehweg abkürzt, trifft sie.
+ */
+export function addPosts(city: City, random: () => number): void {
+  const kindAt = (i: number, j: number): BlockKind | null =>
+    i < 0 || j < 0 || i >= GRID || j >= GRID ? null : city.blocks[j * GRID + i].kind;
+  const add = (post: Post) => {
+    city.posts.push(post);
+    const r = POSTS.radius;
+    city.walls.push({ x0: post.x - r, x1: post.x + r, z0: post.z - r, z1: post.z + r, kind: 'post' });
+  };
+  for (const axis of ['x', 'z'] as const) {
+    for (let line = 0; line <= GRID; line++) {
+      if (axis === 'z' && (line === city.riverCol || line === city.riverCol + 1)) continue;
+      for (let seg = 0; seg < GRID; seg++) {
+        for (const side of [-1, 1] as const) {
+          const kind = axis === 'x' ? kindAt(seg, side > 0 ? line : line - 1) : kindAt(side > 0 ? line : line - 1, seg);
+          const bridge = axis === 'x' && seg === city.riverCol;
+          if (!kind && !bridge) continue;
+          const at = (along: number, off: number, k: Post['kind']) =>
+            add({
+              x: axis === 'x' ? along : line * PITCH + side * off,
+              z: axis === 'x' ? line * PITCH + side * off : along,
+              kind: k,
+              axis,
+              side,
+            });
+          for (const k of [18, 54]) at(seg * PITCH + k, POSTS.lamp, 'lamp');
+          if (bridge || kind === 'water') continue;
+          for (const k of [24, 48]) if (random() < POSTS.treeChance) at(seg * PITCH + k, POSTS.tree, 'tree');
+        }
+      }
+    }
+  }
+  for (let i = 1; i < GRID; i++) {
+    for (let j = 1; j < GRID; j++) {
+      if (i === city.riverCol || i === city.riverCol + 1) continue;
+      const flip = random() < 0.5 ? 1 : -1;
+      for (const s of [1, -1] as const) {
+        add({
+          x: i * PITCH + s * POSTS.signal,
+          z: j * PITCH + s * flip * POSTS.signal,
+          kind: 'signal',
+          axis: 'x',
+          side: s,
+        });
+      }
+    }
+  }
 }
 
 /**
@@ -550,6 +624,7 @@ export function createChase(options: ChaseOptions): ChaseSetup {
   if (col === city.riverCol || col === city.riverCol + 1) col = col > 2 ? col - 2 : col + 2;
   const row = GRID - 3;
   addParking(city, createRng(options.seed ^ 0x2545f491));
+  addPosts(city, createRng(options.seed ^ 0x68e31da4));
   return {
     seed: options.seed,
     difficulty,
@@ -886,7 +961,7 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
         p.crashCooldown = 0.5;
         const power = clamp((into - IMPACT_FREE) / (IMPACT_FULL - IMPACT_FREE), 0, 1);
         const blockWall = w.kind === 'block';
-        const soft = w.kind === 'parked' ? PARKED_DAMAGE : 1;
+        const soft = w.kind === 'parked' ? PARKED_DAMAGE : w.kind === 'post' ? POST_DAMAGE : 1;
         p.damage = clamp(p.damage + (blockWall ? BLOCK_DAMAGE : power * IMPACT_MAX_DAMAGE * soft), 0, 1);
         state.events.push({
           kind: w.kind === 'water' ? 'splash' : blockWall ? 'blockHit' : 'crash',

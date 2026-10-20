@@ -16,6 +16,10 @@ export const CHASE_SOUNDS = {
   turbo: 'minigames.chase.turbo',
   radio: 'minigames.chase.radio',
   dump: 'minigames.chase.dump',
+  skid: 'minigames.chase.skid',
+  whoosh: 'minigames.chase.whoosh',
+  alarm: 'minigames.chase.alarm',
+  warn: 'minigames.chase.warn',
 } as const;
 
 /** Martinshorn: ein Ton-Paar (tatü-tata) dauert so lange. */
@@ -112,7 +116,10 @@ export function registerChaseSounds(): void {
       const lp = filter(ctx, 'lowpass', 2200, 1.2);
       const level = ctx.createGain();
       level.gain.value = 0.12;
-      lp.connect(level).connect(out);
+      // Stereo: von wo die nächste Streife kommt (pan −1 links bis 1 rechts).
+      const panner = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
+      if (panner) lp.connect(level).connect(panner).connect(out);
+      else lp.connect(level).connect(out);
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
       lfo.frequency.value = 1 / SIREN_PERIOD;
@@ -138,9 +145,11 @@ export function registerChaseSounds(): void {
       });
       return {
         set: (p: LoopParams, at: number) => {
+          if (p.pan !== undefined && panner) panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, p.pan)), at, 0.1);
           if (p.pitch === undefined) return;
-          for (const o of tones) o.frequency.setTargetAtTime(513.5 * p.pitch, at, GLIDE);
-          depth.gain.setTargetAtTime(73.5 * p.pitch, at, GLIDE);
+          // Doppler: Tonhöhe folgt weich (Zeitkonstante länger als beim Motor, sonst flattert sie).
+          for (const o of tones) o.frequency.setTargetAtTime(513.5 * p.pitch, at, 0.25);
+          depth.gain.setTargetAtTime(73.5 * p.pitch, at, 0.25);
         },
         stop: (at: number) => {
           lfo.stop(at);
@@ -306,6 +315,76 @@ export function registerChaseSounds(): void {
         o.connect(envelope(ctx, t + 0.25 + i * 0.12, 0.004, 0.02, 0.1, 0.35)).connect(out);
         o.start(t + 0.25 + i * 0.12);
         o.stop(t + 0.45 + i * 0.12);
+      }
+    },
+  });
+
+  audio.registerSound(s.skid, {
+    kind: 'loop',
+    start: (ctx, out, t) => {
+      // Reifen quietschen: Rauschen durch zwei schmale Bandpässe, Lautstärke folgt dem Rutschen.
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuffer(ctx, 1);
+      src.loop = true;
+      const bp = filter(ctx, 'bandpass', 2400, 12);
+      const bp2 = filter(ctx, 'bandpass', 1300, 8);
+      const level = ctx.createGain();
+      level.gain.value = 0;
+      src.connect(bp).connect(level);
+      src.connect(bp2).connect(level);
+      level.connect(out);
+      src.start(t);
+      return {
+        set: (p: LoopParams, at: number) => {
+          if (p.volume !== undefined) level.gain.setTargetAtTime(p.volume * 1.4, at, 0.06);
+          if (p.pitch !== undefined) bp.frequency.setTargetAtTime(2000 + 900 * p.pitch, at, 0.1);
+        },
+        stop: (at: number) => src.stop(at),
+      };
+    },
+  });
+
+  audio.registerSound(s.whoosh, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Knapp vorbei: Luftstoß, der von hoch nach tief fällt.
+      const src = noise(ctx, t, 0.5);
+      const bp = filter(ctx, 'bandpass', 2400, 1.6);
+      bp.frequency.setValueAtTime(2800, t);
+      bp.frequency.exponentialRampToValueAtTime(380, t + 0.42);
+      src
+        .connect(bp)
+        .connect(envelope(ctx, t, 0.04, 0.08, 0.3, 0.7))
+        .connect(out);
+    },
+  });
+
+  audio.registerSound(s.alarm, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Autoalarm: Ton im Wechsel, sechsmal.
+      const lp = filter(ctx, 'lowpass', 2600, 1);
+      lp.connect(envelope(ctx, t, 0.01, 1.3, 0.2, 0.08)).connect(out);
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      for (let k = 0; k < 8; k++) o.frequency.setValueAtTime(k % 2 ? 980 : 1320, t + k * 0.18);
+      o.connect(lp);
+      o.start(t);
+      o.stop(t + 1.5);
+    },
+  });
+
+  audio.registerSound(s.warn, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Warnung (Streife setzt zum Rammen an): zwei kurze helle Piepser.
+      for (const k of [0, 0.13]) {
+        const o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = 1760;
+        o.connect(envelope(ctx, t + k, 0.004, 0.05, 0.03, 0.22)).connect(out);
+        o.start(t + k);
+        o.stop(t + k + 0.1);
       }
     },
   });
