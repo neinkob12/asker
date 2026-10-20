@@ -69,7 +69,26 @@ Offen bleibt die Messung auf einem echten Handy (30 fps ist das Ziel). Falls der
 Die Bilder am Handy (`npm run screenshot:minigames -- --kind=chase --sizes=mobile`, auch `--uhr=23`) liefen in dieser
 Runde headless durch (langsam, aber ohne Zeitüberschreitung und ohne Browser-Fehler).
 
+## Folgeauftrag: Karre mit Form (`buildHeroCar` in `kit/scene3d.ts`)
+
+Vorher las sich die Karre von hinten kantig wie aus Quadern, von der Seite mit zwei Ellipsoiden als Hüften
+(„Pontons“) über den Rädern; facettierte Flächen, Räder von hinten kaum zu sehen.
+
+- **Radläufe im Seitenprofil** (`archPoints`): Bögen über beiden Achsen, Unterboden und Radhausschalen dahinter
+  (sonst sähe man durch die Bögen). Die Ellipsoid-Hüften sind weg.
+- **Grundriss** (`shapePlan`, Extrusion quer unterteilt): Hüften wölben sich über den Rädern (hinten mehr), die Enden
+  sind schmaler, Nase und Heck außen rund zurückgezogen. Räder stehen bündig in den Bögen und sind von hinten
+  sichtbar.
+- **Weiche Flächen** (`smoothBody`): Ecken zusammengeführt, Normalen geglättet; größere Fasen. Keine Dreiecke mehr im
+  Lack.
+- **Glas** heller und stärker spiegelnd (Heckscheibe zeigt die Stadt), Chromleiste unter der Seitenscheibe, runde
+  Spiegel, Leuchtband und Rückleuchten innerhalb der runden Heckecken.
+- Gleiche Schnittstelle (`HeroCar`), die Verkehrskontrolle nutzt `buildHeroCar` nicht.
+- Pause-Knopf (`PauseButton` aus `kit/pause.tsx`) vorn in der Leiste.
+
+Leistung (`perf:browser --scenes=jagd --mobile --throttle=4`, 30 s, je ein bis zwei Läufe): main 25,4 ms, mit der
+neuen Karre 23,5 bis 24,0 ms (ein Ausreißer-Lauf 33 ms) pro Bild; im Rauschen.
+
 ## Offen
 
-- Seitenansicht der Karre bei Drehern (aus Auftrag 48).
 - Messung auf einem echten Handy.
