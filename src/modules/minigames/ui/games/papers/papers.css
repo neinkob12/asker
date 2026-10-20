@@ -1,7 +1,9 @@
 /* Papiere fälschen (Auftrag 44, Teil 8). Schreibtisch (Canvas) mit Papieren (DOM), Zöllner hinter der Scheibe, Waage,
    Kalender und Kamera im Look Glas. Inhaltsfarben (Papier, Tinte, Stempel, Haut) kommen als --pp-* vom Spiel
    (draw.ts, DESK_COLORS), Bedeutungsfarben aus den Tokens. Am Desktop: links Zöllner, Vorlagen und Auswege, rechts
-   drei Papiere. Am Handy (is-narrow): untereinander, die Papiere als Stapel mit Reitern. */
+   drei Papiere. Am Handy (is-narrow): untereinander, die Papiere als Stapel mit Reitern.
+   Auftrag 48: Papier mit Faser (--pp-fiber aus draw.ts) und Farbe je Formular, Licht der Lampe, Ecke, die sich hebt;
+   Lupe (is-compare), Kuli schreibt, Holzstempel (pp-press) mit Ruck am Tisch, Stempelfarbe abgenutzt (--pp-ink-wear). */
 
 .papers {
   --pp-row: 46px;
@@ -194,6 +196,12 @@
   background: var(--hud-glass-strong);
   border: 1px solid var(--hud-glass-edge);
 }
+.pp-ref.is-compare {
+  border-color: var(--hud-gold);
+  box-shadow:
+    0 0 0 1px var(--hud-gold),
+    0 0 18px color-mix(in srgb, var(--hud-gold) 35%, transparent);
+}
 .pp-ref__label {
   display: flex;
   align-items: center;
@@ -333,17 +341,30 @@
   min-height: 0;
 }
 .pp-sheet {
+  --sheet: var(--pp-paper);
+  --sheet-shade: var(--pp-paper-shade);
+  --sheet-print: var(--pp-print);
   position: relative;
   padding: 10px 12px 14px 14px;
   border-radius: 3px;
   background:
-    linear-gradient(180deg, transparent 0 46px, var(--pp-paper-edge) 46px 47px, transparent 47px),
-    linear-gradient(170deg, var(--pp-paper), var(--pp-paper-shade));
+    var(--pp-fiber, none) 0 0 / 256px 256px,
+    linear-gradient(
+      180deg,
+      transparent 0 46px,
+      color-mix(in srgb, var(--sheet-print) 55%, transparent) 46px 48px,
+      transparent 48px
+    ),
+    radial-gradient(130% 80% at 90% -10%, rgba(255, 236, 200, 0.5), transparent 65%),
+    linear-gradient(170deg, var(--sheet), var(--sheet-shade));
   color: var(--pp-ink);
+  /* Gedruckter Rahmen des Formulars, darunter Schatten auf dem Tisch (weich und kurz). */
   box-shadow:
+    inset 0 0 0 5px var(--sheet),
+    inset 0 0 0 6px color-mix(in srgb, var(--sheet-print) 40%, transparent),
     0 1px 0 var(--pp-paper-edge),
-    0 14px 30px rgba(0, 0, 0, 0.45),
-    0 2px 6px rgba(0, 0, 0, 0.3);
+    0 16px 32px rgba(0, 0, 0, 0.42),
+    0 3px 6px rgba(0, 0, 0, 0.32);
   transform: rotate(var(--tilt, 0deg));
   transition:
     transform 0.35s var(--ease-out),
@@ -355,16 +376,42 @@
 }
 .pp-sheet--1 {
   --tilt: 0.6deg;
+  --sheet: var(--pp-paper-pink);
+  --sheet-shade: var(--pp-paper-pink-shade);
 }
 .pp-sheet--2 {
   --tilt: -0.4deg;
+  --sheet: var(--pp-paper-green);
+  --sheet-shade: var(--pp-paper-green-shade);
+  --sheet-print: var(--pp-print-green);
+}
+/* Die Ecke unten rechts hebt sich ein wenig. */
+.pp-sheet::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 0 0 3px 0;
+  background: linear-gradient(
+    135deg,
+    transparent 48%,
+    rgba(0, 0, 0, 0.18) 50%,
+    var(--sheet-shade) 56%,
+    color-mix(in srgb, var(--sheet) 60%, white) 100%
+  );
+  box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
 }
 /* Das Papier in seiner Hand: angehoben, Lampe drauf. */
 .pp-sheet.is-reading {
   transform: rotate(0deg) translateY(-4px) scale(1.015);
   box-shadow:
+    inset 0 0 0 5px var(--sheet),
+    inset 0 0 0 6px color-mix(in srgb, var(--sheet-print) 40%, transparent),
     0 0 0 2px var(--hud-gold),
-    0 22px 40px rgba(0, 0, 0, 0.5);
+    0 26px 44px rgba(0, 0, 0, 0.5);
 }
 .pp-sheet.is-checked {
   filter: brightness(0.86) saturate(0.85);
@@ -402,6 +449,7 @@
   margin-bottom: 6px;
 }
 .pp-sheet__title {
+  color: var(--sheet-print);
   font-family: var(--font-hud-display);
   font-size: 20px;
   font-weight: 800;
@@ -476,13 +524,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Umgeschrieben: Tipp-Ex drunter, Kuli drüber. */
+/* Umgeschrieben: Tipp-Ex drunter (unregelmäßig, leicht erhaben), Kuli drüber, der Wert wird von links geschrieben. */
 .pp-field.is-edited .pp-field__text {
-  padding: 0 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.7);
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px 7px 4px 6px;
+  background: linear-gradient(175deg, rgba(255, 255, 255, 0.95), rgba(246, 244, 238, 0.9));
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
   color: var(--pp-pen);
   font-style: italic;
+  transform: rotate(-0.8deg);
+  animation: papers-write 0.42s steps(14, end) both;
+}
+@keyframes papers-write {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+/* Lupe: dasselbe Feld auf den anderen Papieren, wie mit Textmarker. */
+.pp-field.is-compare {
+  background: linear-gradient(
+    180deg,
+    transparent 38%,
+    color-mix(in srgb, var(--pp-marker) 55%, transparent) 40% 92%,
+    transparent 94%
+  );
+}
+.pp-field.is-compare .pp-field__label {
+  color: var(--pp-ink);
 }
 /* Haken bzw. Kreuz des Zöllners oben rechts in der Zeile (der Wert behält die ganze Breite). */
 .pp-field__mark {
@@ -528,6 +602,10 @@
   transform: rotate(-6deg);
 }
 .pp-stamp__ring {
+  -webkit-mask-image: var(--pp-ink-wear, none);
+  mask-image: var(--pp-ink-wear, none);
+  -webkit-mask-size: 72px 72px;
+  mask-size: 72px 72px;
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
@@ -548,12 +626,91 @@
   font-weight: 700;
 }
 .pp-field.is-stamped .pp-stamp {
-  animation: papers-stamp 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation: papers-stamp 0.3s 0.14s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
 @keyframes papers-stamp {
   from {
     opacity: 0;
-    transform: rotate(-6deg) scale(1.8);
+    transform: rotate(-6deg) scale(1.12);
+  }
+}
+/* Holzstempel kommt herunter, staucht beim Aufschlag, hebt wieder ab. */
+.pp-press {
+  position: absolute;
+  left: 70px;
+  top: 58%;
+  width: 78px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+  animation: papers-press 0.52s cubic-bezier(0.3, 0, 0.3, 1) both;
+}
+.pp-press__block {
+  position: absolute;
+  inset: 6px 0 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--pp-wood-light), var(--pp-wood));
+  box-shadow:
+    inset 0 -5px 0 var(--pp-stamp),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.pp-press__knob {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--pp-wood-light), var(--pp-wood-dark) 75%);
+}
+@keyframes papers-press {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(10px, -70px) scale(1.5);
+    filter: drop-shadow(14px 26px 10px rgba(0, 0, 0, 0.35));
+  }
+  28% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(2px 3px 2px rgba(0, 0, 0, 0.5));
+  }
+  36% {
+    transform: translate(-50%, -50%) scale(1.03, 0.9);
+  }
+  52% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(16px, -80px) scale(1.45);
+    filter: drop-shadow(16px 30px 12px rgba(0, 0, 0, 0.3));
+  }
+}
+/* Ruck am Tisch beim Aufschlag (Stempel, Schluss). */
+.papers__docs.is-thump-a {
+  animation: papers-thump-a 0.3s 0.14s ease-out;
+}
+.papers__docs.is-thump-b {
+  animation: papers-thump-b 0.3s 0.14s ease-out;
+}
+@keyframes papers-thump-a {
+  25% {
+    transform: translateY(3px) scale(0.997);
+  }
+  60% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes papers-thump-b {
+  25% {
+    transform: translateY(3px) scale(0.997);
+  }
+  60% {
+    transform: translateY(-1px);
   }
 }
 
@@ -602,17 +759,22 @@
   transform: scaleX(0);
 }
 
-/* Großer Stempel am Ende. */
+/* Großer Stempel am Ende: schlägt ein, Farbe abgenutzt; rot, wenn er beanstandet. */
 .pp-sheet__cleared {
   position: absolute;
+  z-index: 3;
   left: 50%;
   top: 55%;
   padding: 4px 14px;
   border: 4px double var(--pp-ok);
   border-radius: 8px;
   color: var(--pp-ok);
+  -webkit-mask-image: var(--pp-ink-wear, none);
+  mask-image: var(--pp-ink-wear, none);
+  -webkit-mask-size: 110px 110px;
+  mask-size: 110px 110px;
   font-family: var(--font-hud-display);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -621,9 +783,30 @@
   pointer-events: none;
 }
 @keyframes papers-cleared {
-  from {
+  0% {
     opacity: 0;
-    transform: translate(-50%, -50%) rotate(-12deg) scale(2.2);
+    transform: translate(-50%, -50%) rotate(-16deg) scale(2.6);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-12deg) scale(0.94);
+  }
+}
+.pp-sheet__cleared.is-fail {
+  border-color: var(--pp-stamp);
+  color: var(--pp-stamp);
+  transform: translate(-50%, -50%) rotate(9deg);
+  animation-name: papers-cleared-fail;
+  animation-delay: 0.23s;
+}
+@keyframes papers-cleared-fail {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(14deg) scale(2.6);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(9deg) scale(0.94);
   }
 }
 
@@ -667,6 +850,43 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--hud-ink-2);
+}
+/* Vergleich im Wertewähler: dasselbe Feld auf den anderen Papieren und die Vorlage. */
+.papers__compare {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-fill);
+}
+.papers__compare-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+.papers__compare-row dt {
+  max-width: 15em;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--hud-ink-2);
+}
+.papers__compare-row dd {
+  margin: 0;
+  overflow: hidden;
+  font: 600 15px var(--font-hud-display);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.papers__compare-row.is-ref dt,
+.papers__compare-row.is-ref dd {
+  color: var(--hud-gold);
 }
 .papers__options {
   display: grid;
@@ -893,6 +1113,9 @@
   .pp-sheet.is-shake-b,
   .pp-reader__finger,
   .pp-field.is-stamped .pp-stamp,
+  .pp-field.is-edited .pp-field__text,
+  .papers__docs.is-thump-a,
+  .papers__docs.is-thump-b,
   .pp-sheet__cleared,
   .papers__bubble {
     animation: none;
