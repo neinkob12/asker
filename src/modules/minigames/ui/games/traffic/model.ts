@@ -31,17 +31,24 @@ export const MAX_HITS = 2;
 export const QUESTIONS_EASY = 5;
 export const QUESTIONS_HARD = 7;
 /** Misstrauen: je Treffer, je passender Antwort (fällt), pro Sekunde Warten bei offener Frage, Start. */
-export const HIT_SUS = 0.34;
+export const HIT_SUS = { easy: 0.3, hard: 0.5 };
 export const OK_SUS = -0.04;
-export const WAIT_SUS = { easy: 0.006, hard: 0.014 };
+export const WAIT_SUS = { easy: 0.006, hard: 0.03 };
+/** So lange darf man je Frage nach dem Lesen überlegen, ohne dass das Warten Misstrauen kostet (Sekunden). */
+export const GRACE = 2.5;
+/** Ist das Misstrauen voll, lässt er aussteigen (auch ohne zweiten Widerspruch). */
+export const SUS_FAIL = 1;
 export const START_SUS = 0.12;
 /**
- * Ab so vielen Sekunden Überlegen sagt er etwas (einmal je Frage) und es kostet etwas Misstrauen (leicht bis schwer).
- * Nach SILENT mal so lange ist Schweigen auch eine Antwort: Es zählt als Widerspruch, und er fragt weiter.
+ * Ab so vielen Sekunden Überlegen (dazu die Lesezeit der Frage, READ_CPS) sagt er etwas (einmal je Frage) und es
+ * kostet etwas Misstrauen (leicht bis schwer). Nach SILENT mal so lange ist Schweigen auch eine Antwort: Es zählt als
+ * Widerspruch, und er fragt weiter.
  */
-export const SLOW_AFTER = { easy: 16, hard: 10 };
+export const SLOW_AFTER = { easy: 4, hard: 0.5 };
 export const SLOW_SUS = 0.06;
 export const SILENT = 1.8;
+/** Lesezeit: Frage und Antworten mit so vielen Zeichen pro Sekunde (lange Fragen geben mehr Zeit). */
+export const READ_CPS = 20;
 /** Bestechen klappt nur bei mittlerem Misstrauen (dazwischen). */
 export const BRIBE_MIN = 0.3;
 export const BRIBE_MAX = 0.78;
@@ -87,6 +94,8 @@ export interface TrafficSetup {
   walkAfter: number;
   radioAfter: number;
   waitSus: number;
+  /** Misstrauen je Widerspruch (schwer: Er setzt nach einem Treffer härter nach). */
+  hitSus: number;
   /** Sekunden bis „So lange überlegen?“. */
   slowAfter: number;
 }
@@ -105,6 +114,8 @@ export interface TrafficState {
   hits: number;
   /** So lange hast du bei der aktuellen Frage schon überlegt. */
   thinking: number;
+  /** Ab hier wird er ungeduldig (Sekunden, je Frage: Bedenkzeit plus Lesezeit). */
+  slowAt: number;
   slowSaid: boolean;
   walked: boolean;
   radioed: boolean;
@@ -174,6 +185,7 @@ export function createTraffic(seed: number, difficulty: number, options: Traffic
     walkAfter,
     radioAfter: order.length - 2,
     waitSus: lerp(WAIT_SUS.easy, WAIT_SUS.hard, d),
+    hitSus: lerp(HIT_SUS.easy, HIT_SUS.hard, d),
     slowAfter: lerp(SLOW_AFTER.easy, SLOW_AFTER.hard, d),
   };
 }
@@ -197,6 +209,7 @@ export function initTraffic(setup: TrafficSetup): TrafficState {
     suspicion: START_SUS,
     hits: 0,
     thinking: 0,
+    slowAt: setup.slowAfter,
     slowSaid: false,
     walked: false,
     radioed: false,
@@ -273,6 +286,12 @@ export function buildQuestion(setup: TrafficSetup, state: TrafficState, id: stri
   };
 }
 
+/** Sekunden, um Frage und Antworten zu lesen. */
+export function readSeconds(q: Question | null): number {
+  if (!q) return 0;
+  return (q.text.length + q.answers.reduce((n, a) => n + a.text.length, 0)) / READ_CPS;
+}
+
 function say(state: TrafficState, lines: readonly string[]): void {
   const text = lines[Math.floor(state.random() * lines.length)] ?? lines[0];
   state.line = { text, n: (state.line?.n ?? 0) + 1 };
@@ -307,6 +326,7 @@ function nextQuestion(setup: TrafficSetup, state: TrafficState): Signal {
   state.index = next;
   state.question = buildQuestion(setup, state, setup.order[next]);
   state.thinking = 0;
+  state.slowAt = setup.slowAfter + readSeconds(state.question);
   state.slowSaid = false;
   sayText(state, state.question.text);
   enter(state, 'ask', Infinity);
@@ -355,18 +375,27 @@ export function advance(setup: TrafficSetup, state: TrafficState, dt: number): S
       break;
     case 'ask':
       state.thinking += dt;
-      state.suspicion = clamp(state.suspicion + setup.waitSus * dt, 0, 1);
-      if (state.thinking >= setup.slowAfter && !state.slowSaid) {
+      // Lesen und kurz überlegen ist normal; wer länger zögert, macht ihn misstrauisch.
+      if (state.thinking > state.slowAt - setup.slowAfter + GRACE)
+        state.suspicion = clamp(state.suspicion + setup.waitSus * dt, 0, 1);
+      if (state.suspicion >= SUS_FAIL) {
+        state.question = null;
+        state.caught = [];
+        state.outcome = 'fail';
+        say(state, OFFICER_LINES.fed);
+        enter(state, 'end', END + 0.6);
+        signals.push('fail');
+      } else if (state.thinking >= state.slowAt && !state.slowSaid) {
         state.slowSaid = true;
         state.suspicion = clamp(state.suspicion + SLOW_SUS, 0, 1);
         say(state, OFFICER_LINES.slow);
         signals.push('slow');
-      } else if (state.thinking >= setup.slowAfter * SILENT) {
+      } else if (state.thinking >= state.slowAt * SILENT) {
         // Keine Antwort ist auch eine Antwort.
         state.question = null;
         state.caught = [];
         const line = OFFICER_LINES.silent[Math.floor(state.random() * OFFICER_LINES.silent.length)];
-        signals.push('silent', caughtOut(state, line) === 'fail' ? 'fail' : 'hit');
+        signals.push('silent', caughtOut(setup, state, line) === 'fail' ? 'fail' : 'hit');
       }
       break;
     case 'react':
@@ -384,10 +413,10 @@ export function advance(setup: TrafficSetup, state: TrafficState, dt: number): S
 export type AnswerResult = 'ok' | 'hit' | 'fail' | 'none';
 
 /** Ein Widerspruch fliegt auf (oder du schweigst zu lange): Treffer, beim letzten „Aussteigen“. */
-function caughtOut(state: TrafficState, remark: string): 'hit' | 'fail' {
+function caughtOut(setup: TrafficSetup, state: TrafficState, remark: string): 'hit' | 'fail' {
   state.hits += 1;
-  state.suspicion = clamp(state.suspicion + HIT_SUS, 0, 1);
-  if (state.hits >= MAX_HITS) {
+  state.suspicion = clamp(state.suspicion + setup.hitSus, 0, 1);
+  if (state.hits >= MAX_HITS || state.suspicion >= SUS_FAIL) {
     state.outcome = 'fail';
     sayText(state, `${remark} ${OFFICER_LINES.fail[Math.floor(state.random() * OFFICER_LINES.fail.length)]}`);
     enter(state, 'end', END + 0.6);
@@ -412,7 +441,7 @@ export function answer(setup: TrafficSetup, state: TrafficState, index: number):
   // Was du sagst, gilt ab jetzt (auch wenn es nicht passt: dann hast du es eben behauptet).
   for (const [k, v] of Object.entries(a.claims)) if (v) state.story[k as FactKey] = v;
   state.question = null;
-  if (remark) return caughtOut(state, remark);
+  if (remark) return caughtOut(setup, state, remark);
   state.suspicion = clamp(state.suspicion + OK_SUS, 0, 1);
   say(state, OFFICER_LINES.ok);
   enter(state, 'react', REACT.ok);
@@ -451,9 +480,9 @@ export function flee(state: TrafficState): boolean {
 }
 
 /** Geduld 0 bis 1, solange er auf deine Antwort wartet (1 = gerade gefragt, 0 = Schweigen zählt). */
-export function patience(setup: TrafficSetup, state: TrafficState): number {
+export function patience(_setup: TrafficSetup, state: TrafficState): number {
   if (state.phase !== 'ask') return 1;
-  return clamp(1 - state.thinking / (setup.slowAfter * SILENT), 0, 1);
+  return clamp(1 - state.thinking / (state.slowAt * SILENT), 0, 1);
 }
 
 /** Fortschritt 0 bis 1 (Fragen beantwortet). */

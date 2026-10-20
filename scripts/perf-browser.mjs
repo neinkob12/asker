@@ -835,6 +835,75 @@ for (const [scene, kind, title] of [
   await page.waitForTimeout(800);
 }
 
+// Verkehrskontrolle und Papiere (Auftrag 48, Teil B): --scenes=kontrolle bzw. papiere öffnet das Minispiel als
+// Vorschau (Nacht mit Regen bzw. Kai), wartet die Einleitung ab und misst SECONDS Sekunden lang Bilder pro Sekunde, den
+// längsten Abstand und die Rechenzeit pro Bild (window.__mgPerf aus dem Spiel, nur im Dev-Server). Die Kontrolle
+// beantwortet jede Frage mit der ersten Antwort nach 3 s, die Papiere laufen ohne Eingabe (der Zöllner liest).
+for (const [scene, kind, label] of [
+  ['kontrolle', 'traffic', 'Verkehrskontrolle'],
+  ['papiere', 'papers', 'Papiere fälschen'],
+]) {
+  if (!SCENES.has(scene)) continue;
+  await closeDialogs();
+  await page.evaluate((k) => window.koeln.dev.minigamePreview(k, { schwer: 0.2, seed: 1 }), kind);
+  await page.waitForSelector('.mg-intro', { timeout: 20000 });
+  await page.waitForTimeout(2500);
+  await page.click('.mg-intro .mg-button.is-gold');
+  await page.waitForSelector('.mg-run.is-play', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => {
+    window.__mgPerf = { frames: 0, total: 0, max: 0 };
+    window.__perf.reset();
+    window.__mgFps = { frames: 0, start: performance.now(), worst: 0, last: performance.now() };
+    const tick = (now) => {
+      const j = window.__mgFps;
+      if (!j || j.stop) return;
+      j.frames += 1;
+      j.worst = Math.max(j.worst, now - j.last);
+      j.last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  for (let i = 0; i < SECONDS; i++) {
+    await page.waitForTimeout(1000);
+    if (kind === 'traffic' && i % 3 === 2) {
+      const answer = page.locator('.traffic__answer:enabled').first();
+      if (await answer.count()) await answer.click().catch(() => {});
+    }
+    if (await page.locator('.mg-result').count()) break;
+  }
+  const info = await page.evaluate(() => {
+    const j = window.__mgFps;
+    j.stop = true;
+    const seconds = (performance.now() - j.start) / 1000;
+    return {
+      seconds,
+      fps: j.frames / seconds,
+      worst: j.worst,
+      perf: window.__mgPerf?.frames ? window.__mgPerf : null,
+      longTasks: window.__perf.longTasks,
+      ended: !!document.querySelector('.mg-result'),
+    };
+  });
+  const lt = info.longTasks;
+  const perFrame = info.perf ? (info.perf.total / Math.max(1, info.perf.frames)).toFixed(2) : '–';
+  console.log(
+    [
+      `\n######## "${label}" (${info.seconds.toFixed(0)} s, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${info.ended ? ', vorzeitig zu Ende' : ''}) ########`,
+      `Bilder: ${info.fps.toFixed(1)} fps, längster Abstand ${info.worst.toFixed(0)} ms`,
+      `Spiel pro Bild (Modell, Szene, Zeichnen): ${info.perf ? `${perFrame} ms im Mittel, schlimmstes ${info.perf.max.toFixed(1)} ms über ${info.perf.frames} Bilder` : '–'}`,
+      `Draw-Calls pro Bild (3D): ${info.perf?.calls ?? '–'}`,
+      `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
+    ].join('\n'),
+  );
+  summary.push(`${label}: ${info.fps.toFixed(1)} fps, ${perFrame} ms/Bild`);
+  // Schließen und kurz warten, damit die nächste Szene frisch startet.
+  await page.evaluate(() => window.koeln?.dev?.minigameLose?.());
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('Escape');
+}
+
 console.log(`\n######## Zusammenfassung ########\n${summary.join('\n')}`);
 console.log(`\nBrowser-Fehler: ${errors.length}${errors.length ? `\n${errors.slice(0, 5).join('\n')}` : ''}`);
 await browser.close();

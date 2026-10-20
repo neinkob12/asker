@@ -6,7 +6,9 @@
    Lupe (is-compare), Kuli schreibt, Holzstempel (pp-press) mit Ruck am Tisch, Stempelfarbe abgenutzt (--pp-ink-wear). */
 
 .papers {
-  --pp-row: 46px;
+  /* Zeilenhöhe wächst mit der Bühne (Container-Höhe), damit die Papiere den Tisch füllen. */
+  --pp-row: clamp(46px, 8.4cqh, 70px);
+  container-type: size;
   position: absolute;
   inset: 0;
   display: grid;
@@ -32,13 +34,49 @@
   display: block;
   touch-action: none;
 }
+.papers__docs {
+  position: relative;
+  z-index: 1;
+}
 .papers__booth,
 .papers__refs,
 .papers__tabs,
-.papers__docs,
 .papers__ways {
   position: relative;
+  z-index: 2;
+}
+/* Licht der Schreibtischlampe über den Papieren: warmer Kegel von oben rechts, zum Rand hin dunkler (auch auf dem
+   Papier, das am Rand liegt). Nachts enger und tiefer. */
+.papers__light {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    ellipse 75% 85% at 72% 26%,
+    rgba(255, 246, 228, 1) 0%,
+    rgba(250, 232, 200, 1) 38%,
+    rgba(150, 120, 95, 1) 78%,
+    rgba(90, 72, 60, 1) 100%
+  );
+}
+.papers.is-night .papers__light {
+  background: radial-gradient(
+    ellipse 62% 72% at 72% 24%,
+    rgba(255, 240, 214, 1) 0%,
+    rgba(240, 210, 165, 1) 34%,
+    rgba(110, 85, 65, 1) 72%,
+    rgba(55, 42, 34, 1) 100%
+  );
+}
+.papers.is-narrow .papers__light {
+  background: radial-gradient(
+    ellipse 95% 70% at 70% 45%,
+    rgba(255, 246, 228, 1) 0%,
+    rgba(250, 232, 200, 1) 45%,
+    rgba(140, 112, 90, 1) 100%
+  );
 }
 
 /* ---------------------------------------------------------------- HUD oben */
@@ -105,7 +143,10 @@
   border: 3px solid var(--hud-glass-edge);
   background: linear-gradient(180deg, var(--hud-glass-fill-active), var(--hud-glass-solid));
   box-shadow: var(--hud-shadow);
-  transition: border-color var(--duration) var(--ease-out);
+  transition:
+    border-color var(--duration) var(--ease-out),
+    transform 0.3s var(--ease-out),
+    box-shadow 0.3s var(--ease-out);
 }
 /* Spiegelung der Scheibe. */
 .papers__window::after {
@@ -517,7 +558,7 @@
 .pp-field__value {
   min-width: 0;
   font-family: var(--font-hud-display);
-  font-size: 16px;
+  font-size: clamp(16px, 2.5cqh, 19px);
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -574,6 +615,105 @@
 }
 .pp-field.is-hit {
   background: rgba(176, 38, 28, 0.14);
+}
+/* Beanstandet: Er kringelt das Feld mit Rotstift ein (der Strich zieht sich in einem Zug). */
+.pp-field__circle {
+  position: absolute;
+  inset: 2px -2px;
+  width: calc(100% + 4px);
+  height: calc(100% - 4px);
+  overflow: visible;
+  pointer-events: none;
+}
+.pp-field__circle path {
+  fill: none;
+  stroke: var(--pp-stamp);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1400;
+  stroke-dashoffset: 1400;
+  opacity: 0.85;
+  animation: papers-circle 0.45s 0.1s var(--ease-out) forwards;
+}
+@keyframes papers-circle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* Stichprobe: Er greift sich das Papier (es hebt sich und rückt zum Schalter), die Zeile leuchtet, ein Balken zeigt,
+   wie lange er noch blättert. Jetzt umschreiben, sonst liest er sie. */
+.pp-sheet.is-peeked {
+  transform: rotate(-2deg) translate(-10px, -10px) scale(1.03);
+  box-shadow:
+    inset 0 0 0 5px var(--sheet),
+    inset 0 0 0 6px color-mix(in srgb, var(--sheet-print) 40%, transparent),
+    0 0 0 3px var(--cat-warn),
+    0 0 26px color-mix(in srgb, var(--cat-warn) 55%, transparent),
+    0 30px 50px rgba(0, 0, 0, 0.55);
+  animation: papers-peek 0.5s var(--ease-out);
+}
+@keyframes papers-peek {
+  0% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(-3deg) translate(-14px, -16px) scale(1.05);
+  }
+}
+.pp-sheet__peek {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  right: 8px;
+  top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 10px 6px;
+  border-radius: 8px;
+  background: var(--cat-warn);
+  color: var(--hud-glass-solid);
+  font: 800 12px var(--font-hud-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+  animation: papers-pop 0.25s var(--ease-out);
+}
+.pp-sheet__peek svg {
+  width: 14px;
+  height: 14px;
+}
+.pp-sheet__peek-bar {
+  flex-basis: 100%;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+}
+.pp-sheet__peek-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--hud-glass-solid);
+  transform-origin: 0 50%;
+  will-change: transform;
+}
+.pp-field.is-peek {
+  outline: 3px solid var(--cat-warn);
+  outline-offset: -3px;
+  animation: papers-peek-field 0.6s steps(2) infinite;
+}
+@keyframes papers-peek-field {
+  50% {
+    background: color-mix(in srgb, var(--cat-warn) 30%, transparent);
+  }
+}
+/* Der Zöllner beugt sich zur Scheibe, wenn er sich etwas greift. */
+.papers__window.is-peek {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px var(--cat-warn);
 }
 .pp-field.is-flash {
   animation: papers-flash 0.9s var(--ease-out);
@@ -1112,6 +1252,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pp-sheet.is-peeked,
+  .pp-field.is-peek,
+  .pp-field__circle path {
+    animation: none;
+  }
+  .pp-field__circle path {
+    stroke-dashoffset: 0;
+  }
   .pp-sheet.is-shake-a,
   .pp-sheet.is-shake-b,
   .pp-reader__finger,

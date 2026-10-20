@@ -22,7 +22,8 @@ registerMinigameView('papers', {
       'Der Zöllner liest ein Papier nach dem anderen, sein Finger wandert die Zeilen runter. Was auf einem Papier ' +
       'anders steht als auf den beiden anderen, auf der Waage, im Kalender oder auf dem Kennzeichen, musst du ' +
       'umschreiben, bevor er dort ankommt. Mit der Maus über einer Zeile leuchtet dasselbe Feld auf allen Papieren. ' +
-      'Der Ausfuhrstempel muss zur Herkunft passen. Findet er zwei Fehler, ' +
+      'Der Ausfuhrstempel muss zur Herkunft passen. Bei schweren Kontrollen greift er sich zwischendurch ein ' +
+      'anderes Papier (Stichprobe, das Papier leuchtet orange): Schnell die Zeile richtigstellen. Findet er zwei Fehler, ' +
       'macht er die Ladung auf. Den Schein nimmt er erst, wenn er schon etwas gefunden hat; vorher zählt er als ' +
       'Fehler. Aufgeben heißt: Die Ware bleibt da, festgenommen wird niemand.',
   },

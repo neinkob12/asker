@@ -1,8 +1,9 @@
 // Verkehrskontrolle (Auftrag 44, Teil 4; seit Auftrag 47 ein Gespräch mit Widersprüchen aus dem Auto in 3D):
-// Anmeldung der Ansicht. Spiel in TrafficGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Fragen und
-// Antworten als Daten (questions.ts), 3D-Szene in scene.ts, Klänge in sounds.ts. Auslöser und Folgen: encounters
-// (vehicleCheck, applyTraffic in encounters/minigames.ts).
-// Vorschau: ?minispiel=traffic (Nacht mit Regen), &seed=2 (gerade Seeds: Tag, trocken).
+// Anmeldung der Ansicht. Spiel in TrafficGame.tsx, Logik als reines Modell (model.ts mit model.test.ts, Schwierigkeit
+// in model.balance.test.ts), Fragen und Antworten als Daten (questions.ts), 3D-Szene in scene.ts (Beamter officer.ts,
+// Gesicht faceTexture.ts, Texturen textures.ts), Klänge in sounds.ts. Auslöser und Folgen: encounters (vehicleCheck,
+// applyTraffic in encounters/minigames.ts).
+// Vorschau: ?minispiel=traffic (Regen, Tageszeit der Spieluhr), &seed=2 (gerade Seeds: trocken).
 
 import { formatEuro } from '../../../../../core';
 import { lazyView } from '../../kit/lazyView';
@@ -24,16 +25,17 @@ registerMinigameView('traffic', {
       'Du sitzt am Steuer, der Beamte steht am Fenster und fragt: Woher, wohin, wessen Wagen, was hinten drin ist. ' +
       'Zu jeder Frage passt eine Antwort zu dem, was er sieht (Uhrzeit, Kennzeichen, Fahrzeug, die Ladung hinter ' +
       'der Scheibe) und zu dem, was du schon gesagt hast; beides steht links im Bild. Fliegt ein Widerspruch auf, ' +
-      'leuchtet auf, woran es hing, und das Misstrauen steigt; beim zweiten musst du aussteigen. Er fragt auch nach, ' +
-      'was du eben gesagt hast. Unter seiner Frage läuft die Geduld ab: Wer zu lange schweigt, fliegt auch auf. Der ' +
-      'Schein klappt nur bei mittlerem Misstrauen, Gas geben heißt Verfolgungsjagd.',
+      'leuchtet auf, woran es hing, und das Misstrauen steigt; beim zweiten oder bei vollem Misstrauen musst du ' +
+      'aussteigen. Er fragt nach und stellt Fallen („Sie kamen doch vom Baumarkt?“): Dann gilt, was du wirklich ' +
+      'gesagt hast. Unter seiner Frage läuft die Geduld ab: Wer lange zögert, macht ihn misstrauisch, wer schweigt, ' +
+      'fliegt auf. Der Schein klappt nur bei mittlerem Misstrauen, Gas geben heißt Verfolgungsjagd.',
   },
   previewParams: (seed) => ({
     encounterKind: 'vehicleCheck',
     setting: 'street',
-    phase: seed % 2 === 0 ? 'day' : 'night',
+    // Ohne Stunde und Tageszeit nimmt das Spiel die Spieluhr (sonst passten Bild und Uhr nicht zusammen); --uhr der
+    // Screenshots setzt beides.
     weather: seed % 2 === 0 ? 'clear' : 'rain',
-    hour: seed % 2 === 0 ? 15 : 1,
     place: 'in Ehrenfeld',
     opponent: { label: 'Die Streife', strength: 50, count: 2, roles: ['leader', 'nervous'] },
     stakes: { ids: ['goods', 'people', 'noise'], money: 0, goods: 400 },
