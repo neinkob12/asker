@@ -21,8 +21,8 @@ registerMinigameView('safe', {
     touch: 'Am Rad drehen oder Pfeile halten, dann „Einrasten“.',
     help:
       'Drei Zahlen: erst nach rechts auf die erste, dann nach links auf die zweite, dann wieder nach rechts. ' +
-      'Je näher du bist, desto lauter klickt es, das Rad zittert und das Stethoskop schlägt aus; genau über der ' +
-      'richtigen Zahl gibt es einen satten Klick. Falsch einrasten kostet Sekunden.',
+      'Dreh am Rad: An der richtigen Zahl hakt es kurz mit einem hellen Klick, und ein Kreidestrich bleibt stehen. ' +
+      'Loslassen, einrasten. Dumpfe Störklicks sind falsch. Falsch einrasten kostet Sekunden.',
   },
   previewParams: () => ({ max: 2400, gang: 'Schäl Sick' }),
   previewSituation: 'Im Hinterzimmer von Schäl Sick steht ein alter Stahltresor. Drin: bis zu 2.400 €.',

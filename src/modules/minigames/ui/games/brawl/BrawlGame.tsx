@@ -14,6 +14,7 @@ import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import { type Stage, useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
+import { createCrowd, drawCrowd } from './crowd';
 import {
   BADGE_FOR,
   type Backdrop,
@@ -58,6 +59,7 @@ import {
   CREW_MOVES,
   createBrawl,
   type Fighter,
+  fighterById,
   finished,
   GRAB_TIME,
   initBrawl,
@@ -209,6 +211,7 @@ export function BrawlGame(props: MinigameViewProps) {
     }
     return map;
   }, [setup]);
+  const crowd = useMemo(() => createCrowd(setup.seed, 7), [setup]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<{ layout: BrawlLayout; backdrop: Backdrop; mobile: boolean } | null>(null);
   const fx = useRef({
@@ -224,6 +227,8 @@ export function BrawlGame(props: MinigameViewProps) {
     punchAt: { x: 0, y: 0 },
     floaters: [] as Floater[],
     drops: [] as Drop[],
+    /** Zuschauer: Aufregung (0–1, klingt ab), seit wann und wo es gekracht hat (Meter). */
+    cheer: { level: 0, since: -10, x: 9 },
     lastHud: -1,
     sent: false,
     calloutUntil: 0,
@@ -297,6 +302,15 @@ export function BrawlGame(props: MinigameViewProps) {
   /** Wer den Spezialzug Nummer i hat (Crew in Reihenfolge, nur mit Zug). */
   function specialAt(i: number): string | null {
     return setup.own.filter((f) => f.move)[i]?.id ?? null;
+  }
+
+  /** Die Zuschauer gehen mit (harter Treffer, Konter, einer am Boden). */
+  function cheer(x: number, level: number): void {
+    const c = fx.current.cheer;
+    if (level < c.level) return;
+    c.level = level;
+    c.since = fx.current.t;
+    c.x = x;
   }
 
   function cameraGoal(): number {
@@ -385,6 +399,7 @@ export function BrawlGame(props: MinigameViewProps) {
         case 'hit': {
           const at = screenOf(e.target);
           const own = e.target === 'player';
+          if (!e.blocked && (e.attack !== 'light' || e.counter)) cheer(e.x, e.counter ? 1 : 0.75);
           if (at) {
             const y = at.y - ppm * at.scale * 1.35;
             const color = e.blocked ? palette.ink2 : e.counter ? palette.gold : own ? palette.danger : palette.ink;
@@ -462,6 +477,7 @@ export function BrawlGame(props: MinigameViewProps) {
         }
         case 'down':
           sfx(BRAWL_SOUNDS.down, 0.9);
+          cheer(fighterById(game.current, e.id)?.x ?? fx.current.cheer.x, 1);
           if (e.id === 'player') say('Du gehst zu Boden.', 'bad', 3);
           else if (e.id.startsWith('foe:')) {
             f.shake = Math.max(f.shake, 0.7);
@@ -561,6 +577,7 @@ export function BrawlGame(props: MinigameViewProps) {
       const at = toScreen(layout, f.cam, setup.loot.x, 1);
       drawLoot(ctx, setup.loot.stake, at.x, at.y, layout.ppm * at.scale, palette, s.grabbed);
     }
+    drawCrowd(ctx, layout, f.cam, crowd, f.t, f.cheer, setup.phase !== 'day', palette.gold);
     // Figuren von hinten nach vorn (hintere Ebene zuerst), am Boden Liegende zuerst.
     const order = [...s.fighters].sort(
       (a, b) =>
@@ -607,6 +624,11 @@ export function BrawlGame(props: MinigameViewProps) {
         bulk: fig.bulk,
         ring,
         light: lightOn(fighter, at.x),
+        // Atmen: ruhig im Stand, schnell und tief, wenn das Leben knapp wird; liegend nicht.
+        breath:
+          fighter.state === 'down' || fighter.out
+            ? 0
+            : Math.sin(f.t * (2.2 + 3 * (1 - fighter.hp / fighter.maxHp)) + fighter.id.length * 1.3),
       };
       // Nasse Straße: blasse Spiegelung unter der Figur.
       if (wet && fighter.state !== 'down') {
@@ -614,7 +636,13 @@ export function BrawlGame(props: MinigameViewProps) {
         ctx.translate(0, at.y * 2);
         ctx.scale(1, -1);
         ctx.globalAlpha = 0.12;
-        drawFigure(ctx, pose, fig.look, fig.colors, { ...opts, ring: null, opacity: 0.12, light: null });
+        drawFigure(ctx, pose, fig.look, fig.colors, {
+          ...opts,
+          ring: null,
+          opacity: 0.12,
+          light: null,
+          simple: true,
+        });
         ctx.restore();
       }
       if (fighter.state === 'dodge' && !reduced) {
@@ -625,6 +653,7 @@ export function BrawlGame(props: MinigameViewProps) {
           opacity: 0.18,
           ring: null,
           light: null,
+          simple: true,
         });
       }
       drawFigure(ctx, pose, fig.look, fig.colors, opts);
@@ -705,6 +734,7 @@ export function BrawlGame(props: MinigameViewProps) {
     f.shake = Math.max(0, f.shake - dt * 4);
     f.flash = Math.max(0, f.flash - dt * 2.5);
     f.vignette = Math.max(0, f.vignette - dt * 2);
+    f.cheer.level = Math.max(0, f.cheer.level - dt * 0.55);
     const slow = s.slowmo > 0 ? 0.35 : 1;
     for (const sp of f.sparks) {
       sp.x += sp.vx * dt * slow;
