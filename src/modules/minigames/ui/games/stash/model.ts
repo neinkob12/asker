@@ -859,3 +859,24 @@ export function bestMove(setup: StashSetup, state: StashState): { id: number; hi
   }
   return best ? { id: best.id, hide: best.hide } : null;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Lead-PR #136). */
+export interface StashStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Ergebnis-Werte: versteckt, nass, liegen geblieben, Zeit übrig (höchstens vier). */
+export function stashStats(setup: StashSetup, state: StashState): StashStat[] {
+  const c = stashCounts(setup, state);
+  const stats: StashStat[] = [
+    { label: 'Versteckt', value: `${c.hidden}/${setup.packages.length}`, icon: 'package', tone: 'good' },
+  ];
+  if (c.wet > 0) stats.push({ label: 'Nass', value: String(c.wet), icon: 'drop' });
+  if (c.left > 0) stats.push({ label: 'Gefunden', value: String(c.left), icon: 'siren', tone: 'bad' });
+  if (state.cleared)
+    stats.push({ label: 'Zeit übrig', value: `${Math.ceil(timeLeft(setup, state))} s`, icon: 'clock' });
+  return stats.slice(0, 4);
+}

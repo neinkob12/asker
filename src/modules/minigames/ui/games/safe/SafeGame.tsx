@@ -3,7 +3,7 @@
 // (Umschalt: fein), Einrasten mit Leertaste bzw. „Einrasten“. Nahe an der Zahl: Klicken lauter, das Rad zittert, das
 // Stethoskop schlägt aus, am Handy vibriert es. Spiellogik in model.ts, Zeichnen in draw.ts.
 
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudTimer } from '../../kit/hud';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
@@ -407,6 +407,11 @@ export function SafeGame(props: MinigameViewProps) {
   const onPointerUp = (e: PointerEvent) => {
     if (drag.current?.id === e.pointerId) drag.current = null;
   };
+
+  // Pause mitten im Spiel: gehaltene Knöpfe loslassen; weiter geht es genau dort.
+  useEffect(() => {
+    if (!running) fx.current.touchDir = 0;
+  }, [running]);
 
   const s = game.current;
   const dir = requiredDir(Math.min(2, hud.step));

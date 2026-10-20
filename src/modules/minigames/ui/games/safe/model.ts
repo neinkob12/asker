@@ -229,3 +229,23 @@ export function safeScore(setup: SafeSetup, state: SafeState): number {
   if (state.opened) return Math.round((0.6 + 0.4 * (timeLeft(setup, state) / setup.duration)) * 1000) / 1000;
   return Math.round(((0.2 * cracked(state)) / 3) * 1000) / 1000;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Lead-PR #136). */
+export interface SafeStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Ergebnis-Werte: Zahlen, Fehlversuche, Zeit übrig. */
+export function safeStats(setup: SafeSetup, state: SafeState): SafeStat[] {
+  const stats: SafeStat[] = [{ label: 'Zahlen', value: `${cracked(state)}/3`, icon: 'lock', tone: 'good' }];
+  stats.push({
+    label: 'Fehlversuche',
+    value: String(state.mistakes),
+    ...(state.mistakes > 0 ? { tone: 'bad' as const } : {}),
+  });
+  if (state.opened) stats.push({ label: 'Zeit übrig', value: `${Math.ceil(timeLeft(setup, state))} s`, icon: 'clock' });
+  return stats;
+}

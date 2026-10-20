@@ -494,6 +494,11 @@ export function StashGame(props: MinigameViewProps) {
 
   // Bild auch ohne laufendes Spiel (Einleitung, Ergebnis) aktuell halten.
   useEffect(() => {
+    // Pause (running false mitten im Spiel): gehaltene Knöpfe loslassen; weiter geht es genau dort.
+    if (!running) {
+      held.current.left = false;
+      held.current.right = false;
+    }
     draw(0);
   }, [running]);
 

@@ -14,6 +14,7 @@ import {
   type SearchSetup,
   searchPicks,
   searchScore,
+  searchStats,
   splitMoney,
   timeLeft,
 } from './model';
@@ -235,5 +236,14 @@ describe('Bude durchsuchen: Schwierigkeit (Bot im Ego-Blick)', () => {
     expect(mid).toBeLessThan(easy);
     expect(hard).toBeLessThan(easy - 0.1);
     expect(hard).toBeGreaterThan(0.35);
+  });
+});
+
+describe('Bude durchsuchen: Ergebnis-Werte', () => {
+  it('Verstecke und durchsucht, Nachbarn bei Alarm', () => {
+    const setup = createSearch(1, 0.5, 900);
+    const state = initSearch(setup);
+    state.alerted = true;
+    expect(searchStats(setup, state).map((s) => s.label)).toEqual(['Verstecke', 'Durchsucht', 'Nachbarn']);
   });
 });

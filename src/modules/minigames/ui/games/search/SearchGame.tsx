@@ -386,6 +386,8 @@ export function SearchGame(props: MinigameViewProps) {
   }, running);
 
   useEffect(() => {
+    // Pause mitten im Spiel: angefangenen Tipp vergessen; weiter geht es genau dort.
+    if (!running) fx.current.press = null;
     draw(0);
   }, [running]);
 

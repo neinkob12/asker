@@ -23,6 +23,7 @@ import {
   stashCounts,
   stashPicks,
   stashScore,
+  stashStats,
   step,
   streetClosed,
   timeLeft,
@@ -360,5 +361,19 @@ describe('Razzia-Lauf: Schwierigkeit (Bot mit Reaktionszeit)', () => {
     const plain = { ...LAGER, warehouse: { vault: 0, cover: 0 } };
     expect(average(plain, 0.9, 0.35)).toBeGreaterThan(0.4);
     expect(average(SPOT, 0.9, 0.35)).toBeGreaterThan(0.8);
+  });
+});
+
+describe('Razzia-Lauf: Ergebnis-Werte', () => {
+  it('versteckt, nass, gefunden; höchstens vier', () => {
+    const setup = createStash(2, 0, SPOT);
+    const state = initStash(setup);
+    const pkg = setup.packages.find((p) => p.size <= 2);
+    if (!pkg) throw new Error('kein Paket');
+    state.items[pkg.id].hide = 'drain';
+    state.done = true;
+    const stats = stashStats(setup, state);
+    expect(stats[0]).toMatchObject({ label: 'Versteckt', value: `1/${setup.packages.length}` });
+    expect(stats.map((s) => s.label)).toEqual(['Versteckt', 'Nass', 'Gefunden']);
   });
 });
