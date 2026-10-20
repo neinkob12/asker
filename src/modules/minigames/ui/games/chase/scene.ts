@@ -360,6 +360,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     );
     composer.addPass(bloom);
     lens = new ShaderPass(LENS_SHADER);
+    // Am Handy keine Radial-Unschärfe (3 Abtastungen sahen wie Geisterbilder aus und kosten Füllrate), siehe uBlur.
     lens.uniforms.uTaps.value = hi ? 7 : 3;
     lens.uniforms.uGrain.value = hi ? 0.03 : 0.02;
     composer.addPass(lens);
@@ -772,7 +773,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     if (lens) {
       const u = lens.uniforms;
       const turboK = p.turboOn ? 1 : 0;
-      u.uBlur.value = reduced ? 0 : Math.max(0, speedF - 0.75) * 1.2 + turboK * 0.9;
+      u.uBlur.value = reduced || !hi ? 0 : Math.max(0, speedF - 0.75) * 1.2 + turboK * 0.9;
       u.uAberration.value = reduced ? 0 : turboK * 0.5 + cam.shake * 0.8;
       u.uTime.value = (t * 60) % 1000;
       const near = state.nearest;

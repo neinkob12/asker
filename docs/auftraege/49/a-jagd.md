@@ -1,4 +1,4 @@
-# Auftrag 48, Teil A: Verfolgungsjagd – zweite Runde
+# Auftrag 49, Teil A: Verfolgungsjagd (zweite Runde nach Auftrag 48)
 
 Branch `claude/auftrag-48-jagd`. Baut auf dem Stand aus PR #141 auf (Notizen: `../48-minispiele-jagd.md`); hier steht
 nur, was diese Runde dazu kommt.
@@ -47,6 +47,8 @@ Messung (40 Seeds je Zelle im Test, hier 60 Seeds, Schritte zu 1/30 s):
   60 ms; Kamera und Wackeln laufen weiter. Bei `prefers-reduced-motion` die Hälfte.
 - **Knapp vorbei lädt den Turbo** (`NEAR_MISS_TURBO` 0,2 der Ladung, nicht, solange er brennt); Einblendung
   „Knapp vorbei! Turbo +“. Riskant fahren zahlt sich doppelt aus.
+- **Keine Bewegungsunschärfe am Handy** (`uBlur` 0 ohne `hi`): Mit 3 Abtastungen sah sie wie Geisterbilder aus;
+  Tempo zeigen dort Tempo-Linien, Blickwinkel und Rütteln. Spart Füllrate.
 - **Karre in Rot** (`PLAYER_COLOR` 0x7a1016, Metallic mit Klarlack): hebt sich in Dämmerung und Nacht ab; vorher ein
   schwarzer Block.
 
@@ -63,3 +65,11 @@ nichts, die Rechenzeit pro Bild schon):
 
 Offen bleibt die Messung auf einem echten Handy (30 fps ist das Ziel). Falls der Spiegel dort zu teuer ist:
 `MIRROR_FAR` kleiner oder am Handy jedes vierte Bild.
+
+Die Bilder am Handy (`npm run screenshot:minigames -- --kind=chase --sizes=mobile`, auch `--uhr=23`) liefen in dieser
+Runde headless durch (langsam, aber ohne Zeitüberschreitung und ohne Browser-Fehler).
+
+## Offen
+
+- Seitenansicht der Karre bei Drehern (aus Auftrag 48).
+- Messung auf einem echten Handy.
