@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { type Look, lookFor, personLook } from '../../../../../core';
 import { Avatar, audio, DuelBar, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudTimer } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { TouchControls } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
@@ -814,6 +815,7 @@ export function BrawlGame(props: MinigameViewProps) {
         </ul>
         <div class="brawl__center">
           <span class="brawl__clock">
+            <PauseButton />
             <Icon name="siren" class="brawl__siren" />
             <HudTimer seconds={hud.left} total={setup.duration} urgentAt={10} label="bis Polizei" />
           </span>

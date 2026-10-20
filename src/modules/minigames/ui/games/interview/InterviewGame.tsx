@@ -11,6 +11,7 @@ import { type MouthStyle, personLook } from '../../../../../core';
 import { audio, Face, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { TRAITS, type TraitId, traitName } from '../../../../staff';
 import { HudBar } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
@@ -558,6 +559,7 @@ export function InterviewGame(props: MinigameViewProps) {
       <div class="iv-vignette" aria-hidden="true" />
 
       <HudBar class="iv-hud">
+        <PauseButton />
         <span class="iv-hud__round" role="img" aria-label={`Frage ${Math.min(hud.round + 1, ROUNDS)} von ${ROUNDS}`}>
           <Icon name="message" />
           {Math.min(hud.round + 1, ROUNDS)}/{ROUNDS}

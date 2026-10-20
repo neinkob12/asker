@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from 'preact/hooks';
 import { formatAmount } from '../../../../../core';
 import { audio, Face, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudTimer } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
@@ -699,6 +700,7 @@ export function UndercoverGame(props: MinigameViewProps) {
       <Scene night={night} spot={spotName} watched={live && seen.includes('watchesCar')} flash={flash} />
       {bust > 0 && <div key={bust} class="uc-bust" aria-hidden="true" />}
       <HudBar class="uc-hud">
+        <PauseButton />
         <HudTimer seconds={left} total={current?.seconds ?? shift.perCard} urgentAt={2} />
         <span class="uc-hud__stat">
           <span class="uc-hud__label">Kunde</span>
