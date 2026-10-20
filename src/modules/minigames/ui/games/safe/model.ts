@@ -3,7 +3,8 @@
 // Ein altes Zahlenschloss mit 100 Strichen (0 bis 99). Drei Zahlen aus dem Seed, abwechselnd rechts und links
 // gedreht wie bei einem echten Schloss: erst rechts auf die erste Zahl, dann links auf die zweite, dann rechts auf
 // die dritte. Einrasten mit der Leertaste bzw. „Einrasten“: Sitzt die Zahl (Toleranz schmaler mit der Schwierigkeit)
-// und kam man aus der richtigen Richtung, rastet sie ein. Sonst Fehlerton und Strafsekunden.
+// und kam man aus der richtigen Richtung, rastet sie ein. Sonst Fehlerton und Strafsekunden. Seit Auftrag 48 darf man
+// nach dem Überdrehen ein kleines Stück zurück (bis CORRECTION Striche), ohne dass es als falsche Richtung zählt.
 // Score: geknackt 0,6 + 0,4 · restliche Zeit; sonst 0,2 · geknackte Zahlen / 3.
 
 import { createRng } from '../../../../../core';
@@ -40,6 +41,10 @@ export interface SafeState {
   lastDir: TurnDir | 0;
   /** Wie weit seit dem letzten Einrasten in lastDir gedreht wurde (Striche). */
   travel: number;
+  /** Seit dem letzten Einrasten in die verlangte Richtung gedreht (Striche). */
+  ahead: number;
+  /** Seitdem wieder zurück gedreht (Striche, gegen die verlangte Richtung). */
+  back: number;
   mistakes: number;
   done: boolean;
   opened: boolean;
@@ -107,6 +112,8 @@ export function initSafe(setup: SafeSetup): SafeState {
     penalty: 0,
     lastDir: 0,
     travel: 0,
+    ahead: 0,
+    back: 0,
     mistakes: 0,
     done: false,
     opened: false,
@@ -136,7 +143,19 @@ export function turn(state: SafeState, delta: number): number[] {
   state.pos = wrap(to);
   state.travel = state.lastDir === dir ? state.travel + Math.abs(delta) : Math.abs(delta);
   state.lastDir = dir;
+  if (state.step <= 2 && dir === requiredDir(state.step)) {
+    state.ahead += Math.abs(delta);
+    state.back = 0;
+  } else state.back += Math.abs(delta);
   return crossed;
+}
+
+/** So weit (Striche) darf man nach dem Überdrehen zurück, ohne dass es als falsche Richtung zählt. */
+export const CORRECTION = 6;
+
+/** Kommt das Rad aus der richtigen Richtung (höchstens CORRECTION Striche zurück korrigiert)? */
+export function comingRight(state: SafeState): boolean {
+  return state.step <= 2 && state.ahead > 0 && state.back <= CORRECTION;
 }
 
 /** Über so viele Striche steigt die Nähe an (Stethoskop, Klicken, Zittern). */
@@ -151,7 +170,8 @@ export function proximity(setup: SafeSetup, state: SafeState): number {
   const target = setup.combo[state.step];
   const d = dialDistance(state.pos, target);
   const near = clamp01(1 - d / PROXIMITY_RANGE) ** 1.6;
-  return state.lastDir === requiredDir(state.step) || state.lastDir === 0 ? near : near * 0.5;
+  const untouched = state.ahead === 0 && state.back === 0;
+  return untouched || comingRight(state) ? near : near * 0.5;
 }
 
 /** Hat die Drehung (crossed aus turn) die Zahl dieses Schritts in der richtigen Richtung überfahren? Dann klickt es. */
@@ -168,7 +188,7 @@ export function onTarget(setup: SafeSetup, state: SafeState): boolean {
 /** Einrasten versuchen. */
 export function confirm(setup: SafeSetup, state: SafeState): ConfirmResult {
   if (state.done) return 'done';
-  const wrongWay = state.lastDir !== requiredDir(state.step);
+  const wrongWay = !comingRight(state);
   if (wrongWay || !onTarget(setup, state)) {
     state.mistakes += 1;
     state.penalty += setup.penalty;
@@ -178,6 +198,8 @@ export function confirm(setup: SafeSetup, state: SafeState): ConfirmResult {
   state.step += 1;
   state.lastDir = 0;
   state.travel = 0;
+  state.ahead = 0;
+  state.back = 0;
   if (state.step > 2) {
     state.done = true;
     state.opened = true;

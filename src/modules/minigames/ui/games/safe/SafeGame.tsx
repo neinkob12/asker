@@ -29,6 +29,7 @@ import {
   cracked,
   createSafe,
   crossedTarget,
+  dialDistance,
   dialNumber,
   initSafe,
   onTarget,
@@ -45,6 +46,8 @@ const HOLD_DELAY = 0.22;
 /** Striche pro Sekunde beim Halten, mit Umschalt fein. */
 const HOLD_SPEED = 22;
 const FINE_SPEED = 5;
+/** So viel Tempo bleibt kurz vor der richtigen Zahl (Ziehen, Halten): das Rad hakt, man landet leichter drauf. */
+const STICKY = 0.45;
 
 interface Layers {
   layout: SafeLayout;
@@ -115,9 +118,14 @@ export function SafeGame(props: MinigameViewProps) {
 
   const say = (message: string | null, tone: Hud['tone'] = null) => setHud((h) => ({ ...h, message, tone }));
 
-  const turnBy = (delta: number) => {
+  /** Rad drehen; sticky (Ziehen, Halten): kurz vor der richtigen Zahl hakt das Rad spürbar (langsamer). */
+  const turnBy = (rawDelta: number, sticky = false) => {
     const s = game.current;
     if (!running || s.done) return;
+    let delta = rawDelta;
+    if (sticky && s.step <= 2 && Math.sign(delta) === requiredDir(s.step)) {
+      if (dialDistance(s.pos, setup.combo[s.step]) <= setup.tolerance + 1.5) delta *= STICKY;
+    }
     const crossed = turn(s, delta);
     fx.current.dirty = true;
     if (crossed.length === 0) return;
@@ -320,10 +328,10 @@ export function SafeGame(props: MinigameViewProps) {
     const heldDir =
       keys.isDown('ArrowLeft') || keys.isDown('KeyA') ? -1 : keys.isDown('ArrowRight') || keys.isDown('KeyD') ? 1 : 0;
     if (heldDir !== 0 && f.hold.dir === heldDir && f.t - f.hold.since > HOLD_DELAY) {
-      turnBy(heldDir * (keys.shift() ? FINE_SPEED : HOLD_SPEED) * rawDt);
+      turnBy(heldDir * (keys.shift() ? FINE_SPEED : HOLD_SPEED) * rawDt, true);
     }
     if (heldDir === 0) f.hold.dir = 0;
-    if (f.touchDir !== 0 && f.t - f.hold.since > HOLD_DELAY) turnBy(f.touchDir * HOLD_SPEED * 0.7 * rawDt);
+    if (f.touchDir !== 0 && f.t - f.hold.since > HOLD_DELAY) turnBy(f.touchDir * HOLD_SPEED * 0.7 * rawDt, true);
     // Herzschlag in den letzten zehn Sekunden.
     const left = timeLeft(setup, s);
     if (!s.done && left <= 10 && f.t - f.lastBeat >= (left <= 5 ? 0.6 : 1)) {
@@ -394,7 +402,7 @@ export function SafeGame(props: MinigameViewProps) {
     if (delta < -Math.PI) delta += Math.PI * 2;
     d.angle = angle;
     // Eine volle Umdrehung = 100 Striche, im Uhrzeigersinn = rechts.
-    turnBy((delta / (Math.PI * 2)) * 100);
+    turnBy((delta / (Math.PI * 2)) * 100, true);
   };
   const onPointerUp = (e: PointerEvent) => {
     if (drag.current?.id === e.pointerId) drag.current = null;
