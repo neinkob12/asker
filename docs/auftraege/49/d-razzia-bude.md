@@ -52,6 +52,10 @@ Vorschau startet sauber (`?minispiel=stash`, `npm run screenshot:minigames -- --
   sind Wagen und Figur lesbar. Hochkant näher und tiefer (`viewW` 5,4 m). Hit-Stop beim Verstauen, Tor runter und
   Reinstürmen. Die Figur atmet im Stand (schneller, je näher die Streife) und schaut beim Klopfen über die Schulter.
   Licht unter dem Tor als `createCrackLight`.
+- **Razzia, Schluss mit mehr Spannung:** In den letzten `RAM_FROM` 3,2 s kommt im Lager der Rammbock (alle 0,78 s):
+  Das Tor beult sich nach innen und federt zurück, Staub rieselt, unter dem Tor springt weißes Licht durch den Spalt,
+  Wackeln, Hit-Stop 50 ms, kräftige Haptik. Die Kamera rückt in der Schlussphase bis zu 12 % näher. Wer in den letzten
+  `CLOSE_CALL` 1,5 s noch etwas verstaut, bekommt „Knapp!“ mit 140 ms Stillstand.
 - **Ruckler weg:** `scene.warm` zeichnet beim Aufbau (unter der Einleitung) einmal die ganze Strecke mit den Beamten:
   Geometrie, Texturen und Shader sind fertig. Vorher stand das Bild bis zu 1 s, wenn die Kamera zum ersten Mal Richtung
   Tor schwenkte, und beim Reinstürmen (die Lampen der Beamten ändern die Zahl der Lichter, three.js baut dann alle

@@ -83,6 +83,8 @@ export interface StashFx {
   clearT: number;
   /** Klopfen am Tor (Stoß, klingt ab). */
   knock: number;
+  /** Rammbock am Tor (Stoß, klingt ab): Das Tor beult sich nach innen. */
+  ram: number;
   /** Wackeln der Kamera (0 bis 1, klingt ab). */
   shake: number;
   /** Wie nah die Sirenen sind (0 bis 1). */
@@ -1042,10 +1044,15 @@ export function createStashScene(
       const down =
         fx.breachT >= 0 ? Math.max(0, 1 - fx.breachT * 3) : fx.closedT >= 0 ? Math.min(1, fx.closedT / 0.35) : 0;
       shutter.scale.y = Math.max(0.02, down);
-      shutter.position.x = gate + (fx.knock > 0 ? Math.sin(t * 90) * 0.03 * fx.knock : 0);
+      // Beim Rammen beult es sich nach innen (zur Halle) und federt zurück.
+      const bulge = fx.ram > 0 ? -0.16 * fx.ram ** 2 : 0;
+      shutter.position.x = gate + bulge + (fx.knock > 0 ? Math.sin(t * 90) * 0.03 * fx.knock : 0);
+      shutter.scale.z = 1 - 0.04 * fx.ram;
     }
     if (gapGlow) {
-      gapGlow.set(fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.75 : 0.3) : 0, blink ? POLICE_BLUE : POLICE_RED);
+      // Licht unter dem Tor; bei jedem Stoß des Rammbocks springt der Spalt auf.
+      const leak = fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.75 : 0.3) + 0.9 * fx.ram : 0;
+      gapGlow.set(leak, fx.ram > 0.5 ? 0xe8f0ff : blink ? POLICE_BLUE : POLICE_RED);
     }
     police.intensity = copOn * (blink ? 26 : 18) * (fx.closedT >= 0 ? 1 : 0.6);
     police.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
@@ -1126,7 +1133,9 @@ export function createStashScene(
     const shake = reduced ? fx.shake * 0.2 : fx.shake;
     const sx = shake > 0.01 ? Math.sin(t * 71) * 0.12 * shake : 0;
     const sy = shake > 0.01 ? Math.cos(t * 53) * 0.08 * shake : 0;
-    camera.position.set(camX + sx, camY + 2.1 + sy, dist * 0.98);
+    // Zum Schluss rückt die Kamera näher (Enge), bis sie reinstürmen.
+    const tight = fx.breachT >= 0 || fx.clearT >= 0 ? 0 : Math.max(0, (fx.alarm - 0.78) / 0.22);
+    camera.position.set(camX + sx, camY + 2.1 + sy, dist * (0.98 - 0.12 * tight));
     camera.lookAt(camX + sx * 0.5, camY + 0.5, -0.7);
     camera.updateMatrixWorld();
     // Schatten folgen der Kamera.
@@ -1205,7 +1214,8 @@ export function createStashScene(
     } else if (kind === 'pick') {
       particles.emit(x, y, z, Math.round(n / 3), 0xbfae94, 0.9, 2, 0.5);
     } else {
-      particles.emit(x, 0.05, z, n, 0x8a7f70, 1.4, 1.5, 0.9);
+      // Staub, z.B. oben vom Tor, wenn der Rammbock trifft.
+      particles.emit(x, y, z, n, 0x8a7f70, 1.4, 1.5, 0.9);
     }
   };
 

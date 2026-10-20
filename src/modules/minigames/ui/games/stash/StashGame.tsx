@@ -76,6 +76,11 @@ const SIREN_EVERY = 1.25;
 /** So viele Sekunden vor Schluss klopft es (im Lager erst, wenn das Tor zu ist). */
 const KNOCK_FROM = 6;
 const KNOCK_EVERY = 1.15;
+/** In den letzten Sekunden kommt der Rammbock (nur im Lager): so oft (s). */
+const RAM_FROM = 3.2;
+const RAM_EVERY = 0.78;
+/** Verstaut in den letzten Sekunden: knappe Rettung (Zeitlupe, „Knapp!“). */
+const CLOSE_CALL = 1.5;
 /** So lange steht eine Meldung (ms). */
 const MESSAGE_MS = 2600;
 
@@ -185,6 +190,7 @@ export function StashGame(props: MinigameViewProps) {
     breachT: -1,
     clearT: -1,
     knock: 0,
+    ram: 0,
     shake: 0,
     alarm: 0,
     focus: null,
@@ -398,6 +404,12 @@ export function StashGame(props: MinigameViewProps) {
           }
         }
         if (hide?.wet) say('Im Gully. Nass, aber weg.', 'warn');
+        else if (timeLeft(setup, game.current) <= CLOSE_CALL && !game.current.done) {
+          // Knappe Rettung: kurz anhalten, der Moment soll sitzen.
+          stop.hold(0.14);
+          haptic('success');
+          say('Knapp!', 'good');
+        }
       } else if (e.type === 'dropped') {
         audio.play(STASH_SOUNDS.step, { volume: 0.8 });
       } else if (e.type === 'refused') {
@@ -482,6 +494,7 @@ export function StashGame(props: MinigameViewProps) {
     if (f.clearT >= 0) f.clearT += dt;
     f.alarm = Math.min(1, (s.time / setup.duration) ** 1.3);
     f.knock = Math.max(0, f.knock - rawDt * 4);
+    f.ram = Math.max(0, f.ram - rawDt * 1.6);
     f.shake = Math.max(0, f.shake - rawDt * 2.2);
     // Schritte im Takt (schwer: dumpfer, langsamer).
     const speed = Math.abs(s.v);
@@ -498,12 +511,24 @@ export function StashGame(props: MinigameViewProps) {
     const remaining = timeLeft(setup, s);
     // Klopfen am Tor (Lager: erst, wenn es zu ist), Herzschlag in den letzten Sekunden.
     const knocking = !s.done && remaining <= KNOCK_FROM && (setup.gate === null || f.closedT >= 0);
-    if (knocking && f.t - f.lastKnock >= KNOCK_EVERY) {
+    // Zum Schluss der Rammbock: schneller, härter, das Tor beult sich (Lager).
+    const ramming = setup.gate !== null && remaining <= RAM_FROM;
+    if (knocking && f.t - f.lastKnock >= (ramming ? RAM_EVERY : KNOCK_EVERY)) {
       f.lastKnock = f.t;
       f.knock = 1;
-      f.shake = Math.max(f.shake, setup.gate === null ? 0.1 : 0.3);
-      if (setup.gate !== null) audio.play(STASH_SOUNDS.knock, { volume: 0.9 });
-      haptic('light');
+      if (ramming && setup.gate !== null) {
+        f.ram = 1;
+        f.shake = Math.max(f.shake, 0.6);
+        stop.hold(0.05);
+        audio.play(STASH_SOUNDS.slam, { volume: 0.75 });
+        audio.play(STASH_SOUNDS.knock, { volume: 1 });
+        haptic('medium');
+        f.scene?.burst('dust', setup.gate - 0.3, 3, 0);
+      } else {
+        f.shake = Math.max(f.shake, setup.gate === null ? 0.1 : 0.3);
+        if (setup.gate !== null) audio.play(STASH_SOUNDS.knock, { volume: 0.9 });
+        haptic('light');
+      }
       if (!f.warned) {
         f.warned = true;
         say(setup.gate !== null ? '„Polizei! Aufmachen!“' : 'Da vorne biegt die Streife ein!', 'bad');
