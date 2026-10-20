@@ -242,7 +242,7 @@ describe('Razzia-Countdown, Ware unterwegs, wenn die Straße zu ist', () => {
 describe('Lügendetektor, Akte ohne Doppel', () => {
   function play(person: InterviewPerson, seed: number): InterviewState {
     const setup = createInterview(seed, 0.3, person);
-    const s = initInterview();
+    const s = initInterview(setup);
     for (let i = 0; i < 60 * 120 && !isDone(s); i++) {
       advance(setup, s, 1 / 60);
       const active = activeCue(setup, s);
