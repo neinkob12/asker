@@ -1,4 +1,5 @@
-// Verfolgungsjagd (Auftrag 44, Teil 1; seit Auftrag 47 freies Lenken im Straßennetz in 3D): Anmeldung der Ansicht.
+// Verfolgungsjagd (Auftrag 44, Teil 1; seit Auftrag 47 freies Lenken im Straßennetz in 3D, Auftrag 48 Stadt, Karre
+// und HUD neu): Anmeldung der Ansicht.
 // Spiel in ChaseGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), 3D-Szene mit three.js (scene.ts),
 // Funk in radio.ts, Ton in sounds.ts. Eigene Bühne (layout 'stage'): Die Karte bleibt unberührt.
 
@@ -21,13 +22,14 @@ registerMinigameView('chase', {
     keys: '←/→ oder A/D lenken, ↑ Vollgas, ↓ oder Leertaste bremsen, Umschalt Turbo, X Ware raus.',
     touch: 'Linke Hälfte: Finger ziehen lenkt. Rechts Bremse und Turbo halten, Gas gibt der Wagen von selbst.',
     help:
-      'Du fährst frei durch die Stadt: Kreuzungen, Querverkehr, der Fluss mit seinen Brücken. Bremsen und lenken ' +
-      'lässt die Karre driften. Gebäude und Verkehr sind hart: Aufprall kostet Tempo und Schaden, dann holen die ' +
-      'Streifen auf und rammen dich. Der Balken „Abhängen“ füllt sich, solange die nächste Streife weit weg ist, und ' +
-      'leert sich, wenn sie dir im Nacken sitzt. Voll: Die nächste Tiefgarage leuchtet (gold auf der Minikarte), rein ' +
-      'und du bist weg. Sperren stehen an Kreuzungen vor dir mit einer Lücke. Der Turbo lädt langsam nach. Ware aus dem ' +
-      'Fenster: Turbo voll, die Streifen zögern, die Ware ist weg. Gefasst, wenn die Karre kaputt ist, sie dich stellen ' +
-      'oder die Zeit abläuft.',
+      'Du fährst frei durch die Stadt: Kreuzungen, Querverkehr, parkende Autos, der Fluss mit seinen Brücken. ' +
+      'Bremsen und lenken lässt die Karre driften. Häuser, Laternen, Bäume und Verkehr sind hart: Aufprall kostet ' +
+      'Tempo und Schaden, dann holen die Streifen auf. Pfeile am Rand zeigen, wo sie sind; leuchtet einer rot ' +
+      '(„Rammt!“), setzt die Streife zum Rammen an: Spur wechseln oder Turbo. Der Balken „Abhängen“ füllt sich, ' +
+      'solange die nächste Streife weit weg ist, knapp am Verkehr vorbei und durch die Lücke einer Sperre gibt es ' +
+      'einen Schub. Voll: Die nächste Tiefgarage leuchtet (gold, mit Pfeil und Abstand), rein und du bist weg. ' +
+      'Ware aus dem Fenster: Turbo voll, die Streifen zögern, die Ware ist weg. Gefasst, wenn die Karre kaputt ist, ' +
+      'sie dich stellen oder die Zeit abläuft.',
   },
   previewParams: (seed) => ({
     clock: 4,

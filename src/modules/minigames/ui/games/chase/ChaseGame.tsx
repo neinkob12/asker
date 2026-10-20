@@ -1,7 +1,8 @@
-// Verfolgungsjagd (Auftrag 47): freies Lenken im Straßennetz, 3D-Szene mit three.js (scene.ts), Spiellogik in
-// model.ts, Funk-Zeilen in radio.ts, Ton in sounds.ts. Hier: Bildschleife, Eingaben (Tastatur, Touch: linke Hälfte
-// lenken, rechts Bremse und Turbo), HUD im Look Glas (Zeit, Abhängen, Karre, Tacho mit Turbo, Funk, Ware raus,
-// Minikarte) und das Ende mit Zeitlupe.
+// Verfolgungsjagd (Auftrag 47, Auftrag 48): freies Lenken im Straßennetz, 3D-Szene mit three.js (scene.ts), Spiellogik
+// in model.ts, Funk-Zeilen in radio.ts, Ton in sounds.ts. Hier: Bildschleife, Eingaben (Tastatur, Touch: linke Hälfte
+// lenken, rechts Bremse und Turbo), HUD im Look Glas (Zeit, Abhängen, Karre, Tacho mit Turbo, Funk, Ware raus, Radar
+// mit Blick nach vorn, Pfeile am Rand zu Streifen außerhalb des Bildes, Ziel Tiefgarage, Einblendungen „Knapp
+// vorbei“) und das Ende mit Zeitlupe.
 //
 // Die Spielzeit steht still, solange das Minispiel offen ist: alles läuft über die eigene Schleife (useFrameLoop).
 // Pro Bild nur Rechnen und Zeichnen, keine Layout-Lesungen (Größe kommt aus useStage3d).
@@ -17,6 +18,7 @@ import { capture, TouchControls } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
+import { createPilot, type Pilot, pilotInput } from './bot';
 import {
   type ChaseInput,
   type ChaseState,
@@ -26,13 +28,14 @@ import {
   dumpGoods,
   forceEnd,
   GRID,
+  headingTo,
   initChase,
   PITCH,
   stepChase,
   TIME_LIMIT,
   TOP_SPEED,
   timeLeft,
-  WORLD,
+  wrapAngle,
 } from './model';
 import { radioLine } from './radio';
 import { type ChaseScene, createChaseScene } from './scene';
@@ -63,8 +66,21 @@ const HUD_RATE = 8;
 const RADIO_EVERY = 14;
 /** Lenken mit dem Finger: so viele Pixel seitlich sind voller Einschlag. */
 const STEER_PX = 90;
-/** Minikarte: Pixel. */
+/** Radar: Pixel (Zeichenfläche) und Reichweite bis zum Rand (Meter). */
 const MINIMAP = 128;
+const RADAR_RANGE = 190;
+/** Pfeile am Rand: höchstens so viele Streifen. */
+const PINS = 4;
+/** Einblendungen (Knapp vorbei …): so viele gleichzeitig, so lange (Sekunden). */
+const POPS = 3;
+const POP_SECONDS = 1.4;
+
+interface Pop {
+  id: number;
+  text: string;
+  tone: 'gold' | 'good' | 'bad';
+  at: number;
+}
 
 interface Hud {
   left: number;
@@ -76,6 +92,10 @@ interface Hud {
   radio: string;
   radioKey: number;
   turboReady: boolean;
+  /** Abstand zur Tiefgarage (Meter) oder null. */
+  goal: number | null;
+  charging: boolean;
+  pops: Pop[];
 }
 
 export function ChaseGame(props: MinigameViewProps) {
@@ -109,7 +129,9 @@ export function ChaseGame(props: MinigameViewProps) {
     turbo: useRef<HTMLSpanElement>(null),
     shake: useRef<HTMLSpanElement>(null),
     damage: useRef<HTMLSpanElement>(null),
+    goalArrow: useRef<HTMLSpanElement>(null),
   };
+  const pins = useRef<(HTMLDivElement | null)[]>([]);
   const view = useRef({
     scene: null as ChaseScene | null,
     touch: { gas: false, brake: false, turbo: false, steer: 0 },
@@ -121,6 +143,12 @@ export function ChaseGame(props: MinigameViewProps) {
     radioCount: 0,
     nextRadio: RADIO_EVERY,
     lastMap: -1,
+    popId: 0,
+    /** Doppler: Abstand der nächsten Streife im letzten Bild. */
+    lastNear: Number.POSITIVE_INFINITY,
+    pitch: 1,
+    /** Entwicklung: Autopilot (Fahr-Bot) für Bilder und Messungen. */
+    pilot: null as Pilot | null,
     /** Entwicklung: Rechenzeit der Bildschleife. */
     perf: { frames: 0, total: 0, max: 0 },
   });
@@ -134,24 +162,32 @@ export function ChaseGame(props: MinigameViewProps) {
     radio: 'Zentrale: Flüchtiges Fahrzeug, alle Einheiten.',
     radioKey: 0,
     turboReady: true,
+    goal: null,
+    charging: false,
+    pops: [],
   }));
 
   // ------------------------------------------------------------------ Szene
   const sceneFor = (): ChaseScene => {
     const v = view.current;
-    v.scene ??= createChaseScene(setup, { cityId, phase, rain, reduced });
+    v.scene ??= createChaseScene(setup, { cityId, phase, rain, reduced, hi: !coarse });
     return v.scene;
   };
-  const stage = useStage3d(canvas, (st) => {
-    sceneFor().resize(st.width, st.height);
-    draw(0);
-  });
-  const draw = (dt: number) => {
+  // Am Handy höchstens 1,5 Pixel je CSS-Pixel: Bloom und Linse kosten Füllrate, 30 Bilder reichen.
+  const stage = useStage3d(
+    canvas,
+    (st) => {
+      sceneFor().resize(st.width, st.height);
+      draw(0);
+    },
+    { maxDpr: coarse ? 1.5 : undefined },
+  );
+  const draw = (dt: number, render = true) => {
     const st = stage.current;
     if (!st) return;
     const scene = sceneFor();
-    scene.update(game.current, dt, { steer: game.current.player.steer });
-    scene.render(st);
+    scene.update(game.current, dt);
+    if (render) scene.render(st);
   };
   useEffect(
     () => () => {
@@ -200,6 +236,8 @@ export function ChaseGame(props: MinigameViewProps) {
 
   // Am Handy gibt der Wagen von selbst Vollgas (Bremse, Turbo und Lenken reichen für zwei Daumen).
   const inputNow = (): ChaseInput => {
+    const pilot = view.current.pilot;
+    if (pilot) return pilotInput(setup, game.current, pilot);
     const t = view.current.touch;
     const left = keys.isDown('ArrowLeft') || keys.isDown('KeyA');
     const right = keys.isDown('ArrowRight') || keys.isDown('KeyD');
@@ -227,7 +265,16 @@ export function ChaseGame(props: MinigameViewProps) {
       dumped: g.dumped,
       hideout: !!g.hideout,
       turboReady: g.player.turbo >= 0.999 && !g.player.turboOn,
+      goal: g.hideout ? Math.round(Math.hypot(g.hideout.x - g.player.x, g.hideout.z - g.player.z)) : null,
+      charging: g.cops.some((c) => c.charging),
+      pops: prev.pops.filter((p) => v.t - p.at < POP_SECONDS),
     }));
+  };
+  const pop = (text: string, tone: Pop['tone']) => {
+    const v = view.current;
+    v.popId += 1;
+    const item: Pop = { id: v.popId, text, tone, at: v.t };
+    setHud((prev) => ({ ...prev, pops: [...prev.pops.filter((p) => v.t - p.at < POP_SECONDS), item].slice(-POPS) }));
   };
   const say = (text: string) => {
     const v = view.current;
@@ -236,90 +283,202 @@ export function ChaseGame(props: MinigameViewProps) {
     audio.play(CHASE_SOUNDS.radio, { volume: 0.5 });
   };
 
+  // Radar: du in der Mitte, Blick nach oben (dreht mit der Kamera), Umkreis RADAR_RANGE Meter.
   const drawMinimap = () => {
     const c = minimap.current;
     const g = c?.getContext('2d');
     if (!c || !g) return;
     const s = game.current;
-    const k = MINIMAP / WORLD;
+    const p = s.player;
+    const R = MINIMAP / 2;
+    const k = R / RADAR_RANGE;
+    const heading = view.current.scene?.viewHeading() ?? p.heading;
     g.clearRect(0, 0, MINIMAP, MINIMAP);
-    g.fillStyle = 'rgba(10,12,18,0.72)';
+    g.save();
+    g.beginPath();
+    g.arc(R, R, R - 1, 0, Math.PI * 2);
+    g.clip();
+    g.fillStyle = 'rgba(64,68,78,0.92)';
     g.fillRect(0, 0, MINIMAP, MINIMAP);
-    // Straßen.
-    g.strokeStyle = 'rgba(255,255,255,0.22)';
-    g.lineWidth = 1;
-    for (let i = 0; i <= GRID; i++) {
-      const a = i * PITCH * k;
-      g.beginPath();
-      g.moveTo(a, 0);
-      g.lineTo(a, MINIMAP);
-      g.moveTo(0, a);
-      g.lineTo(MINIMAP, a);
-      g.stroke();
+    g.translate(R, R);
+    g.rotate(-heading);
+    g.scale(k, k);
+    g.translate(-p.x, -p.z);
+    // Blöcke (Häuser dunkel, Parks grün, Wasser blau); die Lücken dazwischen sind die Straßen.
+    for (const block of setup.city.blocks) {
+      const x0 = block.i * PITCH + 8.5;
+      const z0 = block.j * PITCH + 8.5;
+      if (Math.abs(x0 + 27 - p.x) > RADAR_RANGE * 1.5 || Math.abs(z0 + 27 - p.z) > RADAR_RANGE * 1.5) continue;
+      g.fillStyle =
+        block.kind === 'water'
+          ? 'rgba(52,104,170,0.95)'
+          : block.kind === 'park'
+            ? 'rgba(40,70,44,0.95)'
+            : 'rgba(16,18,24,0.95)';
+      g.fillRect(x0, z0, PITCH - 17, PITCH - 17);
     }
-    // Fluss.
-    const rc = setup.city.riverCol;
-    if (rc >= 0) {
-      g.fillStyle = 'rgba(70,120,190,0.5)';
-      g.fillRect((rc * PITCH + 8) * k, 0, (PITCH - 16) * k, MINIMAP);
-    }
+    // Außerhalb der Stadt: dunkel.
+    g.fillStyle = 'rgba(8,9,12,0.95)';
+    const W = GRID * PITCH;
+    g.fillRect(-2000, -2000, 4000 + W, 2000 - 8);
+    g.fillRect(-2000, W + 8, 4000 + W, 2000);
+    g.fillRect(-2000, -8, 2000 - 8, W + 16);
+    g.fillRect(W + 8, -8, 2000, W + 16);
     // Sperren.
     g.fillStyle = '#ff5a3a';
-    for (const b of s.blocks) g.fillRect(b.i * PITCH * k - 2, b.j * PITCH * k - 2, 4, 4);
-    // Tiefgarage.
+    for (const b of s.blocks) for (const w of b.walls) g.fillRect(w.x0 - 1, w.z0 - 1, w.x1 - w.x0 + 2, w.z1 - w.z0 + 2);
+    g.restore();
+    // Punkte in Bildschirm-Lage (Radar dreht, Symbole nicht).
+    const toRadar = (x: number, z: number) => {
+      const dx = x - p.x;
+      const dz = z - p.z;
+      const a = -heading;
+      const rx = (dx * Math.cos(a) - dz * Math.sin(a)) * k;
+      const rz = (dx * Math.sin(a) + dz * Math.cos(a)) * k;
+      const d = Math.hypot(rx, rz);
+      const max = R - 7;
+      return d > max
+        ? { x: R + (rx / d) * max, y: R + (rz / d) * max, edge: true }
+        : { x: R + rx, y: R + rz, edge: false };
+    };
+    const t = view.current.t;
     if (s.hideout) {
-      g.fillStyle = '#e0b24a';
+      const h = toRadar(s.hideout.x, s.hideout.z);
+      g.fillStyle = '#ffcf5a';
+      g.strokeStyle = 'rgba(0,0,0,0.6)';
+      g.lineWidth = 1.5;
       g.beginPath();
-      g.arc(s.hideout.x * k, s.hideout.z * k, 3.5 + Math.sin(view.current.t * 8), 0, Math.PI * 2);
+      g.arc(h.x, h.y, 5 + Math.sin(t * 8) * 1.2, 0, Math.PI * 2);
       g.fill();
+      g.stroke();
     }
-    // Streifen.
-    g.fillStyle = '#4a8cff';
     for (const cop of s.cops) {
       if (!cop.active || cop.state === 'wrecked') continue;
+      const q = toRadar(cop.x, cop.z);
+      const blue = (t * 2.2 + cop.id * 0.37) % 1 < 0.5;
+      g.fillStyle = cop.charging ? '#ff3a3a' : blue ? '#4a8cff' : '#ff5a4a';
       g.beginPath();
-      g.arc(cop.x * k, cop.z * k, 2.4, 0, Math.PI * 2);
+      g.arc(q.x, q.y, cop.charging ? 4.6 : 3.6, 0, Math.PI * 2);
       g.fill();
     }
-    // Du: Pfeil in Fahrtrichtung.
-    const p = s.player;
+    // Du: Pfeil nach oben (in Fahrtrichtung der Kamera).
     g.save();
-    g.translate(p.x * k, p.z * k);
-    g.rotate(p.heading);
+    g.translate(R, R);
+    g.rotate(wrapAngle(p.heading - heading));
     g.fillStyle = '#ffffff';
+    g.strokeStyle = 'rgba(0,0,0,0.6)';
+    g.lineWidth = 1.5;
     g.beginPath();
-    g.moveTo(0, -5);
-    g.lineTo(3.5, 4);
-    g.lineTo(-3.5, 4);
+    g.moveTo(0, -7);
+    g.lineTo(5, 5);
+    g.lineTo(0, 2.5);
+    g.lineTo(-5, 5);
     g.closePath();
     g.fill();
+    g.stroke();
     g.restore();
+    g.strokeStyle = s.hideout ? 'rgba(255,207,90,0.9)' : 'rgba(255,255,255,0.25)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(R, R, R - 1.5, 0, Math.PI * 2);
+    g.stroke();
+  };
+
+  // Pfeile am Bildrand: Streifen außerhalb des Bildes (meist hinter dir), mit Abstand; rot, wenn sie zum Rammen
+  // ansetzen. Schreibt nur Stil-Werte (kein Rendern von Preact pro Bild).
+  const drawPins = () => {
+    const scene = view.current.scene;
+    const s = game.current;
+    const active = s.cops.filter((c) => c.active && c.state !== 'wrecked');
+    active.sort(
+      (a, b) => Math.hypot(a.x - s.player.x, a.z - s.player.z) - Math.hypot(b.x - s.player.x, b.z - s.player.z),
+    );
+    for (let i = 0; i < PINS; i++) {
+      const el = pins.current[i];
+      if (!el) continue;
+      const cop = active[i];
+      const d = cop ? Math.hypot(cop.x - s.player.x, cop.z - s.player.z) : Infinity;
+      if (!cop || !scene || d > 150 || s.end) {
+        el.hidden = true;
+        continue;
+      }
+      const sp = scene.screenOf(cop.x, 1.2, cop.z);
+      let x = sp.x;
+      let y = sp.y;
+      const onScreen = !sp.behind && x > 0.04 && x < 0.96 && y > 0.12 && y < 0.92;
+      if (onScreen && !cop.charging) {
+        el.hidden = true;
+        continue;
+      }
+      el.hidden = false;
+      let dx = x - 0.5;
+      let dy = y - 0.5;
+      if (sp.behind) {
+        dx = -dx;
+        dy = Math.abs(dy) + 0.4;
+      }
+      // Auf den Rand schieben (Rahmen 6 % bis 94 %, unten über den Knöpfen).
+      const m = Math.max(Math.abs(dx) / 0.44, Math.abs(dy) / 0.36, 1e-6);
+      if (!onScreen) {
+        x = 0.5 + dx / m;
+        y = 0.5 + dy / m;
+      }
+      const angle = Math.atan2(dy, dx);
+      el.style.transform = `translate(${(x * 100).toFixed(2)}cqw, ${(y * 100).toFixed(2)}cqh) translate(-50%, -50%)`;
+      el.style.setProperty('--pin-angle', `${angle.toFixed(3)}rad`);
+      el.dataset.charging = cop.charging ? '1' : '';
+      const label = el.lastElementChild;
+      if (label) label.textContent = cop.charging ? 'Rammt!' : `${Math.round(d)} m`;
+    }
   };
 
   // ------------------------------------------------------------------ Ton
-  const loops = useRef<{ engine: LoopHandle; siren: LoopHandle } | null>(null);
+  const loops = useRef<{ engine: LoopHandle; siren: LoopHandle; skid: LoopHandle } | null>(null);
   const stopLoops = () => {
     const l = loops.current;
     loops.current = null;
     if (!l) return;
     l.engine.stop();
     l.siren.stop();
+    l.skid.stop();
   };
-  const sound = () => {
+  const sound = (dt: number) => {
     const g = game.current;
     const p = g.player;
+    const v = view.current;
     loops.current ??= {
       engine: audio.loop(CHASE_SOUNDS.engine, { rpm: 40, load: 0, volume: 0.7 }),
       siren: audio.loop(CHASE_SOUNDS.siren, { pitch: 1, volume: 0 }),
+      skid: audio.loop(CHASE_SOUNDS.skid, { volume: 0 }),
     };
     const l = loops.current;
-    const v = Math.abs(p.v);
-    const gear = v < 12 ? 0 : v < 24 ? 1 : v < 40 ? 2 : 3;
-    const rpm = (36 + (v - [0, 9, 20, 34][gear]) * [4.8, 3.4, 2.6, 2.1][gear]) * (p.turboOn ? 1.12 : 1);
-    l.engine.set({ rpm, load: Math.min(1, v / TOP_SPEED + (p.turboOn ? 0.3 : 0)), volume: g.end ? 0.3 : 0.7 });
-    const near = g.nearest;
-    const on = Number.isFinite(near) && !(g.end === 'escaped');
-    l.siren.set({ pitch: near < 15 ? 1.03 : 1, volume: on ? Math.min(1, Math.max(0.1, 1 - near / 240)) * 0.9 : 0 });
+    const speed = Math.abs(p.v);
+    const gear = speed < 12 ? 0 : speed < 24 ? 1 : speed < 40 ? 2 : 3;
+    const rpm = (36 + (speed - [0, 9, 20, 34][gear]) * [4.8, 3.4, 2.6, 2.1][gear]) * (p.turboOn ? 1.12 : 1);
+    l.engine.set({ rpm, load: Math.min(1, speed / TOP_SPEED + (p.turboOn ? 0.3 : 0)), volume: g.end ? 0.3 : 0.7 });
+    // Martinshorn der nächsten Streife: lauter, je näher; Doppler aus der Annäherung; Stereo aus der Richtung.
+    let near: (typeof g.cops)[number] | null = null;
+    let nd = Infinity;
+    for (const c of g.cops) {
+      if (!c.active || c.state === 'wrecked') continue;
+      const d = Math.hypot(c.x - p.x, c.z - p.z);
+      if (d < nd) {
+        nd = d;
+        near = c;
+      }
+    }
+    const on = !!near && g.end !== 'escaped';
+    if (near && dt > 0) {
+      const closing = Number.isFinite(v.lastNear) ? (v.lastNear - nd) / dt : 0;
+      const want = Math.max(0.86, Math.min(1.14, 343 / (343 - Math.max(-60, Math.min(60, closing)))));
+      v.pitch += (want - v.pitch) * Math.min(1, dt * 3);
+    }
+    v.lastNear = nd;
+    const view3 = v.scene?.viewHeading() ?? p.heading;
+    const pan = near ? Math.sin(wrapAngle(headingTo(near.x - p.x, near.z - p.z) - view3)) * 0.8 : 0;
+    l.siren.set({ pitch: v.pitch, pan, volume: on ? Math.min(1, Math.max(0.1, 1 - nd / 240)) * 0.9 : 0 });
+    const slide = p.drifting || (p.braking && p.v > 14) ? Math.min(1, speed / 40) : 0;
+    l.skid.set({ volume: g.end ? 0 : slide * 0.5, pitch: Math.min(1, speed / 50) });
   };
   const onEvents = () => {
     const g = game.current;
@@ -340,6 +499,7 @@ export function ChaseGame(props: MinigameViewProps) {
         case 'ram':
           audio.play(CHASE_SOUNDS.crash, { volume: 0.55 });
           haptic('medium');
+          pop('Gerammt!', 'bad');
           scene?.shake(0.6);
           scene?.sparks(e.x, e.z, 0.6);
           break;
@@ -370,6 +530,8 @@ export function ChaseGame(props: MinigameViewProps) {
         case 'copCrash':
           audio.play(CHASE_SOUNDS.crash, { volume: 0.35 });
           audio.playThrottled(CHASE_SOUNDS.honk, 500, { volume: 0.4 });
+          scene?.sparks(e.x, e.z, 0.8);
+          pop('Streife zerlegt!', 'good');
           say(radioLine(g, 'lost', veedelName, view.current.radioCount));
           break;
         case 'block':
@@ -377,6 +539,22 @@ export function ChaseGame(props: MinigameViewProps) {
           break;
         case 'blockPassed':
           audio.playThrottled(CHASE_SOUNDS.honk, 400, { volume: 0.5 });
+          audio.play(CHASE_SOUNDS.whoosh, { volume: 0.8 });
+          haptic('success');
+          pop('Durch die Sperre! +10 %', 'gold');
+          break;
+        case 'nearMiss':
+          audio.play(CHASE_SOUNDS.whoosh, { volume: 0.5 + 0.4 * e.power });
+          haptic('light');
+          scene?.shake(0.12);
+          pop('Knapp vorbei! +5 %', 'gold');
+          break;
+        case 'charge':
+          audio.playThrottled(CHASE_SOUNDS.warn, 800, { volume: 0.6 });
+          haptic('light');
+          break;
+        case 'alarm':
+          audio.playThrottled(CHASE_SOUNDS.alarm, 1500, { volume: 0.4 });
           break;
         case 'near':
           if (g.t > 2) say(radioLine(g, 'spotted', veedelName, view.current.radioCount));
@@ -406,7 +584,8 @@ export function ChaseGame(props: MinigameViewProps) {
   };
 
   // ------------------------------------------------------------------ Schleife
-  useFrameLoop((dt) => {
+  /** Ein Bild: rechnen, Ton, HUD, zeichnen (render false: nur nachführen, für den Dev-Haken sim). */
+  const frame = (dt: number, render = true) => {
     const v = view.current;
     const g = game.current;
     const started = performance.now();
@@ -414,7 +593,7 @@ export function ChaseGame(props: MinigameViewProps) {
     stepChase(setup, g, inputNow(), dt * slow);
     v.t += dt;
     onEvents();
-    sound();
+    sound(dt);
     if (g.t - v.lastHud > 0) refreshHud();
     const speed = refs.speed.current;
     if (speed) speed.textContent = String(Math.round(Math.abs(g.player.v) * 3.6));
@@ -431,10 +610,17 @@ export function ChaseGame(props: MinigameViewProps) {
       v.nextRadio = v.t + RADIO_EVERY;
       say(radioLine(g, g.near ? 'heading' : 'search', veedelName, v.radioCount));
     }
-    draw(dt * slow);
-    if (v.t - v.lastMap > 1 / 12) {
+    draw(dt * slow, render);
+    drawPins();
+    if (v.t - v.lastMap > 1 / 15) {
       v.lastMap = v.t;
       drawMinimap();
+    }
+    const arrow = refs.goalArrow.current;
+    const h = g.hideout;
+    if (arrow && h && v.scene) {
+      const a = wrapAngle(headingTo(h.x - g.player.x, h.z - g.player.z) - v.scene.viewHeading());
+      arrow.style.transform = `rotate(${a.toFixed(3)}rad)`;
     }
     if (g.end) {
       if (v.endT < 0) {
@@ -450,7 +636,8 @@ export function ChaseGame(props: MinigameViewProps) {
     v.perf.frames += 1;
     v.perf.total += took;
     v.perf.max = Math.max(v.perf.max, took);
-  }, running);
+  };
+  useFrameLoop((dt) => frame(dt), running);
 
   // Ton aus, wenn das Spiel pausiert oder zugeht; erstes Bild hinter der Einleitung.
   useEffect(() => {
@@ -472,7 +659,16 @@ export function ChaseGame(props: MinigameViewProps) {
       draw(1 / 30);
       drawMinimap();
     };
-    (window as unknown as { chase?: unknown }).chase = { game, view, setup, advance, forceEnd };
+    const info = () => view.current.scene?.info(stage.current) ?? null;
+    // Vorspulen mit festen Schritten, gezeichnet wird nur am Ende (Bilder ohne echte Bildrate).
+    const sim = (seconds: number, step = 1 / 30) => {
+      for (let t = 0; t < seconds; t += step) frame(step, t + step >= seconds);
+      refreshHud(true);
+    };
+    const autopilot = (on = true) => {
+      view.current.pilot = on ? createPilot() : null;
+    };
+    (window as unknown as { chase?: unknown }).chase = { game, view, setup, advance, forceEnd, info, autopilot, sim };
     return () => {
       delete (window as unknown as { chase?: unknown }).chase;
     };
@@ -494,7 +690,7 @@ export function ChaseGame(props: MinigameViewProps) {
   return (
     <div
       ref={root}
-      class={`chase chase--${phase}${hud.near ? ' is-near' : ''}${ended ? ` is-ended is-${g.end}` : ''}${hud.hideout ? ' has-hideout' : ''}`}
+      class={`chase chase--${phase}${hud.near ? ' is-near' : ''}${ended ? ` is-ended is-${g.end}` : ''}${hud.hideout ? ' has-hideout' : ''}${hud.charging ? ' is-charging' : ''}`}
     >
       <canvas ref={canvas} class="chase-canvas" role="img" aria-label="Verfolgungsjagd" />
       <div class="chase-wash" aria-hidden="true" />
@@ -540,13 +736,47 @@ export function ChaseGame(props: MinigameViewProps) {
         <span>{hud.radio}</span>
       </p>
 
+      {hud.goal !== null && !ended && (
+        <p class="chase-goal">
+          <span ref={refs.goalArrow} class="chase-goal__arrow">
+            <Icon name="navigation" />
+          </span>
+          <span class="chase-goal__label">Tiefgarage</span>
+          <b class="chase-goal__dist">{hud.goal} m</b>
+        </p>
+      )}
+
+      <div class="chase-pins" aria-hidden="true">
+        {Array.from({ length: PINS }, (_, i) => (
+          <div
+            key={i}
+            class="chase-pin"
+            hidden
+            ref={(el) => {
+              pins.current[i] = el;
+            }}
+          >
+            <span class="chase-pin__arrow" />
+            <span class="chase-pin__label" />
+          </div>
+        ))}
+      </div>
+
+      <div class="chase-pops" aria-live="polite">
+        {hud.pops.map((p) => (
+          <span key={p.id} class={`chase-pop is-${p.tone}`}>
+            {p.text}
+          </span>
+        ))}
+      </div>
+
       <canvas
         ref={minimap}
         class="chase-minimap"
         width={MINIMAP}
         height={MINIMAP}
         role="img"
-        aria-label="Karte: du, Streifen, Tiefgarage"
+        aria-label="Radar: du, Streifen, Tiefgarage"
       />
 
       <div class="chase-speedo">

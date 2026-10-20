@@ -4,7 +4,7 @@
 
 import type { RefObject } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace, WebGLRenderer } from 'three';
 import { MAX_DPR } from './useStageCanvas';
 
 export interface Stage3d {
@@ -19,7 +19,12 @@ export interface Stage3d {
  * Hängt einen Renderer an ein <canvas>. stage.current ist null, bis die erste Größe bekannt ist; onResize kommt nach
  * jeder Größenänderung (Kamera-Seitenverhältnis setzen). Ohne WebGL (sehr alte Geräte, Tests) bleibt stage null.
  */
-export function useStage3d(ref: RefObject<HTMLCanvasElement>, onResize?: (stage: Stage3d) => void) {
+export function useStage3d(
+  ref: RefObject<HTMLCanvasElement>,
+  onResize?: (stage: Stage3d) => void,
+  /** maxDpr: Pixelverhältnis höchstens so groß (Standard MAX_DPR); am Handy spart 1,5 viel Füllrate. */
+  options: { maxDpr?: number } = {},
+) {
   const stage = useRef<Stage3d | null>(null);
   const latest = useRef(onResize);
   latest.current = onResize;
@@ -36,10 +41,11 @@ export function useStage3d(ref: RefObject<HTMLCanvasElement>, onResize?: (stage:
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    // PCFSoftShadowMap gibt es in three.js nicht mehr (Warnung, fällt auf PCF zurück).
+    renderer.shadowMap.type = PCFShadowMap;
     const apply = (width: number, height: number) => {
       if (width <= 0 || height <= 0) return;
-      const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+      const dpr = Math.min(options.maxDpr ?? MAX_DPR, MAX_DPR, window.devicePixelRatio || 1);
       renderer.setPixelRatio(dpr);
       renderer.setSize(width, height, false);
       stage.current = { renderer, width, height, dpr };
@@ -56,6 +62,6 @@ export function useStage3d(ref: RefObject<HTMLCanvasElement>, onResize?: (stage:
       renderer.dispose();
       renderer.forceContextLoss();
     };
-  }, [ref]);
+  }, [ref, options.maxDpr]);
   return stage;
 }
