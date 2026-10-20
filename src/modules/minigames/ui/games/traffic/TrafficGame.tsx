@@ -11,6 +11,7 @@ import { clock, formatEuro, type VoiceSpec, voiceFor, wallet } from '../../../..
 import { audio, haptic, Icon, LOOK_COLORS, prefersReducedMotion, useGame } from '../../../../../ui';
 import { activeCity, CITIES, cityName } from '../../../../city';
 import { HudBar, HudMeter } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { phaseOf } from '../../kit/scene3d';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useStage3d } from '../../kit/stage3d';
@@ -543,6 +544,7 @@ export function TrafficGame(props: MinigameViewProps) {
       <div class="traffic__wash" aria-hidden="true" />
 
       <HudBar class="traffic__hud">
+        <PauseButton />
         <span class="traffic__sus">
           <HudMeter label="Misstrauen" value={hud.suspicion} color="danger" detail={Math.round(hud.suspicion * 100)} />
           {hud.jump && hud.jump.value > 0 && (

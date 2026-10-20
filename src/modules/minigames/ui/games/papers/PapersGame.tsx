@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatEuro, type MouthStyle, wallet } from '../../../../../core';
 import { audio, haptic, Icon, prefersReducedMotion, useGame } from '../../../../../ui';
 import { HudBar } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
@@ -514,10 +515,13 @@ export function PapersGame(props: MinigameViewProps) {
       <canvas ref={deskCanvas} class="papers__desk" role="img" aria-label="Schreibtisch des Zolls" />
 
       <HudBar class="papers__hud">
+        <PauseButton />
         <span class="papers__count" role="img" aria-label={`${remaining} Widersprüche offen`}>
           <Icon name="clipboard" />
           {remaining}
-          <small>{remaining === 1 ? 'Widerspruch offen' : 'Widersprüche offen'}</small>
+          <small class="papers__label-long">{remaining === 1 ? 'Widerspruch offen' : 'Widersprüche offen'}</small>
+          {/* Hochkant mit Pause-Knopf ist die Leiste sonst zu breit (Auftrag 49). */}
+          <small class="papers__label-short">offen</small>
         </span>
         <span class="papers__hits" role="img" aria-label={`Beanstandet: ${s.hits} von ${MAX_HITS}`}>
           <small>Beanstandet</small>

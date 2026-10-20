@@ -101,6 +101,11 @@ entscheidet.
 
 ## Stand
 
-Gestartet am 20.10.2026. Gemergt (auf Anweisung des Spielers über das Büro): A #144, C #146, D #143, E #145, F #142;
-Pause-Knopf in den Spielen von C, D und E und diese Doku in #148. Offen: B #147 (Verkehrskontrolle, Papiere), der
-Pause-Knopf in Jagd, Kontrolle und Papieren (Teile A und B) und A mit mehr Form an der Karre (neuer PR).
+Erledigt am 20.10.2026 und in `main` (gemergt auf Anweisung des Spielers): A #144 und #149 (Karre mit Form), B #147,
+C #146, D #143, E #145, F #142 und #148 (Pause-Knopf in sieben Spielen, Doku). Der letzte Folge-PR setzt den
+Pause-Knopf in Verkehrskontrolle und Papiere und trägt B in die Doku ein. Damit hat jedes Minispiel den Pause-Knopf. Die Minispiele bleiben im Spiel
+aus (`MINIGAMES_ENABLED = false`); gespielt wird in der Spielhalle.
+
+Ideen für danach aus den Notizen der Teile: Baukasten-Kandidaten `GRADE_SHADER`, `dropTextures`, `faceTexture` (B) und
+`HitStop`/`ParticlePool` (D) für alle Spiele; Razzia-Figur mit mehr Volumen (wie im Straßenkampf); echte Bildraten auf
+einem Handy messen (headless nur SwiftShader).
