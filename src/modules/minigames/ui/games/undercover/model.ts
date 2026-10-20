@@ -4,6 +4,11 @@
 // Darunter ein bis drei Zivis. Faustregel (fair aus den Daten): Ein Zivi hat mindestens zwei verdächtige Merkmale, ein
 // echter Kunde höchstens eins. Pro Karte bleibt eine feste Zeit (6 s, schwer 4 s); wer zu lange zögert, lässt den Kunden
 // gehen. Alles kommt aus dem Seed der Challenge (createRng), nie aus ctx.random().
+//
+// Hinschauen (Auftrag 48): Nicht alles ist sofort zu sehen. Was jemand sagt, steht gleich da; die Frage nach dem
+// Lieferanten kommt am Ende des Satzes; alles andere zeigt sich nach und nach (reveal, Sekunden seit die Karte offen
+// ist): Er dreht den Kopf (Knopf im Ohr), schaut zum Auto, die Jacke verrutscht. Leicht zeigt sich alles früh,
+// schwer verteilt es sich über die Karte, aber immer mit REVEAL_MARGIN Sekunden Luft zum Entscheiden.
 
 import { createRng, type Look, lookFor } from '../../../../../core';
 import { undercoverScore } from '../../../../police';
@@ -36,6 +41,8 @@ export interface Person {
   shows: Partial<Record<TellShow, boolean>>;
   /** Schuhe am unteren Kartenrand. */
   shoes: 'new' | 'worn' | 'plain';
+  /** Ab wann (Sekunden seit die Karte offen ist) ein Merkmal zu sehen ist. */
+  reveal: Record<string, number>;
   productId: string;
   amount: number;
   unit: string;
@@ -69,6 +76,11 @@ export type ShiftEvent =
   | { type: 'decided'; index: number; decision: Decision; verdict: Verdict; zivi: boolean }
   | { type: 'next'; index: number }
   | { type: 'done' };
+
+/** So viele Sekunden bleiben nach dem letzten Merkmal mindestens zum Entscheiden. */
+export const REVEAL_MARGIN = 1.6;
+/** Die Frage nach dem Lieferanten kommt am Ende des Satzes. */
+export const LINE_SECONDS = 0.8;
 
 /** Zeit pro Karte: 6 s, schwer (ab 0,8) 4 s. */
 export function cardSeconds(difficulty: number): number {
@@ -185,6 +197,17 @@ export function createShift(seed: number, difficulty: number, input: UndercoverI
       ware,
     });
     const supplier = shown.includes('asksSupplier') ? ` ${pickOne(rng, ASKS_SUPPLIER)}` : '';
+    // Wann sich was zeigt: Gesagtes sofort, der Rest verteilt, schwer später (aber mit Luft zum Entscheiden).
+    const perCard = cardSeconds(d);
+    const latest = Math.max(LINE_SECONDS + 0.2, perCard - REVEAL_MARGIN);
+    const spread = 0.35 + 0.65 * d;
+    const reveal: Record<string, number> = {};
+    for (const id of shown) {
+      const show = SHOWS.get(id);
+      if (id === 'asksSupplier') reveal[id] = LINE_SECONDS;
+      else if (show === 'speech') reveal[id] = 0;
+      else reveal[id] = Math.round((0.3 + rng() * (latest - 0.3) * spread) * 10) / 10;
+    }
     const shows: Partial<Record<TellShow, boolean>> = {};
     for (const id of shown) {
       const show = SHOWS.get(id);
@@ -198,12 +221,28 @@ export function createShift(seed: number, difficulty: number, input: UndercoverI
       tells: shown,
       shows,
       shoes: shown.includes('newShoes') ? 'new' : shown.includes('worn') ? 'worn' : 'plain',
+      reveal,
       productId: good.productId,
       amount,
       unit: good.unit,
     });
   }
   return { people, perCard: cardSeconds(d), gap: 0.45, zivis: input.zivis };
+}
+
+/** Wie lange die aktuelle Karte schon offen ist. */
+export function cardElapsed(shift: Shift, state: ShiftState): number {
+  return state.gapLeft > 0 ? 0 : shift.perCard - state.cardLeft;
+}
+
+/** Was man an einer Person nach so vielen Sekunden schon sieht (in der Reihenfolge der Karte). */
+export function visibleTells(person: Person, elapsed: number): string[] {
+  return person.tells.filter((id) => (person.reveal[id] ?? 0) <= elapsed);
+}
+
+/** Ist ein Merkmal schon zu sehen? */
+export function isRevealed(person: Person, id: string, elapsed: number): boolean {
+  return (person.reveal[id] ?? 0) <= elapsed;
 }
 
 export function initShift(shift: Shift): ShiftState {

@@ -6,14 +6,17 @@ import { undercoverOutcome } from '../../../../police';
 import {
   cardSeconds,
   createShift,
+  type Decision,
   decide,
   initShift,
   inputFrom,
+  REVEAL_MARGIN,
   shiftOutcome,
   shiftPicks,
   shiftScore,
   step,
   verdictOf,
+  visibleTells,
 } from './model';
 import { isSuspicious, tellDef } from './tells';
 
@@ -126,5 +129,46 @@ describe('Zivi oder Kunde: Modell', () => {
   it('liest fremde params robust', () => {
     expect(inputFrom({})).toMatchObject({ customers: 8, zivis: 1 });
     expect(inputFrom({ customers: 99, zivis: 9 })).toMatchObject({ customers: 12, zivis: 3 });
+  });
+
+  it('Hinschauen: Gesagtes gleich, der Rest nach und nach, immer mit Luft zum Entscheiden', () => {
+    for (const difficulty of [0.2, 0.5, 0.95]) {
+      for (let seed = 1; seed < 60; seed++) {
+        const shift = createShift(seed, difficulty, input);
+        for (const p of shift.people) {
+          for (const id of p.tells) {
+            expect(p.reveal[id]).toBeGreaterThanOrEqual(0);
+            expect(p.reveal[id]).toBeLessThanOrEqual(shift.perCard - REVEAL_MARGIN + 1e-9);
+            if (tellDef(id)?.show === 'speech' && id !== 'asksSupplier') expect(p.reveal[id]).toBe(0);
+          }
+          expect(visibleTells(p, shift.perCard)).toEqual(p.tells);
+        }
+      }
+    }
+  });
+
+  /** Test-Bot: entscheidet nach `wait` Sekunden mit der Faustregel (zwei verdächtige Merkmale sind ein Zivi). */
+  function accuracy(difficulty: number, wait: (perCard: number) => number) {
+    let right = 0;
+    let all = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const shift = createShift(seed, difficulty, input);
+      for (const p of shift.people) {
+        const seen = visibleTells(p, wait(shift.perCard)).filter(isSuspicious).length;
+        const decision: Decision = seen >= 2 ? 'refuse' : 'sell';
+        const verdict = verdictOf(p, decision);
+        if (verdict === 'sold' || verdict === 'spotted') right += 1;
+        all += 1;
+      }
+    }
+    return right / all;
+  }
+
+  it('Test-Bot: wer hinschaut, liegt richtig; wer schwer sofort wischt, verkauft an Zivis', () => {
+    for (const d of [0.2, 0.5, 0.95]) expect(accuracy(d, (t) => t - REVEAL_MARGIN)).toBe(1);
+    const hastyHard = accuracy(0.95, () => 0.9);
+    const hastyEasy = accuracy(0.2, () => 0.9);
+    expect(hastyHard).toBeLessThan(0.93);
+    expect(hastyEasy).toBeGreaterThan(hastyHard);
   });
 });

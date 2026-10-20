@@ -31,6 +31,7 @@ registerMinigameView('undercover', {
     help:
       'Unter den Leuten sind Zivilfahnder. Schau auf das, was du siehst: Ein verdächtiges Merkmal kann Zufall sein, ' +
       'zwei sind ein Zivi. Knopf im Ohr, Kabel am Kragen und eine Beule am Gürtel sieht man fast nur bei Zivis. ' +
+      'Nicht alles siehst du sofort: Solange „…“ dasteht, kommt noch etwas. ' +
       'Wer zu lange wartet, geht wieder. Verkaufst du an einen Zivi, kommt gleich die Kontrolle.',
   },
   previewParams: (seed) =>
