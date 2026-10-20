@@ -30,6 +30,7 @@ import {
   shiftOutcome,
   shiftPicks,
   shiftScore,
+  shiftStats,
   step,
   type Verdict,
   visibleTells,
@@ -590,7 +591,7 @@ export function UndercoverGame(props: MinigameViewProps) {
     if (m.endAt >= 0 && t >= m.endAt && !m.sent) {
       m.sent = true;
       const out = shiftOutcome(shift, g);
-      onFinish(shiftScore(shift, out), shiftPicks(out));
+      onFinish(shiftScore(shift, out), shiftPicks(out), shiftStats(shift, out));
     }
   }, running);
 

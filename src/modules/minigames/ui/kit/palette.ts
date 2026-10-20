@@ -1,9 +1,9 @@
-// Farben der Minispiele im Canvas aus den Design-Tokens (mapToken). Früher das 2D-Bild des Razzia-Countdowns; seit
-// Auftrag 48 ist die Razzia ein Lauf in 3D (scene.ts), hier bleibt nur die Palette, die auch der Container nutzt.
+// Farben der Minispiele im Canvas aus den Design-Tokens (mapToken): Bedeutungsfarben und Glas des Looks über der Karte.
+// Lesen einmal beim Aufbau (readPalette), nicht in jedem Bild.
 
-import { mapToken } from '../../../../../map';
+import { mapToken } from '../../../../map';
 
-export interface StashPalette {
+export interface MinigamePalette {
   base: string;
   ink: string;
   ink2: string;
@@ -21,7 +21,7 @@ export interface StashPalette {
   sky: string;
 }
 
-export function readPalette(): StashPalette {
+export function readPalette(): MinigamePalette {
   return {
     base: mapToken('--hud-glass-solid', '#16181d'),
     ink: mapToken('--hud-ink', '#ffffff'),

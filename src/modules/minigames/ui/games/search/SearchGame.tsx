@@ -26,6 +26,7 @@ import {
   type SearchEvent,
   searchPicks,
   searchScore,
+  searchStats,
   timeLeft,
 } from './model';
 import { createSearchScene, type SearchScene } from './scene';
@@ -207,7 +208,7 @@ export function SearchGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(searchScore(setup, game.current), searchPicks(setup, game.current));
+    onFinish(searchScore(setup, game.current), searchPicks(setup, game.current), searchStats(setup, game.current));
   };
 
   const float = (text: string, tone: Floater['tone'], index: number) => {

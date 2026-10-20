@@ -24,6 +24,7 @@ import {
   type ChaseState,
   chasePicks,
   chaseScore,
+  chaseStats,
   createChase,
   dumpGoods,
   forceEnd,
@@ -629,7 +630,7 @@ export function ChaseGame(props: MinigameViewProps) {
       } else if (v.t - v.endT >= END_SECONDS && !v.sent) {
         v.sent = true;
         stopLoops();
-        onFinish(chaseScore(g), chasePicks(g));
+        onFinish(chaseScore(g), chasePicks(g), chaseStats(g));
       }
     }
     const took = performance.now() - started;

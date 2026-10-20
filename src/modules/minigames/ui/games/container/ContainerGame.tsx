@@ -7,13 +7,13 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { productColor } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer, type MeterColor } from '../../kit/hud';
+import { readPalette } from '../../kit/palette';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import { useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
-import { readPalette } from '../stash/draw';
 import {
   cellAt,
   createPackArt,
@@ -35,6 +35,7 @@ import {
   COVER_SETS,
   type CoverKind,
   canPlace,
+  containerStats,
   createPacking,
   cycle,
   FLAG_AT,
@@ -375,7 +376,7 @@ export function ContainerGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(packScore(setup, game.current), packPicks(setup, game.current));
+    onFinish(packScore(setup, game.current), packPicks(setup, game.current), containerStats(setup, game.current));
   };
 
   useGameKeys(

@@ -54,6 +54,7 @@ import {
   type BrawlSetup,
   brawlPicks,
   brawlScore,
+  brawlStats,
   CREW_MOVES,
   createBrawl,
   type Fighter,
@@ -687,7 +688,7 @@ export function BrawlGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(brawlScore(game.current), brawlPicks(game.current));
+    onFinish(brawlScore(game.current), brawlPicks(game.current), brawlStats(game.current));
   }
 
   useFrameLoop((dt) => {
