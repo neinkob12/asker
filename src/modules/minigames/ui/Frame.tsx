@@ -4,15 +4,17 @@
 // Erst „Weiter“ schickt das Ergebnis: zuerst den Dialog schließen, dann den Befehl (sonst schlösse man den Dialog,
 // den die Folgen öffnen, z.B. die Akte der Konfrontation).
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatPercent } from '../../../core';
 import { audio, Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
 import { type Challenge, delegateInfo, getChallenge, MINIGAME_KINDS, winAt } from '../index';
+import { ARCADE_ORIGIN, backToArcade } from './arcade';
 import { restoreDialog, setDevFinish } from './flow';
 import { HudBar, ResultStamp } from './kit/hud';
 import { useMapTakeover } from './kit/mapTakeover';
 import { MINIGAME_SOUNDS, playSound } from './kit/sounds';
 import { useFrameLoop } from './kit/useFrameLoop';
+import { nextArcadeSeed, recordResult } from './records';
 import { type MinigameStat, minigameView } from './registry';
 
 type Phase = 'intro' | 'countdown' | 'play' | 'paused' | 'result';
@@ -47,6 +49,8 @@ interface Outcome {
   picks: string[];
   won: boolean;
   stats: MinigameStat[];
+  /** Nur in der Vorschau: Bestwert dieses Geräts nach dem Durchgang (records.ts). */
+  record?: { best: number; newBest: boolean; first: boolean };
 }
 
 /** Werte aus dem Spiel: nur Texte, kurz, höchstens STATS_MAX (nur Anzeige, nichts davon geht in den Spielstand). */
@@ -204,6 +208,21 @@ function ScoreMeter(props: { score: number; goal: number; won: boolean }) {
   );
 }
 
+/** Bestwert der Spielhalle unter der Wertung: „Neuer Bestwert!“ mit Pokal, sonst der alte zum Schlagen. */
+function BestLine(props: { record: NonNullable<Outcome['record']> }) {
+  const { best, newBest, first } = props.record;
+  useEffect(() => {
+    if (newBest) playSound(MINIGAME_SOUNDS.win, 0.5);
+  }, [newBest]);
+  return (
+    <p class={`mg-best${newBest ? ' is-new' : ''}`}>
+      <Icon name="trophy" class="mg-best__icon" />
+      {newBest ? 'Neuer Bestwert!' : first ? 'Erster Bestwert' : 'Bestwert'}
+      <strong class="mg-best__value">{Math.round(best * 100)}</strong>
+    </p>
+  );
+}
+
 function Result(props: {
   challenge: Challenge;
   outcome: Outcome;
@@ -241,7 +260,14 @@ function Result(props: {
           ))}
         </dl>
       )}
-      {props.preview && <p class="mg-result__note">Vorschau: nichts wird gezählt.</p>}
+      {outcome.record && <BestLine record={outcome.record} />}
+      {props.preview && (
+        <p class="mg-result__note">
+          {challenge.origin.module === ARCADE_ORIGIN
+            ? 'Spielhalle: zählt nicht im Spielstand.'
+            : 'Vorschau: nichts wird gezählt.'}
+        </p>
+      )}
       <div class="mg-actions">
         <button ref={next} type="button" class="mg-button is-gold mg-button--big" onClick={props.onNext}>
           Weiter
@@ -267,13 +293,19 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
   const [phase, setPhase] = useState<Phase>('intro');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const finished = useRef(false);
-  const delegate = preview ? { name: 'Kalle', chance: 0.6 } : delegateInfo(state, challenge);
+  const arcade = preview && challenge.origin.module === ARCADE_ORIGIN;
+  // In der Spielhalle gibt es nichts abzugeben; die Vorschau sonst zeigt den Knopf, wie er im Spiel aussähe.
+  const delegate = arcade ? null : preview ? { name: 'Kalle', chance: 0.6 } : delegateInfo(state, challenge);
 
   const onFinish = (score: number, picks: string[] = [], stats?: readonly MinigameStat[]) => {
     if (finished.current) return;
     finished.current = true;
     const s = Number.isFinite(score) ? Math.min(1, Math.max(0, score)) : 0;
-    setOutcome({ score: s, picks, won: s >= winAt(challenge.kind), stats: cleanStats(stats) });
+    const won = s >= winAt(challenge.kind);
+    // Vorschau und Spielhalle: Bestwert pro Gerät (nur Anzeige, nie im Spielstand).
+    const entry = preview ? recordResult(challenge.kind, s, won) : null;
+    const record = entry && { best: entry.record.best, newBest: entry.newBest, first: entry.previous === null };
+    setOutcome({ score: s, picks, won, stats: cleanStats(stats), ...(record ? { record } : {}) });
     setPhase('result');
   };
   useEffect(() => {
@@ -300,6 +332,7 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
     if (!outcome) return;
     if (preview) {
       ui.closeDialog();
+      if (arcade) backToArcade(ui);
       return;
     }
     leave(() =>
@@ -348,11 +381,15 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
   const ui = useUi();
   const root = useRef<HTMLDivElement>(null);
   const [round, setRound] = useState(0);
+  // „Nochmal“ in der Vorschau bringt eine neue Lage (neuer Seed), nicht dieselbe Runde noch einmal.
+  const [seed, setSeed] = useState<number | null>(null);
   const live = props.preview ?? getChallenge(state, props.challengeId);
   // Die Challenge festhalten: Nach „Weiter“ ist sie aus dem Spielstand weg, der Rahmen zeigt aber noch zu Ende.
   const kept = useRef<Challenge | undefined>(live);
   if (live && live.id !== kept.current?.id) kept.current = live;
-  const challenge = kept.current;
+  // Fest je Seed: Spiele bauen ihr Modell oft per useMemo aus der Challenge, ein neues Objekt je Bild baute es neu.
+  const base = kept.current;
+  const challenge = useMemo(() => (base && seed !== null ? { ...base, seed } : base), [base, seed]);
   const view = challenge ? minigameView(challenge.kind) : null;
   // layout 'map': Die Karte gehört dem Minispiel (keine Bedienung, keine Marker, kein HUD), bis der Rahmen zugeht. Das
   // Spiel startet erst danach (es führt die Kamera ab dem ersten Bild).
@@ -380,7 +417,14 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
           key={`${challenge.id}:${round}`}
           challenge={challenge}
           preview={!!props.preview}
-          onAgain={props.preview ? () => setRound((r) => r + 1) : undefined}
+          onAgain={
+            props.preview
+              ? () => {
+                  setSeed(nextArcadeSeed());
+                  setRound((r) => r + 1);
+                }
+              : undefined
+          }
         />
       ) : (
         <section class="mg-card mg-intro">
