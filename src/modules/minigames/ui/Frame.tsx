@@ -68,6 +68,8 @@ function Intro(props: {
   delegate: { name: string; chance: number } | null;
   onStart: () => void;
   onDelegate: () => void;
+  /** Nur in der Vorschau: ohne zu spielen zurück (in der Spielhalle gibt es sonst keinen Weg hinaus). */
+  onBack?: () => void;
 }) {
   const { challenge, delegate } = props;
   const view = minigameView(challenge.kind);
@@ -119,6 +121,12 @@ function Intro(props: {
             </span>
           </button>
         )}
+        {props.onBack && (
+          <button type="button" class="mg-button mg-button--big" onClick={props.onBack}>
+            <Icon name="back" />
+            Zurück
+          </button>
+        )}
       </div>
     </section>
   );
@@ -156,7 +164,7 @@ function Countdown(props: { onDone: () => void }) {
 }
 
 /** Pause, wenn Tab oder App in den Hintergrund gehen: Das Spiel steht (running false), weiter mit 3-2-1. */
-function Paused(props: { onResume: () => void }) {
+function Paused(props: { onResume: () => void; onQuit?: () => void }) {
   const resume = useRef<HTMLButtonElement>(null);
   useEffect(() => resume.current?.focus(), []);
   return (
@@ -174,6 +182,12 @@ function Paused(props: { onResume: () => void }) {
           <Icon name="play" />
           Weiter
         </button>
+        {props.onQuit && (
+          <button type="button" class="mg-button mg-button--big" onClick={props.onQuit}>
+            <Icon name="close" />
+            Aufhören
+          </button>
+        )}
       </div>
     </section>
   );
@@ -320,13 +334,29 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
       if (document.hidden && !finished.current) setPhase('paused');
     };
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // Esc hält an (wie in jedem Spiel). Spiele, die Esc selbst brauchen (z.B. Papiere: Auswahl zu), fangen die Taste
+    // vorher ab (useGameKeys in der Capture-Phase), dann kommt sie hier nicht an.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape' || e.defaultPrevented || finished.current) return;
+      e.preventDefault();
+      setPhase('paused');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [phase]);
 
   const leave = (send: () => void) => {
     ui.closeDialog();
     send();
     restoreDialog(ui);
+  };
+  /** Vorschau verlassen, ohne Ergebnis (aus der Spielhalle zurück dorthin). */
+  const quit = () => {
+    ui.closeDialog();
+    if (arcade) backToArcade(ui);
   };
   const next = () => {
     if (!outcome) return;
@@ -361,10 +391,11 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
           delegate={delegate}
           onStart={() => setPhase('countdown')}
           onDelegate={delegateNow}
+          onBack={preview ? quit : undefined}
         />
       )}
       {phase === 'countdown' && <Countdown onDone={() => setPhase('play')} />}
-      {phase === 'paused' && <Paused onResume={() => setPhase('countdown')} />}
+      {phase === 'paused' && <Paused onResume={() => setPhase('countdown')} onQuit={preview ? quit : undefined} />}
       {phase === 'result' && outcome && (
         <div class={`mg-flash ${outcome.won ? 'is-won' : 'is-lost'}`} aria-hidden="true" />
       )}
