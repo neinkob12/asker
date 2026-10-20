@@ -34,6 +34,7 @@ registerMinigameView('brawl', {
     help:
       'Gegner kündigen ihren Angriff mit einem Zeichen über dem Kopf an, das Messer blinkt rot. Blockst du oder ' +
       'weichst du im letzten Moment aus, ist das ein Konter: Zeitlupe, und dein nächster Treffer zählt doppelt. ' +
+      'Gegen die Flamme (harter Schlag) hält ein Block nur im letzten Moment, sonst lieber ausweichen. ' +
       'Der Anführer blockt leichte Schläge, ein harter bricht seine Deckung. Treffen kann nur, wer in derselben ' +
       'Ebene steht. Deine Crew kämpft mit; ihre Spezialzüge liegen auf 1 bis 3. Läuft die Uhr ab, kommt die Polizei.',
   },

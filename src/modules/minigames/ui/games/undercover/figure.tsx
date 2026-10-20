@@ -87,7 +87,7 @@ export const LowerBody = memo(function LowerBody(props: { person: Person }) {
       <path d="M58 -2 L142 -2 L144 12 Q100 16 56 12 Z" fill={top} />
       <path d="M58 11 Q100 15 142 11" stroke="#000000" stroke-opacity="0.28" stroke-width="1.5" fill="none" />
       {bulge && (
-        <g>
+        <g class="uc-body__bulge">
           <path d="M120 6 Q131 4 138 9 Q140 17 131 19 Q122 18 120 12 Z" fill={top} />
           <path d="M122 16 Q131 19 137 13" stroke="#000000" stroke-opacity="0.35" stroke-width="1.2" fill="none" />
           <path d="M126 9 Q131 8 135 11" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.2" fill="none" />
@@ -98,7 +98,11 @@ export const LowerBody = memo(function LowerBody(props: { person: Person }) {
         { x: 60, flip: false },
         { x: 104, flip: true },
       ].map(({ x, flip }) => (
-        <g key={x} transform={flip ? `translate(${x + 36} 0) scale(-1 1)` : `translate(${x} 0)`}>
+        <g
+          key={`${x}-${shoe}`}
+          class={shoe === 'plain' ? undefined : 'uc-body__shoes'}
+          transform={flip ? `translate(${x + 36} 0) scale(-1 1)` : `translate(${x} 0)`}
+        >
           <path d="M2 50 Q4 42 14 42 L26 42 Q36 44 38 52 L38 56 L2 56 Z" fill={upper} />
           <rect x="1" y="55" width="38" height="5" rx="2" fill={sole} />
           {shoe === 'new' && (
