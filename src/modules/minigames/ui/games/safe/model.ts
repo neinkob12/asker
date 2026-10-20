@@ -26,6 +26,10 @@ export interface SafeSetup {
   penalty: number;
   /** Startstellung des Rads. */
   start: number;
+  /** Störklicks je Zahl: Hier hakt das Rad auch, aber kürzer und dumpfer (Stethoskop schlägt nur halb aus). */
+  decoys: number[][];
+  /** So lange (Sekunden) hakt das Rad beim Ziehen oder Halten an der richtigen Zahl fest (Zeit zum Loslassen). */
+  catchTime: number;
 }
 
 export interface SafeState {
@@ -48,6 +52,8 @@ export interface SafeState {
   mistakes: number;
   done: boolean;
   opened: boolean;
+  /** Das Rad hakt an der Zahl: so viele Sekunden noch (Ziehen und Halten drehen solange nicht weiter). */
+  caught: number;
 }
 
 export type ConfirmResult = 'locked' | 'opened' | 'miss' | 'wrongWay' | 'done';
@@ -94,13 +100,25 @@ export function createSafe(seed: number, difficulty: number): SafeSetup {
     combo.push(n);
     last = n;
   }
-  const hard = clamp01((d - 0.4) / 0.4);
+  // Störklicks: ab mittlerer Schwierigkeit hakt das Rad kurz vor der Zahl auch an einer falschen Stelle, dumpfer.
+  const decoyCount = d < DECOY_FROM ? 0 : d < DECOY_TWO_FROM ? 1 : 2;
+  const decoys = combo.map((n, i) => {
+    const list: number[] = [];
+    while (list.length < decoyCount) {
+      const k = 7 + Math.floor(random() * 18);
+      const at = wrap(n - requiredDir(i) * k);
+      if (list.every((x) => dialDistance(x, at) >= 5)) list.push(at);
+    }
+    return list;
+  });
   return {
     combo: combo as [number, number, number],
+    decoys,
     tolerance: Math.round((4 - 2 * d) * 10) / 10,
-    duration: Math.round(50 - 14 * hard),
+    duration: Math.round(DURATION_EASY - (DURATION_EASY - DURATION_HARD) * clamp01((d - 0.2) / 0.7)),
     penalty: d >= 0.6 ? 3 : 2,
     start,
+    catchTime: Math.round((CATCH_EASY - (CATCH_EASY - CATCH_HARD) * d) * 100) / 100,
   };
 }
 
@@ -117,6 +135,7 @@ export function initSafe(setup: SafeSetup): SafeState {
     mistakes: 0,
     done: false,
     opened: false,
+    caught: 0,
   };
 }
 
@@ -158,6 +177,62 @@ export function comingRight(state: SafeState): boolean {
   return state.step <= 2 && state.ahead > 0 && state.back <= CORRECTION;
 }
 
+/** Striche pro Sekunde, wenn man eine Taste bzw. einen Knopf hält. */
+export const HOLD_SPEED = 22;
+/** So viel Tempo bleibt kurz vor der richtigen Zahl (Ziehen, Halten): das Rad hakt, man landet leichter drauf. */
+export const STICKY = 0.45;
+
+/** Faktor auf das Tempo beim Ziehen und Halten: kurz vor der Zahl dieses Schritts (in der richtigen Richtung) hakt es. */
+export function stickyFactor(setup: SafeSetup, state: SafeState, dir: TurnDir): number {
+  if (state.step > 2 || dir !== requiredDir(state.step)) return 1;
+  return dialDistance(state.pos, setup.combo[state.step]) <= setup.tolerance + 1.5 ? STICKY : 1;
+}
+
+/** Zeit in Sekunden bis Schwierigkeit 0,2 bzw. ab 0,9 (dazwischen gleitend). */
+export const DURATION_EASY = 48;
+export const DURATION_HARD = 34;
+
+/** So lange hakt das Rad an der Zahl (Sekunden), leicht bzw. schwer: etwa eine Reaktionszeit, schwer etwas weniger. */
+export const CATCH_EASY = 0.42;
+export const CATCH_HARD = 0.2;
+/** Ab dieser Schwierigkeit ein Störklick je Zahl, ab der zweiten zwei. */
+export const DECOY_FROM = 0.4;
+export const DECOY_TWO_FROM = 0.8;
+/** Ein Störklick hakt so viel kürzer als die echte Zahl. */
+export const DECOY_CATCH = 0.6;
+
+/** Woran das Rad gerade eingehakt hat: die echte Zahl, ein Störklick oder nichts. */
+export type Catch = 'target' | 'decoy' | null;
+
+/**
+ * Drehen beim Ziehen oder Halten (nicht beim einzelnen Tipp): kurz vor der Zahl hakt es (STICKY), und wer die Zahl in
+ * der richtigen Richtung überfährt, bleibt für catchTime Sekunden genau auf ihr hängen. Wer in der Zeit loslässt, steht
+ * richtig; wer weiterdreht, dreht danach weiter. Gibt die überschrittenen Zahlen zurück (wie turn) und ob es eingehakt
+ * hat.
+ */
+export function turnHeld(setup: SafeSetup, state: SafeState, delta: number): { crossed: number[]; caught: Catch } {
+  if (state.done || state.caught > 0 || !Number.isFinite(delta) || delta === 0) return { crossed: [], caught: null };
+  const dir: TurnDir = delta > 0 ? 1 : -1;
+  const crossed = turn(state, delta * stickyFactor(setup, state, dir));
+  let at: number | null = null;
+  let caught: Catch = null;
+  if (crossedTarget(setup, state, crossed)) {
+    at = setup.combo[state.step];
+    caught = 'target';
+  } else if (state.step <= 2 && dir === requiredDir(state.step)) {
+    const decoy = (setup.decoys[state.step] ?? []).find((n) => crossed.includes(n));
+    if (decoy !== undefined) {
+      at = decoy;
+      caught = 'decoy';
+    }
+  }
+  if (at === null) return { crossed, caught: null };
+  state.ahead = Math.max(0, state.ahead - dialDistance(state.pos, at));
+  state.pos = at;
+  state.caught = setup.catchTime * (caught === 'decoy' ? DECOY_CATCH : 1);
+  return { crossed, caught };
+}
+
 /** Über so viele Striche steigt die Nähe an (Stethoskop, Klicken, Zittern). */
 export const PROXIMITY_RANGE = 16;
 
@@ -196,6 +271,7 @@ export function confirm(setup: SafeSetup, state: SafeState): ConfirmResult {
     return wrongWay && onTarget(setup, state) ? 'wrongWay' : 'miss';
   }
   state.step += 1;
+  state.caught = 0;
   state.lastDir = 0;
   state.travel = 0;
   state.ahead = 0;
@@ -212,6 +288,7 @@ export function confirm(setup: SafeSetup, state: SafeState): ConfirmResult {
 export function advance(setup: SafeSetup, state: SafeState, dt: number): boolean {
   if (state.done || !(dt > 0)) return false;
   state.time += dt;
+  state.caught = Math.max(0, state.caught - dt);
   if (timeLeft(setup, state) <= 0) {
     state.done = true;
     return true;

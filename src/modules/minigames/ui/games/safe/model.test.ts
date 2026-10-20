@@ -1,12 +1,15 @@
 // Spiellogik von Tresor knacken (Auftrag 44, Teil 0), ohne DOM.
 
 import { describe, expect, it } from 'vitest';
+import { playSafe, SAFE_BOT_GOOD, SAFE_BOT_WEAK, type SafeBot } from './bot';
 import {
   advance,
   CORRECTION,
   comingRight,
   confirm,
   createSafe,
+  DURATION_EASY,
+  DURATION_HARD,
   dialDistance,
   dialNumber,
   initSafe,
@@ -18,6 +21,7 @@ import {
   safeScore,
   timeLeft,
   turn,
+  turnHeld,
   wrap,
 } from './model';
 
@@ -50,8 +54,11 @@ describe('Tresor: Aufbau', () => {
   it('schwerer: weniger Zeit und schmalere Toleranz', () => {
     const easy = createSafe(1, 0.2);
     const hard = createSafe(1, 0.9);
-    expect(easy.duration).toBe(50);
-    expect(hard.duration).toBe(36);
+    expect(easy.duration).toBe(DURATION_EASY);
+    expect(hard.duration).toBe(DURATION_HARD);
+    expect(hard.catchTime).toBeLessThan(easy.catchTime);
+    expect(easy.decoys.every((list) => list.length === 0)).toBe(true);
+    expect(hard.decoys.every((list) => list.length === 2)).toBe(true);
     expect(hard.tolerance).toBeLessThan(easy.tolerance);
     expect(hard.tolerance).toBeGreaterThanOrEqual(2);
     expect(hard.penalty).toBeGreaterThan(easy.penalty);
@@ -176,5 +183,64 @@ describe('Tresor: Zeit und Score', () => {
     confirm(setup, state);
     expect(state.done).toBe(true);
     expect(state.opened).toBe(false);
+  });
+});
+
+describe('Tresor: Rad hakt (Auftrag 49)', () => {
+  it('beim Halten bleibt das Rad an der richtigen Zahl hängen, danach dreht es weiter', () => {
+    const setup = createSafe(4, 0.2);
+    const state = initSafe(setup);
+    let caught = null as ReturnType<typeof turnHeld>['caught'];
+    for (let i = 0; i < 600 && !caught; i++) {
+      caught = turnHeld(setup, state, 0.3).caught;
+      advance(setup, state, 0.01);
+    }
+    expect(caught).toBe('target');
+    expect(state.pos).toBe(setup.combo[0]);
+    expect(turnHeld(setup, state, 0.3).crossed).toEqual([]);
+    expect(confirm(setup, state)).toBe('locked');
+  });
+
+  it('Störklicks haken kürzer und gelten nicht als Zahl', () => {
+    const setup = createSafe(4, 0.9);
+    const state = initSafe(setup);
+    let caught = null as ReturnType<typeof turnHeld>['caught'];
+    for (let i = 0; i < 2000 && caught !== 'decoy'; i++) {
+      caught = turnHeld(setup, state, 0.3).caught;
+      if (caught === 'target') {
+        advance(setup, state, 1);
+        caught = null;
+      }
+    }
+    expect(caught).toBe('decoy');
+    expect(state.caught).toBeLessThan(setup.catchTime);
+    expect(setup.decoys[0]).toContain(state.pos);
+    expect(confirm(setup, state)).toBe('miss');
+  });
+});
+
+describe('Tresor: Schwierigkeit (Test-Bot)', () => {
+  function measure(bot: SafeBot | null, difficulty: number) {
+    let opened = 0;
+    let seconds = 0;
+    const n = 40;
+    for (let seed = 1; seed <= n; seed++) {
+      const setup = createSafe(seed, difficulty);
+      const run = playSafe(setup, initSafe(setup), bot);
+      if (run.opened) opened += 1;
+      seconds += run.seconds / n;
+    }
+    return { opened: opened / n, seconds };
+  }
+
+  it('schaffbar, aber knapp: geübt fast immer, schwach mittel öfter als schwer, ohne Eingabe nie', () => {
+    expect(measure(SAFE_BOT_GOOD, 0.5).opened).toBeGreaterThanOrEqual(0.9);
+    expect(measure(SAFE_BOT_GOOD, 0.9).opened).toBeGreaterThanOrEqual(0.8);
+    const weakMid = measure(SAFE_BOT_WEAK, 0.5).opened;
+    expect(weakMid).toBeGreaterThanOrEqual(0.5);
+    expect(weakMid).toBeLessThanOrEqual(0.85);
+    expect(measure(SAFE_BOT_WEAK, 0.9).opened).toBeLessThan(weakMid);
+    expect(measure(SAFE_BOT_WEAK, 0.2).opened).toBeGreaterThanOrEqual(0.9);
+    for (const d of [0.2, 0.5, 0.9]) expect(measure(null, d).opened).toBe(0);
   });
 });
