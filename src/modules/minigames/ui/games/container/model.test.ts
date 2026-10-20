@@ -5,11 +5,14 @@ import {
   analyze,
   autoPack,
   bounds,
+  type CoverKind,
   canPlace,
+  containerStats,
   createPacking,
   cycle,
   finishPacking,
   GRID,
+  hiddenGoods,
   initPacking,
   lift,
   type PackPiece,
@@ -19,8 +22,10 @@ import {
   pieceAt,
   place,
   rotate,
+  scannerNear,
   stackCount,
   step,
+  TIME_FACTOR,
   trayOrder,
   undo,
 } from './model';
@@ -59,8 +64,12 @@ describe('Container packen: Aufbau', () => {
     expect(createPacking(7, 0.5, INPUT)).not.toEqual(createPacking(8, 0.5, INPUT));
     const small = createPacking(1, 0.3, { ...INPUT, size: 'small' });
     const full = createPacking(1, 0.3, { ...INPUT, size: 'full' });
-    expect([small.cols, small.rows, small.duration]).toEqual([7, 4, 45]);
-    expect([full.cols, full.rows, full.duration]).toEqual([12, 5, 60]);
+    expect([small.cols, small.rows]).toEqual([7, 4]);
+    expect([full.cols, full.rows]).toEqual([12, 5]);
+    // Zeit nach Schwierigkeit: leicht mehr als die Grundzeit, schwer weniger.
+    expect(createPacking(1, 0, { ...INPUT, size: 'small' }).duration).toBe(Math.round(45 * TIME_FACTOR.easy));
+    expect(createPacking(1, 1, { ...INPUT, size: 'full' }).duration).toBe(Math.round(60 * TIME_FACTOR.hard));
+    expect(full.duration).toBeGreaterThan(small.duration);
   });
 
   it('Ware füllt mindestens das Ziel, Deckladung passt in den Rest; schwerer heißt mehr Ware, weniger Deckladung', () => {
@@ -246,5 +255,88 @@ describe('Container packen: machbar', () => {
     const st = initPacking(s);
     expect(autoPack(s, st, 2)).toBe(2);
     expect(st.placed).toHaveLength(2);
+  });
+
+  /**
+   * Test-Bot mit Tempo: legt gierig ein Teil nach dem anderen ab und braucht für jedes `pace` Sekunden (Teil wählen,
+   * drehen, ziehen). Läuft die Zeit ab, zählt, was drin ist.
+   */
+  function timedRun(seed: number, d: number, pace: number, size: 'small' | 'medium' | 'full', cover: CoverKind) {
+    const s = createPacking(seed, d, { ...INPUT, size, cover });
+    const st = initPacking(s);
+    while (!st.done) {
+      if (step(s, st, pace)) break;
+      if (autoPack(s, st, 1) === 0) break;
+    }
+    return packScore(s, st);
+  }
+  const mean = (d: number, pace: number) => {
+    let sum = 0;
+    let n = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6])
+      for (const size of ['small', 'medium', 'full'] as const)
+        for (const cover of ['none', 'tiles', 'bananas'] as const) {
+          sum += timedRun(seed, d, pace, size, cover);
+          n += 1;
+        }
+    return sum / n;
+  };
+
+  it('mit Tempo gemessen: leicht entspannt, schwer knapp, aber machbar; langsam kostet', () => {
+    // Gemessen (Auftrag 48), Mittel über Größen und Deckladung, Bot mit 2 / 3 / 4 / 5 / 6 s je Teil:
+    // leicht 0,2: 0,99 0,99 0,99 0,98 0,97; mittel 0,5: 0,93 0,93 0,93 0,90 0,87; schwer 0,9: 0,88 0,88 0,86 0,82 0,73.
+    // Der Bot findet sofort den besten Platz, Menschen nicht: Für sie drückt die Zeit bei 0,9 deutlich früher.
+    const easy = mean(0.2, 3);
+    const hard = mean(0.9, 3);
+    const hardSlow = mean(0.9, 6);
+    expect(easy).toBeGreaterThan(0.9);
+    expect(hard).toBeGreaterThan(0.6);
+    expect(hard).toBeLessThan(easy - 0.05);
+    expect(hardSlow).toBeLessThan(hard - 0.1);
+  });
+
+  it('ohne Deckladung (Altkleider) ist es schwerer als mit Bananen', () => {
+    let none = 0;
+    let bananas = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      none += timedRun(seed, 0.7, 2.5, 'medium', 'none');
+      bananas += timedRun(seed, 0.7, 2.5, 'medium', 'bananas');
+    }
+    expect(none).toBeLessThan(bananas);
+  });
+
+  it('Scanner rollt erst am Ende heran; versteckte Ware wird erkannt', () => {
+    const s = tiny();
+    const st = initPacking(s);
+    expect(scannerNear(s, st)).toBe(0);
+    step(s, st, s.duration - 5);
+    expect(scannerNear(s, st)).toBeCloseTo(10 / 15, 3);
+    const t = tiny();
+    const ts = initPacking(t);
+    place(t, ts, 0, 0, 1, 1);
+    expect(hiddenGoods(t, ts, analyze(t, ts))).toEqual([]);
+    // Rundum Kisten: (0,1), (3,1), (1,0), (2,0), (1,2), (2,2).
+    let id = 1;
+    for (const [x, y] of [
+      [0, 1],
+      [3, 1],
+      [1, 0],
+      [2, 0],
+      [1, 2],
+      [2, 2],
+    ])
+      place(t, ts, id++, 0, x, y);
+    expect(hiddenGoods(t, ts, analyze(t, ts))).toEqual([0]);
+  });
+});
+
+describe('Container packen: Werte fürs Ergebnis', () => {
+  it('Tarnung, verstaut, versteckt, Röntgen', () => {
+    const s = createPacking(1, 0.5, INPUT);
+    const st = initPacking(s);
+    expect(containerStats(s, st).map((x) => x.label)).toEqual(['Tarnung', 'Verstaut', 'Ganz versteckt', 'Im Röntgen']);
+    autoPack(s, st);
+    const goods = s.pieces.filter((p) => p.kind === 'goods').length;
+    expect(containerStats(s, st)[1]).toMatchObject({ value: `${goods}/${goods}`, tone: 'good' });
   });
 });

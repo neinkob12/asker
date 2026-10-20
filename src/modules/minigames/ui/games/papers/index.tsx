@@ -17,11 +17,12 @@ registerMinigameView('papers', {
   icon: 'clipboard',
   controls: {
     keys: 'Pfeile: Zeile, Eingabe: umschreiben, 1 bis 4: Wert. B Schein, G aufgeben.',
-    touch: 'Zeile antippen, richtigen Wert wählen. Oben die Reiter der Papiere.',
+    touch: 'Zeile antippen: Der Wähler zeigt dasselbe Feld auf den anderen Papieren. Oben die Reiter der Papiere.',
     help:
       'Der Zöllner liest ein Papier nach dem anderen, sein Finger wandert die Zeilen runter. Was auf einem Papier ' +
       'anders steht als auf den beiden anderen, auf der Waage, im Kalender oder auf dem Kennzeichen, musst du ' +
-      'umschreiben, bevor er dort ankommt. Der Ausfuhrstempel muss zur Herkunft passen. Findet er zwei Fehler, ' +
+      'umschreiben, bevor er dort ankommt. Mit der Maus über einer Zeile leuchtet dasselbe Feld auf allen Papieren. ' +
+      'Der Ausfuhrstempel muss zur Herkunft passen. Findet er zwei Fehler, ' +
       'macht er die Ladung auf. Den Schein nimmt er erst, wenn er schon etwas gefunden hat; vorher zählt er als ' +
       'Fehler. Aufgeben heißt: Die Ware bleibt da, festgenommen wird niemand.',
   },

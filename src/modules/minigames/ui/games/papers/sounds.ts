@@ -17,6 +17,8 @@ export const PAPERS_SOUNDS = {
   knock: 'minigames.papers.knock',
   /** Umschlag gleitet über den Tisch. */
   slide: 'minigames.papers.slide',
+  /** Großer Stempel am Schluss: Schlag, der Tisch wackelt, Kleinzeug klappert. */
+  slam: 'minigames.papers.slam',
 } as const;
 
 function noise(
@@ -105,6 +107,15 @@ export function registerPapersSounds(): void {
     kind: 'synth',
     play: (ctx, out, t) => {
       noise(ctx, out, t, 0.45, 'bandpass', 2400, 0.22, 0.7);
+    },
+  });
+  audio.registerSound(s.slam, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, 120, 40, 0.32, 0.7);
+      noise(ctx, out, t, 0.14, 'lowpass', 700, 1);
+      noise(ctx, out, t + 0.03, 0.06, 'bandpass', 2400, 0.25, 2);
+      for (const dt of [0.09, 0.15, 0.2]) noise(ctx, out, t + dt, 0.03, 'bandpass', 3800, 0.12, 4);
     },
   });
 }
