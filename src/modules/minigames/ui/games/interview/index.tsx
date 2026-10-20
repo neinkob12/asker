@@ -1,9 +1,9 @@
-// Bewerbungsgespräch (Auftrag 44, Teil 9; neu nach dem Feedback vom 07.10.2026 als Lügendetektor): Anmeldung der
-// Ansicht. Spiel in InterviewGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Fragen und Antworten als
+// Bewerbungsgespräch (Auftrag 44, Teil 9; Lügendetektor seit dem Feedback vom 07.10.2026, eigene Fragen und Druck
+// seit Auftrag 48): Anmeldung der Ansicht. Spiel in InterviewGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Fragen und Antworten als
 // Daten in recruiting (interview.ts), Zeichen als Overlay (Tells.tsx), Klänge in sounds.ts. Auslöser und Folgen:
 // recruiting ('recruiting.interview', Ereignis 'minigame.finished').
 // Vorschau: ?minispiel=interview (Läufer mit zwei Eigenschaften), &seed=2 (gerade Seeds: Sicherheit, Level 2, eine
-// Eigenschaft schon bekannt), &schwer=0.9 (kurze Zeichen, viele Gesten).
+// Eigenschaft schon bekannt), &schwer=0.9 (kurze Zeichen, viele Gesten, schmale Zone, die wandert).
 
 import { personLook, voiceFor } from '../../../../../core';
 import { TRAITS, type TraitId, traitName } from '../../../../staff';
@@ -37,17 +37,20 @@ registerMinigameView('interview', {
   layout: 'stage',
   icon: 'message',
   controls: {
-    keys: 'Leertaste: Zeichen! Sobald die Person beim Antworten ein Zeichen zeigt.',
-    touch: 'Die Person oder „Zeichen!“ antippen, sobald sie ein Zeichen zeigt.',
+    keys: '1 bis 3: Frage wählen. F oder ↑ halten: Blick halten (Druck). Leertaste: Zeichen!',
+    touch: 'Frage antippen. Links „Blick halten“ (oder die Person) gedrückt halten, rechts „Zeichen!“ tippen.',
     help:
-      'Drei Fragen, du hörst zu. Verrät eine Antwort etwas, zeigt die Person währenddessen kurz Zeichen: Blick weg, ' +
-      'Schwitzen, Zappeln, Kratzen am Hals, nervöses Grinsen. Tipp sofort. Nicken, ein Schluck aus dem Becher, ' +
-      'Schulterzucken oder Vorbeugen sind harmlos: Tippen ist dann ein Fehlalarm, zwei davon verderben die Runde. ' +
-      'Mindestens die Hälfte der Zeichen erwischt: Die Eigenschaft kommt in die Akte. Zwei von drei Runden richtig: ' +
-      'Dazu zeigt sich ein Wert, den du vorher nicht sahst.',
+      'Drei Runden. Du wählst jedes Mal eine von drei Fragen; die Karte sagt, was sie prüft. Während die Person ' +
+      'antwortet, steuerst du den Druck: Blick halten lässt den Ring steigen, loslassen sinken. In der hellen Zone ' +
+      'ist sie angespannt, und verrät die Antwort etwas, zeigt sie deutlich Zeichen: Blick weg, Schwitzen, Zappeln, ' +
+      'Kratzen am Hals, nervöses Grinsen. Tipp dann sofort. Darunter huschen die Zeichen nur vorbei, darüber macht ' +
+      'sie zu und bricht ab. Nicken, ein Schluck, Schulterzucken oder Vorbeugen sind harmlos: Tippen ist ein ' +
+      'Fehlalarm, zwei verderben die Runde. Genug Zeichen erwischt: Die Eigenschaft kommt in die Akte. Antwortet ' +
+      'sie unauffällig, weißt du: nichts von dem, was die Frage prüft. Zwei von drei Runden richtig: Dazu zeigt sich ' +
+      'ein Wert, den du vorher nicht sahst.',
   },
   previewParams: (seed) => previewPerson(seed),
-  previewSituation: 'Nico R., 22, will als Läufer bei dir anfangen. Drei Fragen, dann weißt du mehr.',
+  previewSituation: 'Nico R., 22, will als Läufer bei dir anfangen. Drei Fragen, du entscheidest welche.',
   resultText: ({ won, score, picks }, challenge) => {
     const traits = Array.isArray(challenge.params.traits) ? (challenge.params.traits as string[]) : [];
     const known = Array.isArray(challenge.params.known) ? (challenge.params.known as string[]) : [];

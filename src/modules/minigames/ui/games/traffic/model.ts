@@ -35,9 +35,13 @@ export const HIT_SUS = 0.34;
 export const OK_SUS = -0.04;
 export const WAIT_SUS = { easy: 0.006, hard: 0.014 };
 export const START_SUS = 0.12;
-/** Ab so vielen Sekunden Überlegen sagt er etwas (einmal je Frage) und es kostet etwas Misstrauen. */
-export const SLOW_AFTER = 14;
+/**
+ * Ab so vielen Sekunden Überlegen sagt er etwas (einmal je Frage) und es kostet etwas Misstrauen (leicht bis schwer).
+ * Nach SILENT mal so lange ist Schweigen auch eine Antwort: Es zählt als Widerspruch, und er fragt weiter.
+ */
+export const SLOW_AFTER = { easy: 16, hard: 10 };
 export const SLOW_SUS = 0.06;
+export const SILENT = 1.8;
 /** Bestechen klappt nur bei mittlerem Misstrauen (dazwischen). */
 export const BRIBE_MIN = 0.3;
 export const BRIBE_MAX = 0.78;
@@ -83,6 +87,8 @@ export interface TrafficSetup {
   walkAfter: number;
   radioAfter: number;
   waitSus: number;
+  /** Sekunden bis „So lange überlegen?“. */
+  slowAfter: number;
 }
 
 export interface TrafficState {
@@ -107,11 +113,16 @@ export interface TrafficState {
   line: { text: string; n: number } | null;
   /** Antworten, die du gegeben hast (Text), für Journal und Ergebnis. */
   given: string[];
+  /** Woran der letzte Widerspruch hing (für die Oberfläche: diese Fakten leuchten auf). */
+  caught: Topic[];
   random: () => number;
 }
 
 /** Was im Schritt passiert ist (für Ton, Vibration, Optik). */
-export type Signal = 'greet' | 'ask' | 'ok' | 'hit' | 'slow' | 'walk' | 'radio' | 'pass' | 'fail' | 'done';
+export type Signal = 'greet' | 'ask' | 'ok' | 'hit' | 'slow' | 'silent' | 'walk' | 'radio' | 'pass' | 'fail' | 'done';
+
+/** Woran ein Widerspruch hängt: Uhrzeit, Kennzeichen, Fahrzeug, was hinten liegt, oder deine frühere Aussage. */
+export type Topic = 'hour' | 'plate' | 'vehicle' | 'visible' | 'story';
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -163,6 +174,7 @@ export function createTraffic(seed: number, difficulty: number, options: Traffic
     walkAfter,
     radioAfter: order.length - 2,
     waitSus: lerp(WAIT_SUS.easy, WAIT_SUS.hard, d),
+    slowAfter: lerp(SLOW_AFTER.easy, SLOW_AFTER.hard, d),
   };
 }
 
@@ -191,6 +203,7 @@ export function initTraffic(setup: TrafficSetup): TrafficState {
     outcome: null,
     line: null,
     given: [],
+    caught: [],
     random: createRng(setup.seed ^ 0x3c6ef372),
   };
 }
@@ -207,6 +220,30 @@ export function questionDef(id: string): QuestionDef {
 export function contradiction(def: QuestionDef, answer: AnswerDef, ev: Evidence, story: Story): string | null {
   if (def.repeat) return repeatContradiction(def, answer, story);
   return answer.fits(ev, story);
+}
+
+const HOURS_TRY = [3, 9, 14, 20, 23];
+const PLATES_TRY = ['Hamburg', 'Berlin', 'München', 'Köln'];
+
+/**
+ * Woran ein Widerspruch hängt: Jede sichtbare Tatsache wird probeweise geändert; passt die Antwort dann, hing es
+ * daran. Deine früheren Aussagen ebenso (probeweise vergessen). So braucht keine Antwort eine eigene Angabe.
+ */
+export function contradictionTopics(def: QuestionDef, answer: AnswerDef, ev: Evidence, story: Story): Topic[] {
+  if (!contradiction(def, answer, ev, story)) return [];
+  const fitsWith = (e: Evidence, st: Story) => contradiction(def, answer, e, st) === null;
+  const out: Topic[] = [];
+  if (HOURS_TRY.some((hour) => fitsWith({ ...ev, hour }, story))) out.push('hour');
+  const plates = [ev.homeCity, ...PLATES_TRY].filter((c) => c !== ev.plateCity);
+  if (plates.some((c) => fitsWith({ ...ev, plateCity: c, plateHome: c === ev.homeCity }, story))) out.push('plate');
+  if ((['transporter', 'kombi', 'limousine'] as const).some((vehicle) => fitsWith({ ...ev, vehicle }, story))) {
+    out.push('vehicle');
+  }
+  if ((['kartons', 'werkzeug', 'taschen', 'nichts'] as const).some((visible) => fitsWith({ ...ev, visible }, story))) {
+    out.push('visible');
+  }
+  if (Object.keys(story).length > 0 && fitsWith(ev, {})) out.push('story');
+  return out;
 }
 
 /**
@@ -319,11 +356,17 @@ export function advance(setup: TrafficSetup, state: TrafficState, dt: number): S
     case 'ask':
       state.thinking += dt;
       state.suspicion = clamp(state.suspicion + setup.waitSus * dt, 0, 1);
-      if (state.thinking >= SLOW_AFTER && !state.slowSaid) {
+      if (state.thinking >= setup.slowAfter && !state.slowSaid) {
         state.slowSaid = true;
         state.suspicion = clamp(state.suspicion + SLOW_SUS, 0, 1);
         say(state, OFFICER_LINES.slow);
         signals.push('slow');
+      } else if (state.thinking >= setup.slowAfter * SILENT) {
+        // Keine Antwort ist auch eine Antwort.
+        state.question = null;
+        state.caught = [];
+        const line = OFFICER_LINES.silent[Math.floor(state.random() * OFFICER_LINES.silent.length)];
+        signals.push('silent', caughtOut(state, line) === 'fail' ? 'fail' : 'hit');
       }
       break;
     case 'react':
@@ -340,6 +383,21 @@ export function advance(setup: TrafficSetup, state: TrafficState, dt: number): S
 
 export type AnswerResult = 'ok' | 'hit' | 'fail' | 'none';
 
+/** Ein Widerspruch fliegt auf (oder du schweigst zu lange): Treffer, beim letzten „Aussteigen“. */
+function caughtOut(state: TrafficState, remark: string): 'hit' | 'fail' {
+  state.hits += 1;
+  state.suspicion = clamp(state.suspicion + HIT_SUS, 0, 1);
+  if (state.hits >= MAX_HITS) {
+    state.outcome = 'fail';
+    sayText(state, `${remark} ${OFFICER_LINES.fail[Math.floor(state.random() * OFFICER_LINES.fail.length)]}`);
+    enter(state, 'end', END + 0.6);
+    return 'fail';
+  }
+  sayText(state, remark);
+  enter(state, 'react', REACT.hit);
+  return 'hit';
+}
+
 /** Eine Antwort wählen (Index 0 bis 2). */
 export function answer(setup: TrafficSetup, state: TrafficState, index: number): AnswerResult {
   const q = state.question;
@@ -349,23 +407,12 @@ export function answer(setup: TrafficSetup, state: TrafficState, index: number):
   const def = questionDef(q.id);
   const full = def.answers.find((x) => x.text === a.text);
   const remark = full ? contradiction(def, full, setup.evidence, state.story) : null;
+  state.caught = full && remark ? contradictionTopics(def, full, setup.evidence, state.story) : [];
   state.given.push(a.text);
   // Was du sagst, gilt ab jetzt (auch wenn es nicht passt: dann hast du es eben behauptet).
   for (const [k, v] of Object.entries(a.claims)) if (v) state.story[k as FactKey] = v;
   state.question = null;
-  if (remark) {
-    state.hits += 1;
-    state.suspicion = clamp(state.suspicion + HIT_SUS, 0, 1);
-    if (state.hits >= MAX_HITS) {
-      state.outcome = 'fail';
-      sayText(state, `${remark} ${OFFICER_LINES.fail[Math.floor(state.random() * OFFICER_LINES.fail.length)]}`);
-      enter(state, 'end', END + 0.6);
-      return 'fail';
-    }
-    sayText(state, remark);
-    enter(state, 'react', REACT.hit);
-    return 'hit';
-  }
+  if (remark) return caughtOut(state, remark);
   state.suspicion = clamp(state.suspicion + OK_SUS, 0, 1);
   say(state, OFFICER_LINES.ok);
   enter(state, 'react', REACT.ok);
@@ -401,6 +448,12 @@ export function flee(state: TrafficState): boolean {
   say(state, OFFICER_LINES.flee);
   enter(state, 'end', 0.8);
   return true;
+}
+
+/** Geduld 0 bis 1, solange er auf deine Antwort wartet (1 = gerade gefragt, 0 = Schweigen zählt). */
+export function patience(setup: TrafficSetup, state: TrafficState): number {
+  if (state.phase !== 'ask') return 1;
+  return clamp(1 - state.thinking / (setup.slowAfter * SILENT), 0, 1);
 }
 
 /** Fortschritt 0 bis 1 (Fragen beantwortet). */
@@ -439,4 +492,28 @@ export function trafficPicks(state: TrafficState): string[] {
   if (state.outcome === 'bribe') picks.push('bribe');
   if (state.outcome === 'pass' && state.hits > 0) picks.push(`lies:${state.hits}`);
   return picks;
+}
+
+/** Wert unter der Wertung im Ergebnis (wie MinigameStat im Rahmen). */
+export interface TrafficStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Werte fürs Ergebnis: Widersprüche, Misstrauen, beantwortete Fragen, Dauer. */
+export function trafficStats(state: TrafficState): TrafficStat[] {
+  const sus = Math.round(state.suspicion * 100);
+  return [
+    {
+      label: 'Widersprüche',
+      value: `${state.hits}/${MAX_HITS}`,
+      icon: 'alert',
+      tone: state.hits === 0 ? 'good' : 'bad',
+    },
+    { label: 'Misstrauen', value: `${sus} %`, icon: 'eye', ...(sus >= 60 ? { tone: 'bad' as const } : {}) },
+    { label: 'Antworten', value: String(state.given.length), icon: 'message' },
+    { label: 'Dauer', value: `${Math.round(state.t)} s`, icon: 'clock' },
+  ];
 }
