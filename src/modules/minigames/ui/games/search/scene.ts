@@ -66,7 +66,19 @@ export interface ScreenPoint {
 
 export interface SearchScene {
   /** Raum wechseln (sofort; das Überblenden macht die Komponente). */
-  setRoom(room: RoomId): void;
+  setRoom(room: RoomId, from?: RoomId): void;
+  /**
+   * Gang (Auftrag 49): ein paar Schritte auf die Tür in einen Raum zu (aus dem Flur) bzw. zurück (in den Flur), über
+   * seconds Sekunden. Den Raum wechselt danach setRoom.
+   */
+  walk(to: RoomId, seconds: number): void;
+  /** Tür unter dem Bildschirmpunkt (nur im Flur), sonst null. */
+  pickExit(px: number, py: number): RoomId | null;
+  /**
+   * Bildschirmlage der Tür in einen Raum (nach update); unsichtbar, wenn es im aktuellen Raum keine gibt. Liegt sie
+   * außerhalb des Bilds (auch hinter dir), sagt side, an welchem Rand (−1 links, 1 rechts, 0 im Bild).
+   */
+  exitScreen(to: RoomId): ScreenPoint & { side: -1 | 0 | 1; exists: boolean };
   /** Wohin die Lampe zeigt: Bildschirmpunkt (Maus, Finger) bzw. ein Ding (Tastatur). */
   aimAt(px: number, py: number): void;
   aimItem(index: number): void;
@@ -258,8 +270,36 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     return out.set(view.center[0] + ox, view.center[1], view.center[2]);
   };
 
-  const setRoom = (id: RoomId) => {
+  // Gang: Richtung (Raumkoordinaten x, z) und Fortschritt.
+  const stroll = { k: 1, seconds: 0, dx: 0, dz: 0, yaw: 0 };
+  const exitOf = (to: RoomId) => roomViews.get(room)?.exits.find((e) => e.to === to);
+  const walk = (to: RoomId, seconds: number) => {
+    const exit = exitOf(to);
+    stroll.k = 0;
+    stroll.seconds = Math.max(0.05, seconds);
+    if (exit) {
+      // Auf die Tür zu, den Blick hin.
+      const dx = exit.center[0];
+      const dz = exit.center[2] - STAND_Z;
+      const len = Math.hypot(dx, dz) || 1;
+      const step = Math.min(1.4, len * 0.6);
+      stroll.dx = (dx / len) * step;
+      stroll.dz = (dz / len) * step;
+      stroll.yaw = Math.max(-1.2, Math.min(1.2, Math.atan2(-dx, -dz)));
+    } else {
+      // Zurück durch die Tür hinter dir: ein Schritt rückwärts.
+      stroll.dx = 0;
+      stroll.dz = 0.7;
+      stroll.yaw = 0;
+    }
+  };
+  const setRoom = (id: RoomId, from?: RoomId) => {
+    const prev = room;
     room = id;
+    stroll.k = 1;
+    stroll.dx = 0;
+    stroll.dz = 0;
+    sparks.clear();
     for (const [rid, view] of roomViews) view.group.visible = rid === id;
     for (const b of bills) {
       b.life = 0;
@@ -268,6 +308,10 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     yaw = 0;
     pitch = -0.15;
     aim.item = -1;
+    // Zurück im Flur: Du schaust erst noch zur Tür, aus der du kommst.
+    const back = from ?? prev;
+    const exit = id === 'hall' && back !== 'hall' ? roomViews.get('hall')?.exits.find((e) => e.to === back) : undefined;
+    if (exit) yaw = Math.max(-yawMax, Math.min(yawMax, Math.atan2(-exit.center[0], -(exit.center[2] - STAND_Z))));
   };
 
   const update = (state: SearchState, fx: SearchFx, dt: number) => {
@@ -286,14 +330,26 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     const wantYaw = -Math.sign(nx) * Math.abs(nx) ** 1.1 * yawMax;
     const wantPitch = -0.15 - Math.sign(ny) * Math.abs(ny) ** 1.1 * PITCH;
     yaw += (wantYaw - yaw) * Math.min(1, dt * 2.6);
+    // Gang zur Tür: weich hin, Blick dreht mit.
+    let walkX = 0;
+    let walkZ = 0;
+    let walkYaw = 0;
+    if (stroll.k < 1) {
+      stroll.k = Math.min(1, stroll.k + dt / stroll.seconds);
+      const e = stroll.k * stroll.k * (3 - 2 * stroll.k);
+      walkX = stroll.dx * e;
+      walkZ = stroll.dz * e;
+      walkYaw = (stroll.yaw - yaw) * Math.min(1, e * 1.4);
+    }
+    const bob = reduced || stroll.k >= 1 ? 0 : Math.abs(Math.sin(stroll.k * Math.PI * 3)) * 0.03;
     pitch += (wantPitch - pitch) * Math.min(1, dt * 2.6);
     const shake = (reduced ? 0.25 : 1) * fx.shake;
     const sx = shake > 0.01 ? Math.sin(t * 63) * 0.03 * shake : 0;
     const sy = shake > 0.01 ? Math.cos(t * 51) * 0.02 * shake : 0;
     // Atmen: leichtes Wiegen.
     const breathe = reduced ? 0 : Math.sin(t * 1.3) * 0.006;
-    camera.position.set(ox + sx, EYE + breathe + sy, STAND_Z);
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    camera.position.set(ox + sx + walkX, EYE + breathe + sy - bob, STAND_Z + walkZ);
+    camera.rotation.set(pitch, yaw + walkYaw, 0, 'YXZ');
     camera.updateMatrixWorld();
     // Lampe: aus der rechten Hand in Richtung des Zeigers.
     ndc.set(aim.x * 2 - 1, -(aim.y * 2 - 1));
@@ -435,6 +491,18 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     }
   };
 
+  const pickExit = (px: number, py: number): RoomId | null => {
+    const exits = roomViews.get(room)?.exits ?? [];
+    if (exits.length === 0) return null;
+    ndc.set((px / width) * 2 - 1, -(py / height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObjects(
+      exits.map((e) => e.hit),
+      false,
+    )[0];
+    return hit ? (hit.object.userData.exit as RoomId) : null;
+  };
+
   setRoom('hall');
 
   return {
@@ -451,6 +519,19 @@ export function createSearchScene(setup: SearchSetup, phase: DayPhase, reduced: 
     render: (stage) => stage.renderer.render(scene, camera),
     resize,
     pick,
+    walk,
+    pickExit,
+    exitScreen: (to) => {
+      const exit = exitOf(to);
+      if (!exit) return { x: 0, y: 0, visible: false, side: 0, exists: false };
+      const ox = origin.get(room) ?? 0;
+      const p = project(exit.center[0] + ox, exit.center[1], exit.center[2]);
+      v3.set(exit.center[0] + ox, exit.center[1], exit.center[2]).applyMatrix4(camera.matrixWorldInverse);
+      const inFront = v3.z < -0.05;
+      if (inFront && p.visible) return { ...p, side: 0, exists: true };
+      const side = (inFront ? (p.x < width / 2 ? -1 : 1) : v3.x < 0 ? -1 : 1) as -1 | 1;
+      return { x: side < 0 ? 0 : width, y: inFront ? p.y : height / 2, visible: false, side, exists: true };
+    },
     itemScreen: (index) => project(...(worldCenter(index, v3).toArray() as [number, number, number])),
     burst,
     dispose: () => {

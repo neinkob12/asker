@@ -1,8 +1,9 @@
-# Auftrag 48, Teil D: Razzia (`stash`) und Bude (`search`)
+# Auftrag 49 (Minispiele, zweite Runde), Teil D: Razzia (`stash`) und Bude (`search`)
 
-Branch `claude/auftrag-48-razzia-bude`. Ausgangslage: Beide Spiele sind seit der Runde „Einbruch“
-(`docs/auftraege/48-minispiele-einbruch.md`) schon 3D (Razzia seitlich, Bude im Ego-Blick). Diese Runde arbeitet die
-Prüfliste „fühlt sich gut an“ aus `48-minispiele-gefuehl.md` ab.
+Branch `claude/auftrag-48-razzia-bude` (Name aus dem Start, gemeint ist Auftrag 49), Plan in
+`docs/auftraege/49-minispiele-runde-2.md`. Ausgangslage: Beide Spiele sind seit Auftrag 48
+(`docs/auftraege/48-minispiele-einbruch.md`) schon 3D (Razzia seitlich, Bude im Ego-Blick). Diese Runde baut nichts
+neu, sondern arbeitet die Prüfliste „fühlt sich gut an“ aus `48-minispiele-gefuehl.md` und „Offen“ aus Auftrag 48 ab.
 
 ## Bestandsaufnahme (selbst gespielt, Playwright mit echten Eingaben, Desktop und Handy)
 
@@ -28,6 +29,14 @@ Vorschau startet sauber (`?minispiel=stash`, `npm run screenshot:minigames -- --
 
 ## Was neu ist
 
+- **Bude als Gang durch die Wohnung** (aus „Offen“ in Auftrag 48): Statt der Raumleiste hat der Flur vier Zimmertüren
+  (halb offen, `innerDoor` in `room3d.ts`, `RoomView.exits`): geradeaus Schlafzimmer, links Wohnzimmer, rechts Küche und
+  Bad. Tippen auf die Tür oder ihre Beschriftung (Name und Zahl der offenen Dinge) geht ein paar Schritte hin
+  (`scene.walk`, `WALK_MS` 380 ms, Kamera wippt und dreht zur Tür), im Dunkeln des Überblendens kommt der Raum. Türen
+  außerhalb des Bilds stehen am Rand mit Pfeil und weichen den anderen aus. Aus einem Zimmer geht es mit „Flur“ unten
+  links zurück (du schaust erst zur Tür, aus der du kommst); von Zimmer zu Zimmer also durch den Flur (zwei Türen).
+  Tasten 1–5 und Q/E laufen den Weg selbst, Rücktaste = Flur. Der Schirmständer steht jetzt unter dem Spiegel.
+
 - **`kit/indoor3d.ts`** (Baukasten für Innenräume, beide Spiele nutzen ihn): `ParticlePool` (ein Punkt-System für
   Funken, Staub, Spritzer; nichts wird pro Bild angelegt, ohne lebende Teilchen kein Hochladen), `softDotTexture`,
   `createFlashlight` (SpotLight mit Schatten, sichtbarer Kegel, Staub im Strahl; `aim`, `setPower`, `update`),
@@ -51,7 +60,7 @@ Vorschau startet sauber (`?minispiel=stash`, `npm run screenshot:minigames -- --
 ## Schwierigkeit (Simulation, 40 Seeds, Gewinn = Score ≥ 0,5)
 
 Tests: `stash/model.balance.test.ts`, `search/model.balance.test.ts` (`BALANCE_PRINT=1 npx vitest run … --silent=false`
-druckt die Tabelle). Guter Spieler: bester Zug nach 0,5 s (Razzia) bzw. Spuren zuerst, 0,35 s pro Ding (Bude).
+druckt die Tabelle). Guter Spieler: bester Zug nach 0,5 s (Razzia) bzw. Spuren zuerst, 0,35 s pro Ding und 0,6 s pro Tür (Bude).
 Schwacher: 1 s bzw. 0,9 s, zufällige Wahl, jedes vierte Mal daneben (Razzia) bzw. übersieht Spuren (Bude).
 
 | Lage | Spieler | leicht 0,2 | mittel 0,5 | schwer 0,9 |
@@ -62,7 +71,8 @@ Schwacher: 1 s bzw. 0,9 s, zufällige Wahl, jedes vierte Mal daneben (Razzia) bz
 | Razzia, Lager mit Tresor, nachher | gut / schwach | 100 / 95 % | 100 / 55 % | 100 / 3 % |
 | Razzia am Spot, vorher | gut / schwach | 100 / 100 % | 100 / 95 % | 100 / 68 % |
 | Razzia am Spot, nachher | gut / schwach | 100 / 93 % | 100 / 53 % | 100 / 10 % |
-| Bude (unverändert) | gut / schwach | 100 / 57 % | 95 / 48 % | 75 / 30 % |
+| Bude, vorher (Raumleiste) | gut / schwach | 100 / 57 % | 95 / 48 % | 75 / 30 % |
+| Bude, nachher (Gang durch den Flur) | gut / schwach | 100 / 55 % | 95 / 43 % | 73 / 28 % |
 
 Keine Eingabe gewinnt nie. Stellschrauben der Razzia: im Lager 4 bis 9 Pakete (vorher 8), am Spot 3 bis 6 (vorher 5),
 `DURATION_HARD` 23 s (vorher 25), `STREET_TIME` 0,56 (vorher 0,7), doppelter Boden ohne Ausbau 4 Plätze (vorher 3).
@@ -92,5 +102,5 @@ Bilder pro Sekunde sind deshalb nicht aussagekräftig, die Rechenzeit pro Bild s
 ## Offen
 
 - Echtes Handy messen (Ziel 30 Bilder/s); headless gibt es nur Software-Grafik.
-- Bude: Gang durch die Wohnung statt Leiste; Razzia: unter dem Boden bleibt am Handy ein dunkler Streifen (dort liegt
-  das Versteckte im Hohlraum).
+- Razzia: unter dem Boden bleibt am Handy ein dunkler Streifen (dort liegt das Versteckte im Hohlraum).
+- Pause-Knopf `<PauseButton />` in die HUD-Leisten, sobald PR #142 in `main` ist.

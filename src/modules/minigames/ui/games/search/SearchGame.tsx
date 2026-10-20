@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatEuro } from '../../../../../core';
-import { audio, haptic, prefersReducedMotion } from '../../../../../ui';
+import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
 import { HitStop } from '../../kit/indoor3d';
 import { phaseOf } from '../../kit/scene3d';
@@ -53,6 +53,7 @@ const KEYS = [
   'Digit3',
   'Digit4',
   'Digit5',
+  'Backspace',
 ];
 
 const DIRS: Record<string, [number, number]> = {
@@ -68,8 +69,15 @@ const DIRS: Record<string, [number, number]> = {
 
 /** Reihenfolge der Räume in der Leiste: du kommst durch den Flur. */
 const ROOM_ORDER: readonly RoomId[] = ['hall', 'living', 'kitchen', 'bedroom', 'bath'];
-/** Überblenden beim Raumwechsel (ms bis zum Wechsel, ganze Dauer in der CSS). */
-const SWITCH_MS = 170;
+/**
+ * Gang durch die Wohnung (Auftrag 49): ein paar Schritte zur Tür, dann der nächste Raum (ms je Tür). Von Zimmer zu
+ * Zimmer geht es durch den Flur, also zwei Türen. Das Überblenden (CSS, 0,36 s, am dunkelsten nach 45 %) liegt so,
+ * dass der Wechsel im Dunkeln passiert.
+ */
+const WALK_MS = 380;
+const FADE_PEAK_MS = 160;
+/** Türen im Flur (Reihenfolge der Beschriftungen). */
+const HALL_EXITS: readonly RoomId[] = ['living', 'kitchen', 'bedroom', 'bath'];
 /** So lange steht eine Meldung (ms). */
 const MESSAGE_MS = 2600;
 
@@ -115,6 +123,7 @@ export function SearchGame(props: MinigameViewProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const tags = useRef(new Map<number, HTMLElement>());
   const floatEls = useRef(new Map<number, HTMLElement>());
+  const doorEls = useRef(new Map<RoomId, HTMLElement>());
   const fx = useRef({
     t: 0,
     shake: 0,
@@ -131,6 +140,8 @@ export function SearchGame(props: MinigameViewProps) {
     press: null as { x: number; y: number; id: number; moved: boolean } | null,
     /** Letzte Lage des Zeigers (Maus immer, Finger beim Ziehen): Was dort liegt, wird jedes Bild neu bestimmt. */
     pointer: null as { x: number; y: number } | null,
+    /** Gerade unterwegs zu einer Tür (keine zweite Tür, bis du da bist). */
+    walking: false,
     lastSteps: -10,
     lastBeat: -10,
     lastMiss: -10,
@@ -215,6 +226,32 @@ export function SearchGame(props: MinigameViewProps) {
       const p = scene.itemScreen(index);
       el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
       el.style.visibility = p.visible ? 'visible' : 'hidden';
+    }
+    // Türen: an der Tür, sonst am Rand (mit Pfeil); Randhinweise weichen den Beschriftungen an Türen aus.
+    const doors = HALL_EXITS.map((to) => ({ to, p: scene.exitScreen(to) }));
+    const placed = doors.filter((d) => d.p.side === 0).map((d) => ({ x: d.p.x, y: d.p.y }));
+    for (const { to, p } of doors) {
+      const el = doorEls.current.get(to);
+      if (!el) continue;
+      // Im Bild: ganz drin halten (die Beschriftung ist breiter als die Tür).
+      let x = Math.min(st.width - 90, Math.max(90, p.x));
+      let y = p.y;
+      if (p.side !== 0) {
+        x = p.side < 0 ? 10 : st.width - 10;
+        // Mitte des Hinweises (er hängt am Rand), grob 170 px breit.
+        const cx = p.side < 0 ? x + 85 : x - 85;
+        y = st.height * 0.42;
+        for (let guard = 0; guard < 8; guard++) {
+          if (!placed.some((o) => Math.abs(o.x - cx) < 175 && Math.abs(o.y - y) < 50)) break;
+          y += 54;
+        }
+        y = Math.min(st.height - 140, Math.max(120, y));
+        placed.push({ x: cx, y });
+      }
+      const edge = p.side < 0 ? 'left' : p.side > 0 ? 'right' : '';
+      if (el.dataset.edge !== edge) el.dataset.edge = edge;
+      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      el.style.visibility = p.exists && !f.walking ? 'visible' : 'hidden';
     }
     for (const [index, el] of floatEls.current) {
       const p = scene.itemScreen(index);
@@ -316,18 +353,37 @@ export function SearchGame(props: MinigameViewProps) {
     refresh();
   };
 
-  const goRoom = (room: RoomId) => {
-    if (room === roomRef.current || !running) return;
-    roomRef.current = room;
+  /** Durch eine Tür gehen (Gang, dann Raumwechsel im Dunkeln des Überblendens), danach ggf. die nächste. */
+  const hop = (path: RoomId[]) => {
     const f = fx.current;
+    const to = path[0];
+    if (!to) {
+      f.walking = false;
+      return;
+    }
+    const from = roomRef.current;
+    f.scene?.walk(to, WALK_MS / 1000);
+    audio.play(SEARCH_SOUNDS.steps, { volume: 0.4 });
+    haptic('light');
+    window.setTimeout(() => setFading((n) => n + 1), WALK_MS - FADE_PEAK_MS);
+    window.setTimeout(() => {
+      roomRef.current = to;
+      f.scene?.setRoom(to, from);
+      setHud((h) => ({ ...snapshot({}, h), room: to }));
+      hop(path.slice(1));
+    }, WALK_MS);
+  };
+
+  const goRoom = (room: RoomId) => {
+    const f = fx.current;
+    const here = roomRef.current;
+    if (room === here || !running || f.walking || game.current.done) return;
+    f.walking = true;
     f.selected = -1;
     f.hover = -1;
-    audio.play(SEARCH_SOUNDS.steps, { volume: 0.35 });
-    setFading((n) => n + 1);
-    window.setTimeout(() => {
-      f.scene?.setRoom(room);
-      setHud((h) => ({ ...snapshot({}, h), room }));
-    }, SWITCH_MS);
+    f.pointer = null;
+    // Von Zimmer zu Zimmer durch den Flur.
+    hop(here !== 'hall' && room !== 'hall' ? ['hall', room] : [room]);
   };
 
   const roomItems = (room: RoomId) => setup.items.map((it, i) => (it.room === room ? i : -1)).filter((i) => i >= 0);
@@ -342,6 +398,10 @@ export function SearchGame(props: MinigameViewProps) {
       if (code.startsWith('Digit')) {
         const room = ROOM_ORDER[Number(code.slice(-1)) - 1];
         if (room) goRoom(room);
+        return;
+      }
+      if (code === 'Backspace') {
+        goRoom('hall');
         return;
       }
       if (code === 'KeyQ' || code === 'KeyE') {
@@ -484,6 +544,12 @@ export function SearchGame(props: MinigameViewProps) {
     const p = local(e);
     // Unter dem Finger bzw. Zeiger, sonst das, worauf das Licht gerade zeigt.
     const at = f.scene?.pick(p.x, p.y) ?? -1;
+    // Eine Tür (im Flur) zählt vor dem Ding, das nur in der Nähe liegt.
+    const exit = at < 0 ? (f.scene?.pickExit(p.x, p.y) ?? null) : null;
+    if (exit) {
+      goRoom(exit);
+      return;
+    }
     const index = at >= 0 ? at : f.hover;
     if (index < 0) {
       // Daneben: kurz und leise, damit man merkt, dass der Klick ankam.
@@ -572,27 +638,47 @@ export function SearchGame(props: MinigameViewProps) {
           <HudMeter label="Lärm" value={hud.noise} color={hud.noise > 0.65 ? 'danger' : 'warn'} />
         </span>
       </HudBar>
-      <nav class="search__rooms" aria-label="Räume">
-        {ROOM_ORDER.map((room, i) => {
+      {/* Gang durch die Wohnung: im Flur die Türen (Beschriftung an der Tür), sonst zurück in den Flur. */}
+      {hud.room === 'hall' ? (
+        HALL_EXITS.map((room) => {
           const list = roomItems(room);
           const open = list.filter((k) => !hud.searched[k]).length;
           const found = list.some((k) => hud.searched[k] && setup.items[k].stash);
           return (
             <button
               key={room}
+              ref={(el) => {
+                if (el) doorEls.current.set(room, el);
+                else doorEls.current.delete(room);
+              }}
               type="button"
-              class={`search__room${room === hud.room ? ' is-here' : ''}`}
-              aria-current={room === hud.room ? 'true' : undefined}
+              class="search__door"
               disabled={!running || hud.done}
               onClick={() => goRoom(room)}
+              aria-label={`${ROOM_NAMES[room]}, noch ${open} zum Durchsuchen`}
             >
-              <kbd>{i + 1}</kbd>
+              <kbd>{ROOM_ORDER.indexOf(room) + 1}</kbd>
               <span class="search__room-name">{ROOM_NAMES[room]}</span>
               <span class={`search__room-count${found ? ' is-found' : ''}`}>{open}</span>
             </button>
           );
-        })}
-      </nav>
+        })
+      ) : (
+        <button
+          type="button"
+          class="search__back"
+          disabled={!running || hud.done}
+          onClick={() => goRoom('hall')}
+          aria-label="Zurück in den Flur"
+        >
+          <Icon name="chevronLeft" />
+          <span>Flur</span>
+          <span class="search__room-count">{roomItems('hall').filter((k) => !hud.searched[k]).length}</span>
+        </button>
+      )}
+      <span class="search__here" aria-live="polite">
+        {ROOM_NAMES[hud.room]}
+      </span>
       {hud.message && (
         <p key={hud.serial} class={`search__message is-${hud.tone ?? 'info'}`} aria-live="polite">
           {hud.message}

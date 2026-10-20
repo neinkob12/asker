@@ -17,8 +17,8 @@ function run(setup: SearchSetup, state: ReturnType<typeof initSearch>, seconds: 
 
 /**
  * Guter Spieler: Raum für Raum erst Spuren und klassische Verstecke (laute Dinge nur mit Spur), dann der Rest;
- * 0,6 s pro Raumwechsel, 0,35 s Bedenkzeit pro Ding. Schwacher Spieler: Räume in zufälliger Reihenfolge, darin die
- * Dinge in zufälliger Reihenfolge, Spuren übersieht er; 1 s pro Raumwechsel, 0,9 s pro Ding. Keine Eingabe: wartet.
+ * 0,6 s pro Tür (von Zimmer zu Zimmer zwei), 0,35 s pro Ding. Schwacher Spieler: Räume in zufälliger Reihenfolge, darin die
+ * Dinge in zufälliger Reihenfolge, Spuren übersieht er; 1 s pro Tür, 0,9 s pro Ding. Keine Eingabe: wartet.
  */
 function play(setup: SearchSetup, player: Player, seed: number): number {
   const state = initSearch(setup);
@@ -52,9 +52,11 @@ function play(setup: SearchSetup, player: Player, seed: number): number {
   let room = 'hall';
   for (const i of plan) {
     if (state.done) break;
-    if (setup.items[i].room !== room) {
-      run(setup, state, walk);
-      room = setup.items[i].room;
+    const to = setup.items[i].room;
+    if (to !== room) {
+      // Gang durch die Wohnung: von Zimmer zu Zimmer durch den Flur (zwei Türen).
+      run(setup, state, room !== 'hall' && to !== 'hall' ? walk * 2 : walk);
+      room = to;
     }
     run(setup, state, react);
     if (state.done) break;
