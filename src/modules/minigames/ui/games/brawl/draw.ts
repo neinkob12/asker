@@ -98,7 +98,7 @@ export interface BrawlLayout {
 export function brawlLayout(width: number, height: number, mobile: boolean): BrawlLayout {
   const bottom = mobile ? 236 : 70;
   const groundY = Math.max(height * 0.5, height - bottom);
-  const ppm = Math.max(36, Math.min(height * (mobile ? 0.15 : 0.2), width / (mobile ? 5 : 8)));
+  const ppm = Math.max(36, Math.min(height * (mobile ? 0.15 : 0.2), width / (mobile ? 4.5 : 8)));
   const laneGap = Math.max(18, ppm * 0.42);
   return { width, height, ppm, groundY, laneGap, view: width / ppm, horizon: groundY - laneGap - ppm * 0.55 };
 }
