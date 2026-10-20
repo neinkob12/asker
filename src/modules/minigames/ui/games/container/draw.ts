@@ -1024,6 +1024,84 @@ export interface PackFx {
   dust: Dust[];
   /** Ware ganz versteckt: Zeit, zu der das Siegel kam (je pieceId). */
   sealed: Map<number, number>;
+  /** Lichtstreifen über Zellen (Teil sitzt dicht, Reihe dicht), ab Zeit at. */
+  glints: { cells: [number, number][]; at: number; strong: boolean }[];
+  /** Aufploppende Worte (Modell-Pixel), ab Zeit at. */
+  pops: { text: string; mx: number; my: number; at: number; strong: boolean }[];
+}
+
+/** So lange laufen Lichtstreifen und Worte (Sekunden). */
+export const GLINT_TIME = 0.6;
+export const POP_TIME = 1.1;
+
+/** Alte Lichtstreifen und Worte weg. */
+export function stepGlints(fx: PackFx): void {
+  if (fx.glints.length > 0) fx.glints = fx.glints.filter((g) => fx.t - g.at < GLINT_TIME);
+  if (fx.pops.length > 0) fx.pops = fx.pops.filter((g) => fx.t - g.at < POP_TIME);
+}
+
+/** Lichtstreifen: ein heller Schimmer läuft schräg über die Zellen und verblasst. */
+function drawGlints(ctx: CanvasRenderingContext2D, l: PackLayout, fx: PackFx): void {
+  const { cell, ox, oy } = l;
+  for (const g of fx.glints) {
+    const u = (fx.t - g.at) / GLINT_TIME;
+    if (u < 0 || u > 1) continue;
+    const a = (1 - u) * (g.strong ? 0.55 : 0.35);
+    ctx.fillStyle = `rgba(255, 246, 220, ${(a * 0.5).toFixed(3)})`;
+    for (const [cx, cy] of g.cells) ctx.fillRect(ox + cx * cell + 1, oy + cy * cell + 1, cell - 2, cell - 2);
+    // Der Streifen selbst (einmal je Zelle geschnitten, ohne Verlauf-Objekte pro Bild).
+    ctx.fillStyle = `rgba(255, 255, 255, ${a.toFixed(3)})`;
+    for (const [cx, cy] of g.cells) {
+      const x0 = ox + cx * cell;
+      const y0 = oy + cy * cell;
+      const band = x0 - cell + u * cell * 3;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0 + 1, y0 + 1, cell - 2, cell - 2);
+      ctx.clip();
+      ctx.beginPath();
+      ctx.moveTo(band, y0 + cell);
+      ctx.lineTo(band + cell * 0.25, y0 + cell);
+      ctx.lineTo(band + cell * 0.55, y0);
+      ctx.lineTo(band + cell * 0.3, y0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+let popFont = '';
+/** Schrift der Worte: die HUD-Schrift (einmal gelesen). */
+function hudFont(): string {
+  if (!popFont) {
+    const css = getComputedStyle(document.documentElement).getPropertyValue('--font-hud-display').trim();
+    popFont = css || 'system-ui, sans-serif';
+  }
+  return popFont;
+}
+
+/** Worte, die aufploppen und steigen (in Bildschirm-Lage, auch am Handy aufrecht). */
+function drawPops(ctx: CanvasRenderingContext2D, l: PackLayout, p: PackPalette, fx: PackFx): void {
+  for (const pop of fx.pops) {
+    const u = (fx.t - pop.at) / POP_TIME;
+    if (u < 0 || u > 1) continue;
+    const { x, y } = toScreen(l, pop.mx, pop.my);
+    const grow = u < 0.15 ? 0.6 + (u / 0.15) * 0.5 : u < 0.25 ? 1.1 - ((u - 0.15) / 0.1) * 0.1 : 1;
+    const rise = (fx.reduced ? 0 : 26) * u;
+    const size = Math.round((pop.strong ? 22 : 17) * grow);
+    ctx.save();
+    ctx.globalAlpha = u > 0.7 ? (1 - u) / 0.3 : 1;
+    ctx.font = `800 ${size}px ${hudFont()}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.strokeText(pop.text, x, y - rise);
+    ctx.fillStyle = pop.strong ? p.gold : p.money;
+    ctx.fillText(pop.text, x, y - rise);
+    ctx.restore();
+  }
 }
 
 /** Wie lange ein Teil fällt und nachfedert (Sekunden). */
@@ -1380,6 +1458,7 @@ export function drawScene(
     }
     ctx.restore();
   }
+  if (fx.glints.length > 0) drawGlints(ctx, l, fx);
   const pulse = fx.reduced ? 1 : 0.75 + 0.25 * Math.sin(fx.t * 5);
   if (fx.scan < 0) {
     drawExposure(ctx, p, l, analysis.cells, pulse);
@@ -1465,6 +1544,7 @@ export function drawScene(
     drawGantry(ctx, p, l, setup, parked + (waiting - parked) * ease, fx.t, false, fx.near);
   }
   ctx.restore();
+  if (fx.pops.length > 0) drawPops(ctx, l, p, fx);
 }
 
 /** Linke obere Ecke des ausgewählten Teils am Cursor (Mitte der Form auf der Cursor-Zelle). */

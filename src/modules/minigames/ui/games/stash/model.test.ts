@@ -357,10 +357,11 @@ describe('Razzia-Lauf: Schwierigkeit (Bot mit Reaktionszeit)', () => {
     expect(mid).toBeLessThanOrEqual(easy + 0.001);
   });
 
-  it('ohne Tresor ist es enger, am Spot schnell erledigt', () => {
+  it('ohne Tresor ist es enger, am Spot kurz und knapp', () => {
     const plain = { ...LAGER, warehouse: { vault: 0, cover: 0 } };
     expect(average(plain, 0.9, 0.35)).toBeGreaterThan(0.4);
-    expect(average(SPOT, 0.9, 0.35)).toBeGreaterThan(0.8);
+    // Seit Teil D am Spot weniger Zeit (STREET_TIME); Gewinnraten in model.balance.test.ts.
+    expect(average(SPOT, 0.9, 0.35)).toBeGreaterThan(0.55);
   });
 });
 

@@ -263,15 +263,39 @@ export function renderDoor(layout: SafeLayout, p: SafePalette, dpr: number): HTM
     roundRect(ctx, door.x - door.w * 0.035, door.y + door.h * f - door.h * 0.06, door.w * 0.05, door.h * 0.12, 3);
     ctx.fill();
   }
-  // Ring ums Schloss
-  const ring = ctx.createRadialGradient(dial.x, dial.y, dial.r * 0.9, dial.x, dial.y, dial.r * 1.22);
-  ring.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-  ring.addColorStop(0.5, 'rgba(255, 255, 255, 0.18)');
-  ring.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
-  ctx.fillStyle = ring;
+  scratches(ctx, door, 1962);
+  // Ring ums Schloss: Messing, abgegriffen (Glanz oben links, unten dunkel), innen eine Schattenkante.
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.beginPath();
+  ctx.arc(dial.x + 2, dial.y + 4, dial.r * 1.22, 0, Math.PI * 2);
+  ctx.fill();
+  const brass = ctx.createLinearGradient(dial.x - dial.r, dial.y - dial.r, dial.x + dial.r, dial.y + dial.r);
+  brass.addColorStop(0, p.gold);
+  brass.addColorStop(0.45, 'rgba(120, 88, 30, 1)');
+  brass.addColorStop(0.7, p.gold);
+  brass.addColorStop(1, 'rgba(70, 50, 18, 1)');
+  // Altes Messing: dunkler Grund, darüber der Messington halb deckend (sonst wirkt es wie neu poliert).
+  ctx.fillStyle = p.base;
   ctx.beginPath();
   ctx.arc(dial.x, dial.y, dial.r * 1.2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = brass;
+  ctx.globalAlpha = 0.5;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  const ring = ctx.createRadialGradient(dial.x, dial.y, dial.r * 0.98, dial.x, dial.y, dial.r * 1.2);
+  ring.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
+  ring.addColorStop(0.25, 'rgba(0, 0, 0, 0.1)');
+  ring.addColorStop(0.6, 'rgba(255, 240, 200, 0.18)');
+  ring.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+  ctx.fillStyle = ring;
+  ctx.fill();
+  // Abgegriffene Stellen am Messing (heller Bogen, wo die Hand immer liegt).
+  ctx.strokeStyle = 'rgba(255, 245, 210, 0.22)';
+  ctx.lineWidth = dial.r * 0.05;
+  ctx.beginPath();
+  ctx.arc(dial.x, dial.y, dial.r * 1.12, Math.PI * 1.05, Math.PI * 1.45);
+  ctx.stroke();
   // Lämpchen-Fassungen
   for (let i = -1; i <= 1; i++) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
@@ -313,6 +337,134 @@ export function renderDoor(layout: SafeLayout, p: SafePalette, dpr: number): HTM
   ctx.textBaseline = 'middle';
   ctx.fillText('GEBR. STAHL · KÖLN 1962', door.x + door.w / 2, plateY + plateH / 2 + 1);
   return canvas;
+}
+
+/** Kratzer im Stahl (fest aus einem Startwert, damit sie beim Neuzeichnen gleich bleiben). */
+function scratches(ctx: CanvasRenderingContext2D, door: SafeLayout['door'], seed: number): void {
+  let x = seed;
+  const next = () => {
+    x = (x * 1103515245 + 12345) % 2147483648;
+    return x / 2147483648;
+  };
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 46; i++) {
+    const sx = door.x + next() * door.w;
+    const sy = door.y + next() * door.h;
+    const len = door.w * (0.02 + next() * 0.09);
+    const a = -0.4 + next() * 0.8 + (next() < 0.3 ? Math.PI / 2 : 0);
+    ctx.strokeStyle = next() < 0.5 ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.22)';
+    ctx.lineWidth = 0.6 + next() * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(
+      sx + Math.cos(a) * len * 0.5,
+      sy + Math.sin(a) * len * 0.5 + 1,
+      sx + Math.cos(a) * len,
+      sy + Math.sin(a) * len,
+    );
+    ctx.stroke();
+  }
+  // Abrieb um den Griff und unten an der Tür (Hände, Schuhe): weicher, heller Fleck.
+  const wear = ctx.createRadialGradient(
+    door.x + door.w * 0.5,
+    door.y + door.h * 0.72,
+    0,
+    door.x + door.w * 0.5,
+    door.y + door.h * 0.72,
+    door.w * 0.3,
+  );
+  wear.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
+  wear.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = wear;
+  ctx.fillRect(door.x, door.y, door.w, door.h);
+}
+
+/**
+ * Kreidestrich am Rad, wo es gehakt hat (im gedrehten Zifferblatt, Mitte 0,0): ein kurzer, rauer weißer Strich außen
+ * am Strich der Zahl. strength 1 = gerade frisch und das Rad hängt dort.
+ */
+export function drawChalk(ctx: CanvasRenderingContext2D, r: number, n: number, strength: number): void {
+  const a = (n / DIAL_SIZE) * Math.PI * 2 - Math.PI / 2;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(250, 248, 236, ${0.55 + 0.4 * strength})`;
+  for (let k = 0; k < 3; k++) {
+    const off = (k - 1) * r * 0.012;
+    ctx.lineWidth = Math.max(1.4, r * (0.03 - k * 0.006));
+    ctx.beginPath();
+    ctx.moveTo(cos * r * 0.97 - sin * off, sin * r * 0.97 + cos * off);
+    ctx.lineTo(cos * r * 1.1 - sin * off * 1.4, sin * r * 1.1 + cos * off * 1.4);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Stethoskop an der Tür rechts neben dem Schloss: Bruststück mit Glanz, Schlauch nach unten aus dem Bild. Beim Klick
+ * zuckt es (spike), bei einem Störklick nur halb so stark (strength).
+ */
+export function drawStethoscope(
+  ctx: CanvasRenderingContext2D,
+  layout: SafeLayout,
+  p: SafePalette,
+  spike: number,
+  strength: number,
+): void {
+  const { dial, door } = layout;
+  const r = dial.r * 0.17;
+  const x = dial.x + dial.r * 1.42;
+  const y = dial.y + dial.r * 0.15;
+  const kick = spike * strength;
+  ctx.save();
+  ctx.lineCap = 'round';
+  // Schlauch: dunkel mit Glanzkante, im Bogen nach unten rechts aus der Tür.
+  const tube = (color: string, width: number, dx: number) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x + r * 0.6 + dx, y + r * 0.5);
+    ctx.bezierCurveTo(x + r * 2.2, y + r * 3, x + r * 0.2, y + r * 5, x + r * 1.6 + dx, door.y + door.h + 40);
+    ctx.stroke();
+  };
+  tube('rgba(0, 0, 0, 0.55)', r * 0.42, 2);
+  tube('#1d1f24', r * 0.32, 0);
+  tube('rgba(255, 255, 255, 0.14)', r * 0.08, -r * 0.08);
+  // Bruststück: Schatten, Metallring, Membran; zuckt beim Klick ein Stück zur Tür hin.
+  const s = 1 + kick * 0.12;
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.beginPath();
+  ctx.arc(2, 3, r, 0, Math.PI * 2);
+  ctx.fill();
+  const metal = ctx.createLinearGradient(-r, -r, r, r);
+  metal.addColorStop(0, '#e9ecef');
+  metal.addColorStop(0.5, '#8b9098');
+  metal.addColorStop(1, '#3d4047');
+  ctx.fillStyle = metal;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#25272c';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+  // Die Membran leuchtet beim Klick kurz auf (gold = echte Zahl, matt = Störklick).
+  if (kick > 0.02) {
+    ctx.fillStyle = p.gold;
+    ctx.globalAlpha = Math.min(1, kick) * (strength < 1 ? 0.35 : 0.85);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.28, r * 0.14, -0.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** Zifferblatt mit 100 Strichen, Zahlen alle 10 (gedreht wird beim Zusammensetzen). */

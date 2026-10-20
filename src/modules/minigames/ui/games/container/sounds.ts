@@ -1,6 +1,6 @@
 // Klänge für „Container packen“ (Synth, angemeldet wie in kit/sounds.ts): Kiste absetzen, Ware absetzen (Folie),
 // Drehen, Scanner-Summen, Piepen bei einer auffälligen Stelle; Auftrag 48: Einrasten versteckter Ware, Anrollen des
-// Scanners, Rundumleuchte in den letzten Sekunden. Optik und Ton dürfen Math.random nutzen (kein Einfluss
+// Scanners, Rundumleuchte in den letzten Sekunden; Teil E: Serie dicht gesetzter Teile, Reihe dicht. Optik und Ton dürfen Math.random nutzen (kein Einfluss
 // auf die Simulation).
 
 import { audio } from '../../../../../ui';
@@ -22,7 +22,20 @@ export const PACK_SOUNDS = {
   roll: 'minigames.container.roll',
   /** Rundumleuchte des Scanners in den letzten Sekunden. */
   beacon: 'minigames.container.beacon',
+  /** Teil sitzt dicht (Teil E): heller Klick, je Stufe der Serie höher (snug1 bis snug4). */
+  snug1: 'minigames.container.snug1',
+  snug2: 'minigames.container.snug2',
+  snug3: 'minigames.container.snug3',
+  snug4: 'minigames.container.snug4',
+  /** Eine Reihe von Wand zu Wand ist dicht: Akkord, der aufsteigt. */
+  row: 'minigames.container.row',
 } as const;
+
+/** Klang zur Stufe einer Serie dicht gesetzter Teile (1 bis 4, darüber bleibt es bei 4). */
+export function snugSound(combo: number): string {
+  const k = Math.max(1, Math.min(4, combo));
+  return [PACK_SOUNDS.snug1, PACK_SOUNDS.snug2, PACK_SOUNDS.snug3, PACK_SOUNDS.snug4][k - 1];
+}
 
 function noise(
   ctx: AudioContext,
@@ -126,6 +139,24 @@ export function registerPackSounds(): void {
       noise(ctx, out, t, 1.2, 'lowpass', 160, 0.7);
       tone(ctx, out, t, 45, 60, 1.1, 'sawtooth', 0.06);
       for (let i = 0; i < 4; i++) noise(ctx, out, t + 0.2 + i * 0.24, 0.05, 'bandpass', 700, 0.3);
+    },
+  });
+  // Serie: Grundton steigt je Stufe um eine Quarte bzw. Terz (C, F, A, C).
+  [523, 698, 880, 1047].forEach((base, i) => {
+    audio.registerSound([s.snug1, s.snug2, s.snug3, s.snug4][i], {
+      kind: 'synth',
+      play: (ctx, out, t) => {
+        noise(ctx, out, t, 0.02, 'highpass', 3000, 0.35);
+        tone(ctx, out, t, base, base * 0.99, 0.14, 'triangle', 0.1);
+        tone(ctx, out, t + 0.05, base * 1.5, base * 1.49, 0.16, 'sine', 0.06);
+      },
+    });
+  });
+  audio.registerSound(s.row, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      noise(ctx, out, t, 0.25, 'highpass', 5000, 0.12);
+      for (const [i, f] of [523, 659, 784, 1047].entries()) tone(ctx, out, t + i * 0.06, f, f, 0.42, 'triangle', 0.07);
     },
   });
   audio.registerSound(s.beacon, {

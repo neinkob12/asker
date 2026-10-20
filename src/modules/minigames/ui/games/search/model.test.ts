@@ -210,9 +210,11 @@ describe('Bude durchsuchen: Schwierigkeit (Bot im Ego-Blick)', () => {
     let room = 'hall';
     for (const i of plan) {
       if (state.done) break;
-      if (setup.items[i].room !== room) {
-        run(setup, state, WALK);
-        room = setup.items[i].room;
+      const to = setup.items[i].room;
+      if (to !== room) {
+        // Von Zimmer zu Zimmer durch den Flur (zwei Türen).
+        run(setup, state, room !== 'hall' && to !== 'hall' ? WALK * 2 : WALK);
+        room = to;
       }
       run(setup, state, REACT);
       if (state.done) break;

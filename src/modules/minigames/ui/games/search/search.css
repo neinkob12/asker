@@ -123,31 +123,19 @@
   }
 }
 
-/* Räume unten: wechseln per Tipp, 1–5 oder Q/E. */
-.search__rooms {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-  translate: -50% 0;
-  display: flex;
-  gap: 6px;
-  max-width: calc(100% - 2 * var(--space-3));
-  padding: 6px;
-  border-radius: var(--hud-radius-tile);
-  background: var(--hud-glass-strong);
-  border: 1px solid var(--hud-glass-edge);
-}
-.search__room {
+/* Gang durch die Wohnung: Türen im Flur (Beschriftung an der Tür, Lage setzt die Bildschleife), sonst „Flur“ unten
+   links. Tasten: 1–5, Q/E, Rücktaste. */
+.search__door,
+.search__back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--hud-radius-button);
-  border: 1px solid transparent;
-  background: var(--hud-glass-fill);
-  color: var(--hud-ink-2);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink);
   font: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -155,15 +143,53 @@
   cursor: pointer;
   touch-action: manipulation;
 }
-.search__room.is-here {
-  color: var(--hud-ink);
-  border-color: var(--hud-gold);
-  background: var(--hud-glass-fill-active);
+.search__door {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  visibility: hidden;
+  will-change: transform;
 }
-.search__room:disabled {
+/* Tür außerhalb des Bilds: am Rand, mit Pfeil in ihre Richtung. */
+.search__door[data-edge="left"] {
+  translate: 0 -50%;
+}
+.search__door[data-edge="right"] {
+  translate: -100% -50%;
+}
+.search__door[data-edge="left"]::before,
+.search__door[data-edge="right"]::after {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--hud-gold);
+}
+.search__door[data-edge="left"]::before {
+  content: "‹";
+}
+.search__door[data-edge="right"]::after {
+  content: "›";
+}
+.search__door:hover:not(:disabled),
+.search__back:hover:not(:disabled) {
+  border-color: var(--hud-gold);
+}
+.search__door:disabled,
+.search__back:disabled {
   cursor: default;
 }
-.search__room kbd {
+.search__back {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-4);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+.search__back svg {
+  width: 18px;
+  height: 18px;
+}
+.search__door kbd {
   display: inline-grid;
   place-items: center;
   min-width: 18px;
@@ -174,6 +200,21 @@
   font-family: var(--font-hud-display);
   font-size: 12px;
   color: var(--hud-gold);
+}
+/* Wo du gerade bist. */
+.search__here {
+  position: absolute;
+  z-index: 3;
+  right: var(--space-4);
+  bottom: calc(var(--space-4) + 10px + env(safe-area-inset-bottom, 0px));
+  padding: 3px 10px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
 }
 .search__room-count {
   min-width: 20px;
@@ -300,24 +341,20 @@
     width: 62px;
   }
   .search__message {
-    bottom: calc(var(--space-3) + 116px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--space-3) + 64px + env(safe-area-inset-bottom, 0px));
     font-size: 14px;
   }
-  /* Am Handy zwei Reihen (3 + 2), ohne Tastenhinweis. */
-  .search__rooms {
-    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-    flex-wrap: wrap;
-    justify-content: center;
-    width: calc(100% - 2 * var(--space-3));
-  }
-  .search__room {
-    flex: 1 1 30%;
-    justify-content: center;
-    padding: 0 6px;
-    font-size: 13px;
-  }
-  .search__room kbd {
+  /* Am Handy ohne Tastenhinweis. */
+  .search__door kbd {
     display: none;
+  }
+  .search__back {
+    left: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+  .search__here {
+    right: var(--space-3);
+    bottom: calc(var(--space-3) + 10px + env(safe-area-inset-bottom, 0px));
   }
 }
 

@@ -23,6 +23,42 @@
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------- Pause (kit/pause.tsx): runder Knopf in der HUD-Leiste.
+   Sichtbar 34 px, die Trefferfläche ist 44 px (Rand nach außen), damit die Leiste nicht höher wird. */
+.mg-pause {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hud-glass-edge);
+  border-radius: 50%;
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mg-pause::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+}
+.mg-pause svg {
+  width: 16px;
+  height: 16px;
+}
+.mg-pause:active {
+  background: var(--hud-glass-fill-active);
+}
+.mg-pause:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------- Zeit */
 .mg-hud-timer {
   display: grid;

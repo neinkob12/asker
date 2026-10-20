@@ -77,6 +77,14 @@ function tint(hex: string, factor: number): string {
   return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
 }
 
+/** Zwei Farben (#rrggbb) mischen: k = 0 a, 1 b. */
+function mix(a: string, b: string, k: number): string {
+  const na = Number.parseInt(a.slice(1, 7), 16);
+  const nb = Number.parseInt(b.slice(1, 7), 16);
+  const c = (shift: number) => Math.round(((na >> shift) & 255) * (1 - k) + ((nb >> shift) & 255) * k);
+  return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Lage
 
@@ -99,9 +107,14 @@ export function brawlLayout(width: number, height: number, mobile: boolean): Bra
   const bottom = mobile ? 236 : 70;
   const groundY = Math.max(height * 0.5, height - bottom);
   const ppm = Math.max(36, Math.min(height * (mobile ? 0.15 : 0.2), width / (mobile ? 4.5 : 8)));
-  const laneGap = Math.max(18, ppm * 0.42);
+  // Seit Auftrag 49 deutlich mehr Tiefe zwischen den Ebenen (vorher 0,42 m: alle standen wie in einer Reihe).
+  const laneGap = Math.max(24, ppm * LANE_DEPTH);
   return { width, height, ppm, groundY, laneGap, view: width / ppm, horizon: groundY - laneGap - ppm * 0.55 };
 }
+
+/** Abstand der hinteren Ebene im Bild (Meter nach oben) und wie viel kleiner sie ist. */
+export const LANE_DEPTH = 0.72;
+export const LANE_SCALE = 0.17;
 
 /** Kamera (Mitte in Metern) innerhalb der Bühne halten. */
 export function clampCamera(layout: BrawlLayout, x: number): number {
@@ -111,7 +124,7 @@ export function clampCamera(layout: BrawlLayout, x: number): number {
 }
 
 export function toScreen(layout: BrawlLayout, cam: number, x: number, depth: number) {
-  const scale = 1 - depth * 0.12;
+  const scale = 1 - depth * LANE_SCALE;
   return {
     x: (x - cam) * layout.ppm + layout.width / 2,
     y: layout.groundY - depth * layout.laneGap,
@@ -836,6 +849,22 @@ export function targetPose(f: Fighter, walk: number, t: number): Pose {
           ba: [0.7 + Math.cos(t * 9) * 0.2, 0.3],
           head: 0.3,
         };
+      // Angeschlagen (unter 60 % Leben): krumm, Deckung sinkt, schwankt mehr.
+      const hurt = Math.max(0, Math.min(1, (0.6 - f.hp / f.maxHp) / 0.6));
+      if (hurt > 0) {
+        const wob = Math.sin(t * 1.7 + phaseOf(f.id)) * hurt;
+        return {
+          ...GUARD,
+          lean: GUARD.lean + 0.16 * hurt + wob * 0.06,
+          crouch: GUARD.crouch + 0.06 * hurt,
+          fa: [GUARD.fa[0] - 0.3 * hurt, GUARD.fa[1] - 0.2 * hurt],
+          ba: [GUARD.ba[0] - 0.25 * hurt, GUARD.ba[1] - 0.3 * hurt],
+          fl: [GUARD.fl[0] + wob * 0.05, GUARD.fl[1]],
+          bl: [GUARD.bl[0] - wob * 0.05, GUARD.bl[1]],
+          shift: wob * 0.08,
+          head: GUARD.head + 0.18 * hurt + wob * 0.08,
+        };
+      }
       // Federn auf den Fußballen (zweimal pro Pendel), Hände pumpen leicht, Oberkörper pendelt.
       const bob = 0.5 + 0.5 * Math.sin(ph * 2);
       const pump = Math.sin(ph + 1.2);
@@ -958,22 +987,30 @@ function pt(x: number, y: number, angle: number, len: number): [number, number] 
 /** Farben einer Figur aus ihrem Look (fertig für das Zeichnen). */
 export interface Colors {
   skin: string;
+  skinDark: string;
   hair: string;
   top: string;
   topDark: string;
+  topLight: string;
   pants: string;
+  pantsDark: string;
   shoes: string;
   sleeves: 'long' | 'short' | 'none';
 }
 
 export function colorsFor(look: Look, seed: number): Colors {
   const top = TOP[look.topColor] ?? TOP[0];
+  const skin = SKIN[look.skin] ?? SKIN[1];
+  const pants = PANTS[Math.abs(seed) % PANTS.length];
   return {
-    skin: SKIN[look.skin] ?? SKIN[1],
+    skin,
+    skinDark: mix(skin, '#2a1410', 0.38),
     hair: HAIR[look.hairColor] ?? HAIR[0],
     top,
     topDark: tint(top, 0.72),
-    pants: PANTS[Math.abs(seed) % PANTS.length],
+    topLight: mix(top, '#fff6e6', 0.22),
+    pants,
+    pantsDark: mix(pants, '#050508', 0.5),
     shoes: seed % 3 === 0 ? '#e4e0d8' : '#141416',
     sleeves: look.top === 'tank' ? 'none' : look.top === 'tee' || look.top === 'openshirt' ? 'short' : 'long',
   };
@@ -996,6 +1033,10 @@ export interface FigureOptions {
   ring: string | null;
   /** Licht auf der Figur (Laterne, Leuchtschild), null = flach. */
   light?: FigureLight | null;
+  /** Atmen (−1 bis 1): Brust und Schultern heben sich. */
+  breath?: number;
+  /** Nur Umriss und Grundfarben (Spiegelung, Nachbild): spart die Licht-Schichten. */
+  simple?: boolean;
 }
 
 /**
@@ -1035,59 +1076,249 @@ function shadeFor(light: FigureLight, facing: 1 | -1): Shade {
   };
 }
 
-/** Glanz zum Licht hin, Schatten auf der anderen Seite, farbiger Rand von der Seite des Leuchtschilds. */
-function shadeStroke(ctx: CanvasRenderingContext2D, pts: [number, number][], width: number, sh: Shade): void {
+/** Licht ohne Laterne (Tag, Spiegelung): von schräg oben vorn, Glanz und Schatten blass. */
+const FLAT_SHADE: Shade = {
+  lx: 0.32,
+  ly: -0.95,
+  key: 'rgba(255, 255, 255, 0.12)',
+  shadow: 'rgba(6, 4, 10, 0.24)',
+  rimX: 1,
+  rim: null,
+};
+
+let shadowSprite: HTMLCanvasElement | null = null;
+
+/** Weicher Kontaktschatten (radialer Verlauf, einmal gebacken, gestaucht gezeichnet). */
+function contactShadow(): HTMLCanvasElement {
+  if (shadowSprite) return shadowSprite;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.62)');
+  g.addColorStop(0.45, 'rgba(0, 0, 0, 0.36)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  shadowSprite = canvas;
+  return canvas;
+}
+
+/** Kapsel von a nach b mit Radius ra bzw. rb (Glied mit Verjüngung), als Pfad. */
+function capsule(ctx: CanvasRenderingContext2D, a: [number, number], b: [number, number], ra: number, rb: number) {
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  ctx.beginPath();
+  ctx.arc(a[0], a[1], ra, ang + Math.PI / 2, ang + (Math.PI * 3) / 2);
+  ctx.arc(b[0], b[1], rb, ang - Math.PI / 2, ang + Math.PI / 2);
+  ctx.closePath();
+}
+
+/** Dunkle Lasur über eine Form (hinterer Arm bzw. hinteres Bein im Schatten des Körpers). */
+function dimOver(ctx: CanvasRenderingContext2D, path: () => void, dim: number): void {
+  ctx.fillStyle = `rgba(4, 3, 8, ${1 - dim})`;
+  ctx.beginPath();
+  path();
+  ctx.fill();
+}
+
+/**
+ * Glied mit Volumen: Umriss, dann je Abschnitt Schattenfarbe, darüber die Grundfarbe etwas kleiner und zum Licht
+ * versetzt (bleibt als Schattenkante auf der Gegenseite), Glanz zum Licht hin und Randlicht vom Leuchtschild. Alles
+ * liegt innerhalb der Kapsel, ohne Clip. radii hat einen Wert je Punkt, colors [Grund, Schatten] je Abschnitt.
+ */
+function volumeLimb(
+  ctx: CanvasRenderingContext2D,
+  pts: [number, number][],
+  radii: number[],
+  colors: [string, string][],
+  ol: number,
+  sh: Shade | null,
+  dim = 1,
+): void {
+  ctx.fillStyle = INK;
   for (let i = 1; i < pts.length; i++) {
-    const [ax, ay] = pts[i - 1];
-    const [bx, by] = pts[i];
-    const len = Math.hypot(bx - ax, by - ay) || 1;
-    let nx = -(by - ay) / len;
-    let ny = (bx - ax) / len;
-    if (nx * sh.lx + ny * sh.ly < 0) {
-      nx = -nx;
-      ny = -ny;
+    capsule(ctx, pts[i - 1], pts[i], radii[i - 1] + ol, radii[i] + ol);
+    ctx.fill();
+  }
+  if (!sh) {
+    // Einfach: nur die Grundfarbe.
+    for (let i = 1; i < pts.length; i++) {
+      ctx.fillStyle = (colors[i - 1] ?? colors[0])[0];
+      capsule(ctx, pts[i - 1], pts[i], radii[i - 1], radii[i]);
+      ctx.fill();
     }
-    const seg = (ox: number, oy: number, w: number, color: string) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(ax + ox, ay + oy);
-      ctx.lineTo(bx + ox, by + oy);
-      ctx.stroke();
-    };
-    // Breit und blass, damit es weich wirkt (je Seite ein Strich: das kostet pro Bild am wenigsten).
-    seg(-nx * width * 0.24, -ny * width * 0.24, width * 0.5, sh.shadow);
-    seg(nx * width * 0.2, ny * width * 0.2, width * 0.42, sh.key);
+    return;
+  }
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const ra = radii[i - 1];
+    const rb = radii[i];
+    const [base, dark] = colors[i - 1] ?? colors[0];
+    ctx.fillStyle = dark;
+    capsule(ctx, a, b, ra, rb);
+    ctx.fill();
+    const k = 0.24;
+    ctx.fillStyle = base;
+    capsule(
+      ctx,
+      [a[0] + sh.lx * ra * k, a[1] + sh.ly * ra * k],
+      [b[0] + sh.lx * rb * k, b[1] + sh.ly * rb * k],
+      ra * (1 - k),
+      rb * (1 - k),
+    );
+    ctx.fill();
+    // Glanz: breit und halb durchsichtig, damit er weich wirkt (kein Streifen wie an der Trainingshose).
+    ctx.fillStyle = sh.key;
+    const ga = ctx.globalAlpha;
+    ctx.globalAlpha = ga * 0.55;
+    capsule(
+      ctx,
+      [a[0] + sh.lx * ra * 0.4, a[1] + sh.ly * ra * 0.4],
+      [b[0] + sh.lx * rb * 0.4, b[1] + sh.ly * rb * 0.4],
+      ra * 0.52,
+      rb * 0.52,
+    );
+    ctx.fill();
+    ctx.globalAlpha = ga;
     if (sh.rim) {
-      // Randlicht nur an Gliedern, die zur Seite des Schilds zeigen (fast senkrechte Kanten leuchten am stärksten).
-      const side = Math.abs(ny) < 0.95 ? Math.sign(nx || 1) : 0;
-      const rx = side === sh.rimX ? nx : -nx;
-      const ry = side === sh.rimX ? ny : -ny;
-      seg(rx * width * 0.4, ry * width * 0.4, width * 0.14, sh.rim);
+      ctx.fillStyle = sh.rim;
+      capsule(ctx, [a[0] + sh.rimX * ra * 0.72, a[1]], [b[0] + sh.rimX * rb * 0.72, b[1]], ra * 0.24, rb * 0.24);
+      ctx.fill();
     }
+    if (dim < 1) dimOver(ctx, () => capsule(ctx, a, b, ra, rb), dim);
   }
 }
 
-function limb(
+/**
+ * Rumpf mit Form: Hüfte, Taille, Brust, Schultern (vorn etwas mehr Brust), weich verbunden; Verlauf quer zum Körper
+ * vom Licht (hell) zur Schattenseite (dunkel), dazu Randlicht. breath (−1 bis 1) hebt Brust und Schultern.
+ */
+function drawTorso(
   ctx: CanvasRenderingContext2D,
-  pts: [number, number][],
+  hip: [number, number],
+  neck: [number, number],
   width: number,
-  color: string,
-  outline: number,
-  shade: Shade | null = null,
+  breath: number,
+  c: Colors,
+  ol: number,
+  sh: Shade,
+  simple = false,
 ): void {
+  const top: [number, number] = [neck[0], neck[1] + 0.03 - breath * 0.008];
+  const dx = top[0] - hip[0];
+  const dy = top[1] - hip[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // Normale nach vorn (Blickrichtung +x).
+  let nx = -uy;
+  let ny = ux;
+  if (nx < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const at = (k: number, side: number, half: number): [number, number] => [
+    hip[0] + dx * k + nx * side * half,
+    hip[1] + dy * k + ny * side * half,
+  ];
+  const chest = width * (0.56 + breath * 0.02);
+  const pts = {
+    hipB: at(0, -1, width * 0.44),
+    hipF: at(0, 1, width * 0.44),
+    waistB: at(0.38, -1, width * 0.4),
+    waistF: at(0.38, 1, width * 0.42),
+    chestB: at(0.72, -1, chest * 0.95),
+    chestF: at(0.72, 1, chest),
+    shB: at(1, -1, width * 0.5),
+    shF: at(1, 1, width * 0.44),
+  };
+  const path = (grow: number) => {
+    const g = (p: [number, number], side: number): [number, number] => [
+      p[0] + nx * side * grow,
+      p[1] + ny * side * grow,
+    ];
+    const hB = g(pts.hipB, -1);
+    const hF = g(pts.hipF, 1);
+    const wB = g(pts.waistB, -1);
+    const wF = g(pts.waistF, 1);
+    const cB = g(pts.chestB, -1);
+    const cF = g(pts.chestF, 1);
+    const sB = g(pts.shB, -1);
+    const sF = g(pts.shF, 1);
+    ctx.beginPath();
+    ctx.moveTo(hB[0], hB[1] + grow);
+    ctx.quadraticCurveTo(wB[0], wB[1], cB[0], cB[1]);
+    ctx.quadraticCurveTo(
+      sB[0] - ux * grow,
+      sB[1] - uy * grow,
+      (sB[0] + sF[0]) / 2 - ux * grow,
+      (sB[1] + sF[1]) / 2 - uy * grow,
+    );
+    ctx.quadraticCurveTo(sF[0] - ux * grow, sF[1] - uy * grow, cF[0], cF[1]);
+    ctx.quadraticCurveTo(wF[0], wF[1], hF[0], hF[1] + grow);
+    ctx.quadraticCurveTo((hF[0] + hB[0]) / 2, (hF[1] + hB[1]) / 2 + width * 0.12 + grow, hB[0], hB[1] + grow);
+    ctx.closePath();
+  };
+  ctx.fillStyle = INK;
+  path(ol);
+  ctx.fill();
+  if (simple) {
+    ctx.fillStyle = c.top;
+    path(0);
+    ctx.fill();
+    return;
+  }
+  // Licht quer zum Körper: Seite zum Licht hell, Gegenseite dunkel.
+  const side = nx * sh.lx + ny * sh.ly >= 0 ? 1 : -1;
+  const mx = hip[0] + dx * 0.55;
+  const my = hip[1] + dy * 0.55;
+  const g = ctx.createLinearGradient(
+    mx + nx * side * width * 0.6,
+    my + ny * side * width * 0.6,
+    mx - nx * side * width * 0.6,
+    my - ny * side * width * 0.6,
+  );
+  g.addColorStop(0, c.topLight);
+  g.addColorStop(0.35, c.top);
+  g.addColorStop(0.8, c.topDark);
+  g.addColorStop(1, mix(c.topDark, '#000000', 0.35));
+  ctx.fillStyle = g;
+  path(0);
+  ctx.fill();
+  // Glanz oben auf der Schulter zum Licht hin, Falte an der Taille.
+  ctx.fillStyle = sh.key;
   ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  if (outline > 0) {
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = width + outline * 2;
+  ctx.ellipse(
+    top[0] + nx * side * width * 0.15 - ux * 0.02,
+    top[1] + ny * side * width * 0.15 - uy * 0.02,
+    width * 0.3,
+    width * 0.12,
+    Math.atan2(ny, nx),
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.lineWidth = ol;
+  ctx.beginPath();
+  const wf = at(0.38, side, width * 0.1);
+  ctx.moveTo(wf[0], wf[1]);
+  ctx.lineTo(wf[0] - nx * side * width * 0.3, wf[1] - ny * side * width * 0.3 + 0.01);
+  ctx.stroke();
+  if (sh.rim) {
+    const r = sh.rimX > 0 ? 1 : -1;
+    const a1 = at(0.15, r, width * 0.38);
+    const a2 = at(0.72, r, chest * 0.9);
+    const a3 = at(0.98, r, width * 0.42);
+    ctx.strokeStyle = sh.rim;
+    ctx.lineWidth = width * 0.09;
+    ctx.beginPath();
+    ctx.moveTo(a1[0], a1[1]);
+    ctx.quadraticCurveTo(a2[0], a2[1], a3[0], a3[1]);
     ctx.stroke();
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.stroke();
-  if (shade) shadeStroke(ctx, pts, width, shade);
 }
 
 /**
@@ -1107,10 +1338,13 @@ export function drawFigure(
     ? {
         ...colors,
         skin: '#ffffff',
+        skinDark: '#e9e9e9',
         hair: '#ffffff',
         top: '#ffffff',
         topDark: '#f1f1f1',
+        topLight: '#ffffff',
         pants: '#ffffff',
+        pantsDark: '#e9e9e9',
         shoes: '#fff',
       }
     : colors;
@@ -1118,11 +1352,10 @@ export function drawFigure(
   const shade = o.light && !white ? shadeFor(o.light, o.facing) : null;
   ctx.save();
   ctx.globalAlpha = o.opacity;
-  // Schatten unter den Füßen (und Ring der Seite).
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-  ctx.beginPath();
-  ctx.ellipse(o.x, o.y, s * 0.42, s * 0.08, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Weicher Schatten unter den Füßen (Verlauf, fertig gebacken), liegend breiter; Ring der Seite.
+  const lying = Math.abs(Math.sin(pose.rot));
+  const sw = s * (0.55 + lying * 0.7);
+  ctx.drawImage(contactShadow(), o.x - sw + pose.shift * o.facing * s, o.y - s * 0.11, sw * 2, s * 0.22);
   if (o.ring) {
     ctx.strokeStyle = o.ring;
     ctx.lineWidth = Math.max(1.5, s * 0.03);
@@ -1155,57 +1388,84 @@ export function drawFigure(
     const foot = pt(knee[0], knee[1], a[0] + a[1], BODY.shin);
     return [hip, knee, foot] as [number, number][];
   };
-  const armW = 0.1 * bulk;
-  const legW = 0.13 * bulk;
   const ol = outline * w;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const drawArm = (pts: [number, number][]) => {
-    const sleeve = c.sleeves === 'long' ? c.top : c.skin;
-    const upper = c.sleeves === 'none' ? c.skin : c.top;
-    limb(ctx, [pts[0], pts[1]], armW, upper, ol, shade);
-    limb(ctx, [pts[1], pts[2]], armW * 0.92, sleeve, ol, shade);
-    // Faust.
+  // Licht in Figurkoordinaten: ohne Laterne von schräg oben vorn (flach, aber mit Rundung).
+  const vol: Shade = shade ?? FLAT_SHADE;
+  const lit: Shade | null = o.simple ? null : vol;
+  const puffy = look.top === 'puffer' ? 1.18 : 1;
+  const drawArm = (pts: [number, number][], back: boolean) => {
+    const sleeve = c.sleeves === 'long';
+    const upper = c.sleeves === 'none' ? [c.skin, c.skinDark] : [c.top, c.topDark];
+    const fore = sleeve ? [c.top, c.topDark] : [c.skin, c.skinDark];
+    // Hinterer Arm etwas dunkler (liegt im Schatten des Körpers).
+    const dim = back ? 0.82 : 1;
+    volumeLimb(
+      ctx,
+      pts,
+      [0.066 * bulk * (sleeve ? puffy : 1), 0.05 * bulk, 0.042 * bulk],
+      [upper as [string, string], fore as [string, string]],
+      ol,
+      lit,
+      dim,
+    );
+    // Faust: Kugel mit Glanz, Knöchel zur Schlagrichtung.
+    const [hx, hy] = pts[2];
+    const fr = 0.058 * bulk;
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(hx, hy, fr + ol, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.skinDark;
+    ctx.beginPath();
+    ctx.arc(hx, hy, fr, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = c.skin;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = ol;
     ctx.beginPath();
-    ctx.arc(pts[2][0], pts[2][1], 0.055 * bulk, 0, Math.PI * 2);
+    ctx.arc(hx + vol.lx * fr * 0.22, hy + vol.ly * fr * 0.22, fr * 0.76, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    if (dim < 1) dimOver(ctx, () => ctx.arc(hx, hy, fr, 0, Math.PI * 2), dim);
   };
-  const drawLeg = (pts: [number, number][]) => {
-    limb(ctx, pts, legW, c.pants, ol, shade);
-    // Schuh nach vorn.
+  const drawLeg = (pts: [number, number][], back: boolean) => {
+    volumeLimb(
+      ctx,
+      pts,
+      [0.09 * bulk, 0.062 * bulk, 0.045 * bulk],
+      [
+        [c.pants, c.pantsDark],
+        [c.pants, c.pantsDark],
+      ],
+      ol,
+      lit,
+      back ? 0.82 : 1,
+    );
+    // Schuh nach vorn: Sohle hell, Kappe rund.
     const [fx, fy] = pts[2];
-    ctx.fillStyle = c.shoes;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = ol;
+    ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.ellipse(fx + 0.06, fy, 0.11, 0.045, 0, 0, Math.PI * 2);
+    ctx.ellipse(fx + 0.06, fy - 0.005, 0.12 + ol, 0.05 + ol, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = c.shoes;
+    ctx.beginPath();
+    ctx.ellipse(fx + 0.06, fy - 0.005, 0.12, 0.05, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(fx + 0.09, fy - 0.025, 0.06, 0.015, 0, 0, Math.PI * 2);
+    ctx.fill();
   };
   const backArm = arm(pose.ba, true);
   const frontArm = arm(pose.fa, false);
-  drawArm(backArm);
-  drawLeg(leg(pose.bl));
-  // Rumpf: Oberteil als breiter Strich, Daunenjacke dicker, mit dunklerer Seite.
+  drawArm(backArm, true);
+  drawLeg(leg(pose.bl), true);
+  // Rumpf: Körper mit Schultern, Brust und Taille (Daunenjacke dicker), Verlauf vom Licht zur Schattenseite; atmet.
   const torsoW = (look.top === 'puffer' ? 0.33 : 0.27) * bulk;
-  limb(ctx, [hip, [neck[0], neck[1] + 0.04]], torsoW, c.top, ol);
-  if (shade) shadeStroke(ctx, [hip, [neck[0], neck[1] + 0.04]], torsoW, shade);
-  else {
-    ctx.strokeStyle = c.topDark;
-    ctx.lineWidth = torsoW * 0.35;
-    ctx.beginPath();
-    ctx.moveTo(hip[0] - torsoW * 0.3, hip[1]);
-    ctx.lineTo(neck[0] - torsoW * 0.3, neck[1] + 0.08);
-    ctx.stroke();
-  }
+  drawTorso(ctx, hip, neck, torsoW, o.breath ?? 0, c, ol, vol, o.simple === true);
   if (!white) torsoDetail(ctx, look, c, hip, neck, torsoW);
-  drawLeg(leg(pose.fl));
+  drawLeg(leg(pose.fl), false);
   drawHead(ctx, look, c, neck, pose.lean, pose.head, ol, white, shade);
-  drawArm(frontArm);
+  drawArm(frontArm, false);
   if (o.knife) {
     const [hx, hy] = frontArm[2];
     const ang = pose.fa[0] + pose.fa[1];

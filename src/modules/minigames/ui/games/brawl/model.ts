@@ -64,7 +64,7 @@ export const ATTACKS: Record<AttackId, AttackDef> = {
 };
 
 /** Leben eines Gegners (vor Rolle und Stärke). */
-export const FOE_HP = 120;
+export const FOE_HP = 140;
 /** Nach so vielen Treffern in Folge (je höchstens CHAIN_GAP auseinander) fliegt der Getroffene aus der Reichweite. */
 export const CHAIN_MAX = 3;
 export const CHAIN_GAP = 0.9;
@@ -241,6 +241,8 @@ export interface BrawlState {
    * wartet hier, solange du noch ausholst, zuschlägst oder taumelst.
    */
   held: BrawlInput | null;
+  /** Wann du zuletzt angegriffen, geblockt oder ausgewichen hast (Spielzeit): Die Crew zieht nur mit, wenn du kämpfst. */
+  activeAt: number;
 }
 
 /** Was der Spieler in diesem Bild tut. Tasten-Drücke (light, heavy, dodge, lane, special) gelten einmal. */
@@ -523,6 +525,7 @@ export function initBrawl(setup: BrawlSetup): BrawlState {
     counters: 0,
     buffered: null,
     held: null,
+    activeAt: 0,
   };
 }
 
@@ -839,8 +842,10 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
     const near = nearestFoe(state, p, 2.6);
     if (near && input.dx === 0) faceTowards(p, near.x);
     startAttack(c, p, want);
+    state.activeAt = state.time;
     return;
   }
+  if (input.block || input.dodge) state.activeAt = state.time;
   if (input.block && free(p)) {
     if (p.state !== 'block') {
       setState(p, 'block');
@@ -1069,9 +1074,14 @@ function pickAttack(c: Ctx, f: Fighter): AttackId {
   return c.rng() < role.heavy ? 'heavy' : 'light';
 }
 
+/** Kämpfst du selbst nicht (so lange nichts getan), hält sich die Crew zurück: längere Pausen (CREW_IDLE_PAUSE). */
+export const CREW_IDLE_AFTER = 3;
+export const CREW_IDLE_PAUSE = 2.2;
+
 function nextPause(c: Ctx, f: Fighter): number {
   const base = f.side === 'own' ? 1.0 + c.rng() * 0.8 : (1.0 + c.rng() * 1.0) * c.setup.pace;
-  return base * (f.kind === 'bruiser' ? 1.3 : 1);
+  const idle = f.side === 'own' && c.state.time - c.state.activeAt > CREW_IDLE_AFTER ? CREW_IDLE_PAUSE : 1;
+  return base * idle * (f.kind === 'bruiser' ? 1.3 : 1);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -39,6 +39,9 @@ export interface Pilot {
 const TURN_SPEED = 15;
 const FINAL_APPROACH = 46;
 const BRAKE_DECEL = 22;
+/** Seitlicher Versatz, mit dem er durch die Lücke einer Sperre fährt (Meter), und wie schnell höchstens. */
+const BLOCK_GAP_LANE = 6.1;
+const BLOCK_GAP_SPEED = 26;
 
 export function createPilot(): Pilot {
   return { axis: 'z', dir: -1, line: 0, node: 0, after: { axis: 'z', dir: -1 }, lateral: LANE_OFF, ready: false };
@@ -166,7 +169,14 @@ export function pilotInput(setup: ChaseSetup, state: ChaseState, pilot: Pilot): 
   };
   // Setzt eine Streife zum Rammen an: Spur wechseln (wie ein Spieler auf die Warnung hin).
   const charger = state.cops.find((c) => c.charging);
-  const dodge = charger ? (pilot.lateral > 0 ? -LANE_OFF : LANE_OFF) : null;
+  // Sperre auf dieser Straße vor der nächsten Kreuzung: durch die Lücke (die liegt am Rand, über dem Bordstein).
+  const block = state.blocks.find((b) => {
+    if (b.passed || b.axis !== pilot.axis || b.dir !== pilot.dir) return false;
+    const n = nodeXZ(pilot.axis, pilot.line, pilot.node);
+    return b.i === Math.round(n.x / PITCH) && b.j === Math.round(n.z / PITCH);
+  });
+  const gapLane = block && toNode < 90 ? block.gap * BLOCK_GAP_LANE : null;
+  const dodge = gapLane ?? (charger ? (pilot.lateral > 0 ? -LANE_OFF : LANE_OFF) : null);
   const lanes = dodge !== null ? [dodge] : [LANE_OFF, -LANE_OFF, 0];
   let lane = lanes[0];
   let laneCost = Infinity;
@@ -225,10 +235,39 @@ export function pilotInput(setup: ChaseSetup, state: ChaseState, pilot: Pilot): 
     limit = Math.sqrt(TURN_SPEED * TURN_SPEED + 2 * BRAKE_DECEL * dist * 0.75);
   }
   if (final) limit = Math.min(limit, 14);
+  if (gapLane !== null) limit = Math.min(limit, BLOCK_GAP_SPEED);
   if (Math.abs(diff) > 0.9) limit = Math.min(limit, 12);
   const brake = speed > limit + 1.5;
   const charging = !!charger;
   const longStraight = !turning && toNode > 90 && Math.abs(diff) < 0.12 && laneCost < 1;
   const turbo = !brake && !final && p.turbo >= 0.999 && (charging || longStraight);
   return { steer, gas: !brake && speed < limit, brake, turbo };
+}
+
+/** Schwacher Spieler (Messung der Schwierigkeit): fährt wie der Bot, aber mit Reaktionszeit, unruhiger Hand, ohne
+ * Turbo und ohne auf die Ramm-Warnung zu achten. */
+export interface ClumsyPilot {
+  pilot: Pilot;
+  queue: ChaseInput[];
+  phase: number;
+}
+
+/** Reaktionszeit (Schritte zu 1/30 s) und Ausschlag der unruhigen Hand. */
+const CLUMSY_DELAY = 6;
+const CLUMSY_WOBBLE = 0.1;
+
+export function createClumsyPilot(phase = 0): ClumsyPilot {
+  return { pilot: createPilot(), queue: [], phase };
+}
+
+/** Eingabe des schwachen Spielers; gedacht für Schritte zu 1/30 s. */
+export function clumsyInput(setup: ChaseSetup, state: ChaseState, c: ClumsyPilot): ChaseInput {
+  const blind = { ...state, cops: state.cops.map((cop) => ({ ...cop, charging: false })) };
+  c.queue.push(pilotInput(setup, blind, c.pilot));
+  const late: ChaseInput =
+    c.queue.length > CLUMSY_DELAY
+      ? (c.queue.shift() as ChaseInput)
+      : { steer: 0, gas: true, brake: false, turbo: false };
+  const wobble = Math.sin(state.t * 1.7 + c.phase) * CLUMSY_WOBBLE;
+  return { ...late, steer: Math.max(-1, Math.min(1, late.steer * 0.8 + wobble)), turbo: false };
 }

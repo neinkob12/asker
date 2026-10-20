@@ -11,6 +11,7 @@ import {
   createPacking,
   cycle,
   finishPacking,
+  fullColumns,
   GRID,
   hiddenGoods,
   initPacking,
@@ -22,7 +23,9 @@ import {
   pieceAt,
   place,
   rotate,
+  SNUG_AT,
   scannerNear,
+  snugness,
   stackCount,
   step,
   TIME_FACTOR,
@@ -283,7 +286,8 @@ describe('Container packen: machbar', () => {
   };
 
   it('mit Tempo gemessen: leicht entspannt, schwer knapp, aber machbar; langsam kostet', () => {
-    // Gemessen (Auftrag 48), Mittel über Größen und Deckladung, Bot mit 2 / 3 / 4 / 5 / 6 s je Teil:
+    // Gemessen (Auftrag 48, vor Teil E: seitdem schärferer Scanner und weniger Zeit, Messung in model.balance.test.ts),
+    // Mittel über Größen und Deckladung, Bot mit 2 / 3 / 4 / 5 / 6 s je Teil:
     // leicht 0,2: 0,99 0,99 0,99 0,98 0,97; mittel 0,5: 0,93 0,93 0,93 0,90 0,87; schwer 0,9: 0,88 0,88 0,86 0,82 0,73.
     // Der Bot findet sofort den besten Platz, Menschen nicht: Für sie drückt die Zeit bei 0,9 deutlich früher.
     const easy = mean(0.2, 3);
@@ -338,5 +342,27 @@ describe('Container packen: Werte fürs Ergebnis', () => {
     autoPack(s, st);
     const goods = s.pieces.filter((p) => p.kind === 'goods').length;
     expect(containerStats(s, st)[1]).toMatchObject({ value: `${goods}/${goods}`, tone: 'good' });
+  });
+});
+
+describe('Container packen: Lob fürs dichte Packen', () => {
+  it('ein Teil in der Ecke neben einem anderen sitzt dicht, eins allein in der Mitte nicht', () => {
+    const s = tiny();
+    const st = initPacking(s);
+    place(s, st, 1, 0, 0, 0);
+    place(s, st, 2, 0, 1, 0);
+    // Ecke: Wand oben und links, rechts das andere Teil, unten frei.
+    expect(snugness(s, st, 1)).toBeCloseTo(3 / 4, 5);
+    expect(snugness(s, st, 1)).toBeGreaterThanOrEqual(SNUG_AT);
+    expect(snugness(s, st, 2)).toBeCloseTo(2 / 4, 5);
+    place(s, st, 3, 0, 2, 2);
+    expect(snugness(s, st, 3)).toBe(0);
+  });
+
+  it('eine Spalte von Wand zu Wand ist dicht', () => {
+    const s = tiny();
+    const st = initPacking(s);
+    for (let y = 0; y < s.rows; y++) place(s, st, y + 1, 0, 4, y);
+    expect(fullColumns(s, st)).toEqual([4]);
   });
 });

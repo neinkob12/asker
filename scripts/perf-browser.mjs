@@ -750,6 +750,91 @@ if (SCENES.has('jagd')) {
   );
 }
 
+// Razzia und Bude (Auftrag 48, Teil D): --scenes=razzia bzw. --scenes=bude öffnet das Minispiel als Vorschau, spielt
+// mit echten Eingaben (Razzia: laufen, aufheben, verstecken; Bude: Lampe führen, durchsuchen, Raum wechseln) und meldet
+// Bilder pro Sekunde, Zeichnen pro Bild (Szene, Beschriftungen; window.__mgPerf) und Long Tasks. Am Handy:
+// --mobile --throttle=4.
+for (const [scene, kind, title] of [
+  ['razzia', 'stash', 'Razzia-Lauf'],
+  ['bude', 'search', 'Bude durchsuchen'],
+]) {
+  if (!SCENES.has(scene)) continue;
+  await closeDialogs();
+  await page.evaluate((k) => {
+    window.koeln.dev.minigameRealtime?.(true);
+    window.koeln.dev.minigamePreview(k, { schwer: 0.5, seed: 3 });
+  }, kind);
+  await page.waitForSelector('.mg-intro', { timeout: 20000 });
+  await page.waitForTimeout(2500);
+  await page.click('.mg-intro .mg-button.is-gold');
+  await page.waitForSelector('.mg-run.is-play', { timeout: 20000 });
+  await page.evaluate(() => {
+    window.__mgPerf = { frames: 0, total: 0, max: 0 };
+    window.__perf.reset();
+    window.__indoor = { frames: 0, start: performance.now(), worst: 0, last: performance.now() };
+    const tick = (now) => {
+      const j = window.__indoor;
+      if (!j || j.stop) return;
+      j.frames += 1;
+      j.worst = Math.max(j.worst, now - j.last);
+      j.last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const box = await page.locator('.mg-run canvas').first().boundingBox();
+  for (let i = 0; i < SECONDS; i++) {
+    if (kind === 'stash') {
+      const key = i % 4 < 2 ? 'ArrowLeft' : 'ArrowRight';
+      await page.keyboard.down(key);
+      await page.waitForTimeout(600);
+      await page.keyboard.up(key);
+      await page.keyboard.press('Space');
+      await page.keyboard.press(String(1 + (i % 4)));
+      await page.waitForTimeout(400);
+    } else if (box) {
+      for (let k = 0; k < 4; k++) {
+        const x = box.x + box.width * (0.25 + (0.5 * ((i * 4 + k) % 5)) / 4);
+        const y = box.y + box.height * (0.35 + 0.3 * (k % 2));
+        await page.mouse.move(x, y, { steps: 4 });
+        await page.waitForTimeout(200);
+      }
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.55);
+      if (i % 4 === 3) await page.keyboard.press('KeyE');
+    }
+    if (await page.locator('.mg-result').count()) break;
+  }
+  const info = await page.evaluate(() => {
+    const j = window.__indoor;
+    j.stop = true;
+    const seconds = (performance.now() - j.start) / 1000;
+    return {
+      seconds,
+      fps: j.frames / seconds,
+      worst: j.worst,
+      perf: window.__mgPerf,
+      longTasks: window.__perf.longTasks,
+      ended: !!document.querySelector('.mg-result'),
+    };
+  });
+  const lt = info.longTasks;
+  const perFrame = info.perf.frames ? (info.perf.total / info.perf.frames).toFixed(2) : '–';
+  console.log(
+    [
+      `\n######## "${title}" (${info.seconds.toFixed(0)} s, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${info.ended ? ', vorzeitig zu Ende' : ''}) ########`,
+      `Bilder: ${info.fps.toFixed(1)} fps, längster Abstand ${info.worst.toFixed(0)} ms`,
+      `Zeichnen pro Bild (Szene, Beschriftungen): ${perFrame} ms im Mittel, schlimmstes ${info.perf.max.toFixed(1)} ms über ${info.perf.frames} Bilder`,
+      `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
+    ].join('\n'),
+  );
+  summary.push(`${title}: ${info.fps.toFixed(1)} fps, ${perFrame} ms/Bild`);
+  await page.evaluate(() => window.koeln.dev.minigameWin?.());
+  await page.waitForTimeout(1500);
+  const next = page.locator('.mg-result .mg-button.is-gold');
+  if (await next.count()) await next.first().click();
+  await page.waitForTimeout(800);
+}
+
 // Verkehrskontrolle und Papiere (Auftrag 48, Teil B): --scenes=kontrolle bzw. papiere öffnet das Minispiel als
 // Vorschau (Nacht mit Regen bzw. Kai), wartet die Einleitung ab und misst SECONDS Sekunden lang Bilder pro Sekunde, den
 // längsten Abstand und die Rechenzeit pro Bild (window.__mgPerf aus dem Spiel, nur im Dev-Server). Die Kontrolle
