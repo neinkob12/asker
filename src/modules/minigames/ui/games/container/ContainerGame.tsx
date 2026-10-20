@@ -16,12 +16,16 @@ import type { MinigameViewProps } from '../../registry';
 import { readPalette } from '../stash/draw';
 import {
   cellAt,
+  createPackArt,
   drawScene,
+  FALL_TIME,
   ghostOrigin,
+  type PackArt,
   type PackFx,
   type PackLayout,
   packLayout,
-  renderBackground,
+  spawnDust,
+  stepDust,
   toScreen,
 } from './draw';
 import {
@@ -34,6 +38,7 @@ import {
   cycle,
   FLAG_AT,
   finishPacking,
+  hiddenGoods,
   initPacking,
   isPlaced,
   lift,
@@ -47,6 +52,7 @@ import {
   pieceAt,
   place,
   rotate,
+  scannerNear,
   select,
   stackCount,
   step,
@@ -165,9 +171,21 @@ export function ContainerGame(props: MinigameViewProps) {
   const reduced = useMemo(prefersReducedMotion, []);
   const canvas = useRef<HTMLCanvasElement>(null);
   const layoutRef = useRef<PackLayout | null>(null);
-  const bg = useRef<HTMLCanvasElement | null>(null);
+  const art = useRef<PackArt | null>(null);
   const [layout, setLayout] = useState<PackLayout | null>(null);
-  const fx = useRef<PackFx & { lastHud: number; endAt: number; sent: boolean; scanT: number; beeped: number }>({
+  const fx = useRef<
+    PackFx & {
+      lastHud: number;
+      sent: boolean;
+      scanT: number;
+      beeped: number;
+      /** Teil im Fallen: wann es aufsetzt (Staub, Ruck, Ton), welche Zellen, wie schwer. */
+      landing: { at: number; cells: [number, number][]; cells0: number; goods: boolean } | null;
+      /** Ganze Sekunden, zu denen die Rundumleuchte zuletzt gepiept hat. */
+      beacon: number;
+      rolling: boolean;
+    }
+  >({
     t: 0,
     reduced,
     running: false,
@@ -175,11 +193,17 @@ export function ContainerGame(props: MinigameViewProps) {
     dropped: null,
     reject: -10,
     scan: -1,
+    near: 0,
+    kick: { at: -10, power: 0 },
+    dust: [],
+    sealed: new Map(),
     lastHud: -1,
-    endAt: -1,
     sent: false,
     scanT: -1,
     beeped: -1,
+    landing: null,
+    beacon: -1,
+    rolling: false,
   });
   const drag = useRef<{
     pointer: number;
@@ -208,7 +232,7 @@ export function ContainerGame(props: MinigameViewProps) {
   const stage = useStageCanvas(canvas, (st) => {
     const l = packLayout(st.width, st.height, setup.cols, setup.rows);
     layoutRef.current = l;
-    bg.current = renderBackground(l, palette, setup, st.dpr);
+    art.current = createPackArt(l, palette, setup, st.dpr);
     setLayout(l);
     draw();
   });
@@ -216,11 +240,28 @@ export function ContainerGame(props: MinigameViewProps) {
   const say = (message: string | null, tone: Hud['tone'] = null) =>
     setHud((h) => ({ ...h, message, tone, key: h.key + 1 }));
 
-  /** Nach jeder Handlung: Auffälligkeit neu rechnen und die Leiste neu zeichnen. */
-  const changed = () => {
+  /** Nach jeder Handlung: Auffälligkeit neu rechnen, Siegel auf versteckter Ware, Leiste neu zeichnen. */
+  const changed = (sealAt = fx.current.t) => {
     const s = game.current;
     analysis.current = analyze(setup, s);
     const a = analysis.current;
+    const f = fx.current;
+    const hidden = new Set(hiddenGoods(setup, s, a));
+    for (const id of [...f.sealed.keys()]) if (!hidden.has(id)) f.sealed.delete(id);
+    let fresh = 0;
+    for (const id of hidden) {
+      if (f.sealed.has(id)) continue;
+      f.sealed.set(id, sealAt);
+      fresh += 1;
+    }
+    if (fresh > 0) {
+      // Einrasten erst, wenn das Teil aufgesetzt hat.
+      const delay = Math.max(0, sealAt - f.t);
+      window.setTimeout(() => {
+        audio.play(PACK_SOUNDS.seal, { volume: 0.75 });
+        haptic('success');
+      }, delay * 1000);
+    }
     setHud((h) => ({
       ...h,
       left: timeLeft(setup, s),
@@ -255,10 +296,17 @@ export function ContainerGame(props: MinigameViewProps) {
       return;
     }
     place(setup, s, piece.id, s.rot, x, y);
-    fx.current.dropped = { id: piece.id, at: fx.current.t };
-    audio.play(piece.kind === 'goods' ? PACK_SOUNDS.wrap : PACK_SOUNDS.drop, { volume: 0.8 });
-    haptic('light');
-    changed();
+    const f = fx.current;
+    f.dropped = { id: piece.id, at: f.t };
+    // Fällt kurz, setzt dann mit Staub, Ruck und Ton auf (im Bild-Takt, siehe useFrameLoop).
+    f.landing = {
+      at: f.t + (reduced ? 0 : FALL_TIME),
+      cells: rotate(piece.shape, s.rot).map(([cx, cy]) => [x + cx, y + cy]),
+      cells0: piece.shape.length,
+      goods: piece.kind === 'goods',
+    };
+    audio.playThrottled(MINIGAME_SOUNDS.click, 40, { volume: 0.25 });
+    changed(f.t + (reduced ? 0 : FALL_TIME));
     // Rückmeldung zur Ware: wo sie auffällt.
     if (piece.kind === 'goods') {
       const cells = analysis.current.cells.filter((c) => setup.pieces[s.grid[c.y * setup.cols + c.x]]?.id === piece.id);
@@ -309,6 +357,7 @@ export function ContainerGame(props: MinigameViewProps) {
     f.scanT = 0;
     f.scan = 0;
     f.ghost = false;
+    f.sealed.clear();
     audio.play(PACK_SOUNDS.scan, { volume: 0.9 });
     haptic('medium');
     say(timeUp ? 'Zeit um. Der Scanner kommt.' : 'Container zu. Der Scanner kommt.', timeUp ? 'bad' : null);
@@ -359,9 +408,9 @@ export function ContainerGame(props: MinigameViewProps) {
   function draw() {
     const st = stage.current;
     const l = layoutRef.current;
-    if (!st || !l || !bg.current) return;
+    if (!st || !l || !art.current) return;
     fx.current.running = running;
-    drawScene(st.ctx, l, palette, setup, game.current, analysis.current, bg.current, fx.current);
+    drawScene(st.ctx, l, palette, setup, game.current, analysis.current, art.current, fx.current);
   }
 
   useFrameLoop((dt) => {
@@ -369,6 +418,32 @@ export function ContainerGame(props: MinigameViewProps) {
     const f = fx.current;
     f.t += dt;
     if (!s.done && step(setup, s, dt)) startScan(true);
+    stepDust(f, dt);
+    // Aufsetzen: Staub, Ruck (schwerer = stärker), Ton und Vibration.
+    const land = f.landing;
+    if (land && f.t >= land.at) {
+      f.landing = null;
+      const l = layoutRef.current;
+      if (l) spawnDust(f, l, land.cells, land.cells0 * 0.6);
+      f.kick = { at: f.t, power: Math.min(3.5, 0.8 + land.cells0 * 0.55) };
+      audio.play(land.goods ? PACK_SOUNDS.wrap : PACK_SOUNDS.drop, { volume: Math.min(1, 0.55 + land.cells0 * 0.1) });
+      haptic(land.cells0 >= 4 ? 'medium' : 'light');
+    }
+    // Druck am Ende: Der Scanner rollt heran, die Leuchte piept jede Sekunde.
+    if (!s.done) {
+      f.near = scannerNear(setup, s);
+      if (f.near > 0 && !f.rolling) {
+        f.rolling = true;
+        audio.play(PACK_SOUNDS.roll, { volume: 0.8 });
+        haptic('warning');
+        say('Der Scanner rollt an. Mach zu!', 'warn');
+      }
+      const left = Math.ceil(timeLeft(setup, s));
+      if (left <= 5 && left !== f.beacon) {
+        f.beacon = left;
+        audio.play(PACK_SOUNDS.beacon, { volume: 0.6 });
+      }
+    }
     if (f.scanT >= 0) {
       f.scanT += dt;
       const dur = reduced ? SCAN_TIME * 0.5 : SCAN_TIME;

@@ -624,9 +624,7 @@ export function scannerNear(setup: PackSetup, state: PackState): number {
 export function hiddenGoods(setup: PackSetup, state: PackState, analysis: PackAnalysis): number[] {
   const bad = new Set<number>();
   for (const c of analysis.cells) if (c.value > 0) bad.add(state.grid[c.y * setup.cols + c.x]);
-  return state.placed
-    .map((p) => p.pieceId)
-    .filter((id) => setup.pieces[id].kind === 'goods' && !bad.has(id));
+  return state.placed.map((p) => p.pieceId).filter((id) => setup.pieces[id].kind === 'goods' && !bad.has(id));
 }
 
 /** Restliche Zeit in Sekunden. */

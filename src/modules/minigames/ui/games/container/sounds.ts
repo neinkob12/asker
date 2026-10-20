@@ -1,5 +1,6 @@
 // Klänge für „Container packen“ (Synth, angemeldet wie in kit/sounds.ts): Kiste absetzen, Ware absetzen (Folie),
-// Drehen, Scanner-Summen, Piepen bei einer auffälligen Stelle. Optik und Ton dürfen Math.random nutzen (kein Einfluss
+// Drehen, Scanner-Summen, Piepen bei einer auffälligen Stelle; Auftrag 48: Einrasten versteckter Ware, Anrollen des
+// Scanners, Rundumleuchte in den letzten Sekunden. Optik und Ton dürfen Math.random nutzen (kein Einfluss
 // auf die Simulation).
 
 import { audio } from '../../../../../ui';
@@ -15,6 +16,12 @@ export const PACK_SOUNDS = {
   scan: 'minigames.container.scan',
   /** Auffällige Stelle im Röntgen. */
   beep: 'minigames.container.beep',
+  /** Ware ganz versteckt: Einrasten (Klacken mit hellem Nachklang). */
+  seal: 'minigames.container.seal',
+  /** Der Scanner rollt auf der Schiene an (Rumpeln). */
+  roll: 'minigames.container.roll',
+  /** Rundumleuchte des Scanners in den letzten Sekunden. */
+  beacon: 'minigames.container.beacon',
 } as const;
 
 function noise(
@@ -73,8 +80,10 @@ export function registerPackSounds(): void {
   audio.registerSound(s.drop, {
     kind: 'synth',
     play: (ctx, out, t) => {
-      noise(ctx, out, t, 0.12, 'lowpass', 420, 0.9);
-      tone(ctx, out, t, 120, 55, 0.16, 'triangle', 0.4);
+      // Dumpfer Schlag auf Holz, kurzes Nachklappern.
+      noise(ctx, out, t, 0.14, 'lowpass', 380, 1);
+      tone(ctx, out, t, 110, 48, 0.2, 'triangle', 0.55);
+      noise(ctx, out, t + 0.05, 0.05, 'bandpass', 900, 0.25);
     },
   });
   audio.registerSound(s.wrap, {
@@ -101,6 +110,29 @@ export function registerPackSounds(): void {
     play: (ctx, out, t) => {
       tone(ctx, out, t, 1320, 1300, 0.09, 'square', 0.09);
       tone(ctx, out, t + 0.11, 1320, 1300, 0.09, 'square', 0.07);
+    },
+  });
+  audio.registerSound(s.seal, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      noise(ctx, out, t, 0.03, 'highpass', 2500, 0.5);
+      tone(ctx, out, t + 0.01, 880, 870, 0.12, 'triangle', 0.12);
+      tone(ctx, out, t + 0.07, 1320, 1310, 0.18, 'sine', 0.09);
+    },
+  });
+  audio.registerSound(s.roll, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      noise(ctx, out, t, 1.2, 'lowpass', 160, 0.7);
+      tone(ctx, out, t, 45, 60, 1.1, 'sawtooth', 0.06);
+      for (let i = 0; i < 4; i++) noise(ctx, out, t + 0.2 + i * 0.24, 0.05, 'bandpass', 700, 0.3);
+    },
+  });
+  audio.registerSound(s.beacon, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, 990, 980, 0.1, 'square', 0.05);
+      tone(ctx, out, t + 0.12, 740, 735, 0.12, 'square', 0.04);
     },
   });
 }
