@@ -255,7 +255,11 @@ export function StashGame(props: MinigameViewProps) {
     scene.render(st);
     // Beschriftungen der Verstecke über der Szene; außerhalb des Bilds am Rand. Überlappen sie sich, rückt die
     // spätere nach oben (Breiten misst ein Effekt nach jedem HUD-Wechsel, nie hier in der Bildschleife).
-    const placed: { x: number; y: number; w: number }[] = [];
+    // Die Sprechblase über deinem Kopf zählt als belegt.
+    const placed: { x: number; y: number; w: number }[] =
+      scene.head.visible && (s.carry !== null || ctx.kind === 'pickup')
+        ? [{ x: scene.head.x, y: scene.head.y, w: 190 }]
+        : [];
     const order = setup.hides
       .map((h) => ({ h, p: scene.hideScreen[h.id] }))
       .filter((e): e is { h: (typeof setup.hides)[number]; p: NonNullable<typeof e.p> } => !!e.p)
