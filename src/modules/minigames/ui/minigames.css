@@ -509,8 +509,25 @@
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
       env(safe-area-inset-left, 0px);
   }
+  /* Karten (Einleitung, Pause, Ergebnis) unten andocken (Auftrag 49): Mittig lagen sie genau über der Szene (Tresor,
+     Razzia …), oben bleibt sie jetzt sichtbar. Die 3-2-1 bleibt in der Mitte. */
   .mg-run {
     padding: var(--space-5);
+    place-items: end center;
+  }
+  .mg-countdown {
+    align-self: center;
+  }
+  .mg-card {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Mit dem Finger braucht es die Tastatur-Zeile nicht (mehr Platz für die Szene). */
+  @media (pointer: coarse) {
+    .mg-controls li.is-second {
+      display: none;
+    }
   }
   .mg-stage {
     inset: 0;
