@@ -204,6 +204,14 @@ export const QUESTIONS: QuestionDef[] = [
       },
       { text: 'Von einem Kumpel geliehen.', claims: { owner: 'kumpel' }, fits: () => null },
       {
+        text: `Von einem Kumpel aus ${ARRIVED_FROM}.`,
+        claims: { owner: 'kumpel' },
+        fits: (ev) =>
+          ev.plateCity !== ARRIVED_FROM
+            ? `Aus ${ARRIVED_FROM}? Mit ${plateAdjective(ev.plateCity)} Kennzeichen?`
+            : null,
+      },
+      {
         text: 'Firmenwagen.',
         claims: { owner: 'firma' },
         fits: (ev, story) =>
@@ -334,6 +342,41 @@ export const QUESTIONS: QuestionDef[] = [
   },
 ];
 
+const OWNER_NAMES: Record<string, string> = {
+  own: 'meiner',
+  kumpel: 'vom Kumpel geliehen',
+  firma: 'Firmenwagen',
+  miete: 'Mietwagen',
+};
+const PURPOSE_NAMES: Record<string, string> = {
+  umzug: 'Umzug helfen',
+  lieferung: 'Lieferung für die Firma',
+  freunde: 'Freunde besuchen',
+  club: 'Kumpel vom Club abholen',
+  nachtschicht: 'Nachtschicht',
+};
+
+/** Was du gesagt hast, als Stichwort je Sache (für „Deine Aussagen“). */
+export const STORY_LABELS: Record<FactKey, string> = {
+  from: 'Woher',
+  to: 'Wohin',
+  owner: 'Wagen',
+  cargo: 'Hinten',
+  purpose: 'Vorhaben',
+};
+
+export function storyText(key: FactKey, value: string): string {
+  const names: Record<FactKey, Record<string, string>> = {
+    from: FROM_NAMES,
+    to: TO_NAMES,
+    owner: OWNER_NAMES,
+    cargo: VISIBLE_NAMES,
+    purpose: PURPOSE_NAMES,
+  };
+  const text = names[key][value] ?? value;
+  return key === 'cargo' ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 /** Nachfrage: passt nur, was zur ersten Antwort passt (die Antwort selbst kennt ihre claims). */
 export function repeatContradiction(def: QuestionDef, answer: AnswerDef, story: Story): string | null {
   const said = story[def.fact];
@@ -357,6 +400,7 @@ export const OFFICER_LINES = {
   walk: ['Moment, ich schau mal hinten rein.', 'Bleiben Sie sitzen, ich gucke mal nach hinten.'],
   radio: ['Einen Augenblick, ich gebe das Kennzeichen durch.', 'Moment. Zentrale, Kennzeichen-Abfrage.'],
   slow: ['Das ist keine schwere Frage.', 'Na? So lange überlegen?'],
+  silent: ['Keine Antwort ist auch eine Antwort.', 'Na gut. Dann eben nicht.'],
   pass: ['Gute Fahrt.', 'In Ordnung. Fahren Sie vorsichtig.'],
   passNoted: ['Gute Fahrt. Ich notier mir das Kennzeichen trotzdem.'],
   fail: ['Aussteigen. Hände aufs Dach.', 'So, das reicht. Aussteigen, bitte.'],

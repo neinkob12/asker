@@ -22,10 +22,11 @@ registerMinigameView('traffic', {
     touch: 'Eine der drei Antworten antippen. Unten: Gas geben oder Schein.',
     help:
       'Du sitzt am Steuer, der Beamte steht am Fenster und fragt: Woher, wohin, wessen Wagen, was hinten drin ist. ' +
-      'Zu jeder Frage passt genau eine Antwort zu dem, was er sieht (Uhrzeit, Kennzeichen, Fahrzeug, die Ladung ' +
-      'hinter der Scheibe; steht links im Bild) und zu dem, was du vorher gesagt hast. Fliegt ein Widerspruch auf, ' +
-      'steigt das Misstrauen; beim zweiten musst du aussteigen. Er fragt auch mal nach, was du eben gesagt hast. Lange ' +
-      'überlegen macht ihn ungeduldig. Der Schein klappt nur bei mittlerem Misstrauen, Gas geben heißt Verfolgungsjagd.',
+      'Zu jeder Frage passt eine Antwort zu dem, was er sieht (Uhrzeit, Kennzeichen, Fahrzeug, die Ladung hinter ' +
+      'der Scheibe) und zu dem, was du schon gesagt hast; beides steht links im Bild. Fliegt ein Widerspruch auf, ' +
+      'leuchtet auf, woran es hing, und das Misstrauen steigt; beim zweiten musst du aussteigen. Er fragt auch nach, ' +
+      'was du eben gesagt hast. Unter seiner Frage läuft die Geduld ab: Wer zu lange schweigt, fliegt auch auf. Der ' +
+      'Schein klappt nur bei mittlerem Misstrauen, Gas geben heißt Verfolgungsjagd.',
   },
   previewParams: (seed) => ({
     encounterKind: 'vehicleCheck',
