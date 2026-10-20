@@ -75,6 +75,27 @@ Rahmen und Baukasten. Jeder Teil ist eine eigene Cloud-Session mit eigenem Branc
   Bestwert pro Gerät), gemeinsamer Baukasten für Wackeln, Hit-Stop, Zeitlupe und aufploppende Zahlen (`kit/juice.ts`),
   Übergänge mit Gefühl, Doku am Ende.
 
+## Befunde der steuernden Session (main vom 20.10.2026, Handy 390 × 844)
+
+Der Spieler spielt vom iPhone aus: hochkant am Handy zählt am meisten. Hinweise, keine Pflicht; die eigene Liste
+entscheidet.
+
+- **A Jagd:** Die Bilder am Handy laufen headless in eine Zeitüberschreitung bzw. „Protocol error (DOM.describeNode)“
+  (Seite stürzt ab oder hängt). Prüfen, ob die Szene am Handy zu schwer ist (Speicher, Schatten, Pixelverhältnis).
+- **B Kontrolle:** Der Beamte ist noch ein flaches Comic-Gesicht auf einem Körper aus Röhren (Arme wie dicke blaue
+  Schläuche), Regen sind blaue Punkte statt Schlieren auf der Scheibe; in der Vorschau steht „1 Uhr“, die Spieluhr zeigt
+  18:00. Papiere sind am Handy gut lesbar.
+- **C Tresor:** Hinter der Einleitung ist die Bühne am Handy schwarz (das Rad erscheint erst, wenn das Spiel läuft); am
+  Desktop sieht man den Tresor schon. Das erste Bild auch ohne laufende Schleife zeichnen.
+- **D Razzia:** Hochkant ist die Kamera zu weit weg: die Figur ist winzig und strichdünn, oben ein Drittel nur Dach,
+  unten ein Drittel nur Kanal, die Etiketten der Verstecke liegen über dem Regal. Am Handy näher ran (Kamera folgt der
+  Figur). **Bude:** stimmungsvoll, aber fast alles schwarz; Lichtkegel am Handy größer.
+- **E Zivi:** Porträt in der Karte und Beine darunter wirken getrennt (bekannt: ganze Figur); der Hinweis „Zu lange
+  gezögert“ kommt schon nach wenigen Sekunden. Container und Bewerbung am Handy gut lesbar.
+- **Alle:** Esc hält jetzt jedes Minispiel an (Rahmen, PR #142). Wer Esc selbst braucht, fängt die Taste mit
+  `useGameKeys` ab (wie die Papiere). In der Spielhalle (Einstellungen › Minispiele) lässt sich jedes Spiel mit neuer
+  Lage und Bestwert spielen.
+
 ## Stand
 
 Gestartet am 20.10.2026. Die PRs der Teile stehen hier, sobald es sie gibt.
