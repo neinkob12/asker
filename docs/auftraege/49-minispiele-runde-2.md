@@ -101,4 +101,6 @@ entscheidet.
 
 ## Stand
 
-Gestartet am 20.10.2026. Die PRs der Teile stehen hier, sobald es sie gibt.
+Gestartet am 20.10.2026. Gemergt (auf Anweisung des Spielers über das Büro): A #144, C #146, D #143, E #145, F #142;
+Pause-Knopf in den Spielen von C, D und E und diese Doku in #148. Offen: B #147 (Verkehrskontrolle, Papiere), der
+Pause-Knopf in Jagd, Kontrolle und Papieren (Teile A und B) und A mit mehr Form an der Karre (neuer PR).
