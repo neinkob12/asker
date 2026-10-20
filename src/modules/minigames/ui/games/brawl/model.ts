@@ -64,7 +64,7 @@ export const ATTACKS: Record<AttackId, AttackDef> = {
 };
 
 /** Leben eines Gegners (vor Rolle und Stärke). */
-export const FOE_HP = 80;
+export const FOE_HP = 120;
 /** Nach so vielen Treffern in Folge (je höchstens CHAIN_GAP auseinander) fliegt der Getroffene aus der Reichweite. */
 export const CHAIN_MAX = 3;
 export const CHAIN_GAP = 0.9;
@@ -91,6 +91,8 @@ export const CREW_MOVES: Record<CrewMove, { label: string; hint: string; icon: s
 
 /** Treffer im letzten Moment abgefangen (Block oder Ausweichen so kurz davor) = Konter. */
 export const PARRY_WINDOW = 0.22;
+/** Anteil Schaden, der bei einem schweren Schlag der Gegner durch einen gehaltenen Block geht (Deckung durch). */
+export const HELD_BLOCK_HEAVY = 0.45;
 export const DODGE_TIME = 0.34;
 export const DODGE_COOLDOWN = 0.45;
 export const COUNTER_TIME = 1.4;
@@ -229,6 +231,9 @@ export interface BrawlState {
   endT: number;
   /** Zufall aus dem Seed (Zustand des Generators lebt in der Funktion). */
   combo: number;
+  /** Längste Serie und Konter (für die Ergebnis-Werte). */
+  bestCombo: number;
+  counters: number;
   /** Dein letzter Angriff wurde gepuffert (kam zu früh): so lange gilt er noch (bis du frei bist plus ATTACK_BUFFER). */
   buffered: { attack: AttackId; until: number } | null;
   /**
@@ -368,7 +373,7 @@ export function createBrawl(seed: number, difficulty: number, params: Record<str
       lookSeed: `gang:${label}:${seed}:${i}`,
       age: null,
       hp: Math.round(FOE_HP * r.hp * scale),
-      power: r.power * (0.95 + d * 0.5) * rage,
+      power: r.power * (0.9 + d * 0.7) * rage,
       speed: 2.4 * r.speed,
       move: null,
       knife: i === knifeAt,
@@ -431,7 +436,7 @@ export function createBrawl(seed: number, difficulty: number, params: Record<str
     callout: INTENT_CALLOUTS[intentId] ?? null,
     own,
     foes,
-    attackers: d >= 0.7 && foes.length > 2 ? 2 : 1,
+    attackers: d >= 0.6 && foes.length > 2 ? 2 : 1,
     pace: (1.25 - d * 0.55) * (calm ? 1.35 : 1) * (intentId === 'callFriends' || intentId === 'wreck' ? 0.85 : 1),
     nervousAt: intentId === 'nervousWavers' || intentId === 'exit' ? 0.8 : 0.5,
   };
@@ -514,6 +519,8 @@ export function initBrawl(setup: BrawlSetup): BrawlState {
     end: null,
     endT: 0,
     combo: 0,
+    bestCombo: 0,
+    counters: 0,
     buffered: null,
     held: null,
   };
@@ -713,6 +720,13 @@ function land(c: Ctx, f: Fighter): void {
       hit(c, f, t, attack, def.damage * 0.5 * f.power, false, false);
       continue;
     }
+    // Gehaltener Block gegen einen schweren Schlag der Gegner: Deckung durch, du taumelst und kriegst einiges ab.
+    // Gegen das Ausholen mit der Flamme hilft nur Ausweichen oder der Block im letzten Moment (Auftrag 48).
+    if (blocking && attack === 'heavy' && playerHit) {
+      c.events.push({ type: 'guardBreak', id: t.id });
+      hit(c, f, t, attack, def.damage * f.power * HELD_BLOCK_HEAVY, false, false);
+      continue;
+    }
     const isCounter = f.kind === 'player' && state.time <= state.counterUntil;
     let damage = def.damage * f.power * (isCounter ? 2 : 1);
     if (blocking) damage *= attack === 'knife' ? 0.3 : 0.15;
@@ -747,7 +761,10 @@ function hit(
     x: t.x,
     depth: t.depth,
   });
-  if (f.kind === 'player' && !blocked) state.combo += 1;
+  if (f.kind === 'player' && !blocked) {
+    state.combo += 1;
+    state.bestCombo = Math.max(state.bestCombo, state.combo);
+  }
   if (t.kind === 'player' && !blocked) state.combo = 0;
   // Treffer-Stopp: kurz steht alles (schwer und Konter länger).
   state.hitStop = Math.max(state.hitStop, blocked ? 0.03 : attack === 'light' ? 0.05 : 0.1);
@@ -784,6 +801,7 @@ function hit(
 function counter(c: Ctx, t: Fighter, f: Fighter, how: 'block' | 'dodge'): void {
   const { state } = c;
   c.events.push({ type: 'parry', target: t.id, attacker: f.id, how });
+  state.counters += 1;
   setState(f, 'hit', 1.0);
   f.attack = null;
   f.vx = -f.facing * 1.2;
@@ -828,7 +846,8 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
       setState(p, 'block');
       p.blockSince = state.time;
     }
-    const near = nearestFoe(state, p, 3);
+    // Zum Gegner drehen, der gerade auf dich ausholt (sonst zum nächsten): Ein Block nach hinten hielte nichts ab.
+    const near = urgentThreat(state, p) ?? nearestFoe(state, p, 3);
     if (near) faceTowards(p, near.x);
     return;
   }
@@ -840,6 +859,23 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
       if (p.state !== 'walk') setState(p, 'walk');
     } else if (p.state === 'walk') setState(p, 'idle');
   }
+}
+
+/** Der Gegner, dessen Schlag als Nächstes bei f ankäme (holt aus oder schlägt zu, dieselbe Ebene, nah genug). */
+export function urgentThreat(state: BrawlState, f: Fighter): Fighter | undefined {
+  let best: Fighter | undefined;
+  let bestLeft = Number.POSITIVE_INFINITY;
+  for (const o of state.fighters) {
+    if (o.side === f.side || !isIn(o) || !o.attack || (o.state !== 'windup' && o.state !== 'strike')) continue;
+    if (!sameLane(o, f) || Math.abs(o.x - f.x) > ATTACKS[o.attack].reach + 0.4) continue;
+    if (o.facing !== (f.x > o.x ? 1 : -1)) continue;
+    const left = o.state === 'windup' ? o.dur - o.t : 0;
+    if (left < bestLeft) {
+      best = o;
+      bestLeft = left;
+    }
+  }
+  return best;
 }
 
 function nearestFoe(state: BrawlState, f: Fighter, within = Number.POSITIVE_INFINITY): Fighter | undefined {
@@ -1241,4 +1277,29 @@ export function brawlPicks(state: BrawlState): string[] {
   if (state.grabbed) picks.push('grabbed');
   if (state.sirens) picks.push('sirens');
   return picks.slice(0, 20);
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface BrawlStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Werte fürs Ergebnis: Gegner am Boden, beste Serie, Konter, Zeit. */
+export function brawlStats(state: BrawlState): BrawlStat[] {
+  const foes = state.fighters.filter((f) => f.side === 'foe');
+  const down = foes.filter((f) => f.out === 'down').length;
+  return [
+    {
+      label: 'Am Boden',
+      value: `${down}/${foes.length}`,
+      icon: 'fist',
+      tone: down === foes.length ? 'good' : undefined,
+    },
+    { label: 'Beste Serie', value: String(state.bestCombo), icon: 'bolt' },
+    { label: 'Konter', value: String(state.counters), icon: 'shield', tone: state.counters > 0 ? 'good' : undefined },
+    { label: 'Zeit', value: `${Math.round(state.clock)} s`, icon: 'timer' },
+  ];
 }

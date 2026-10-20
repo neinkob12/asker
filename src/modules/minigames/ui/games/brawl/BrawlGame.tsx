@@ -19,7 +19,6 @@ import {
   type Backdrop,
   type BrawlLayout,
   type BrawlPalette,
-  blendPose,
   brawlLayout,
   type Colors,
   clampCamera,
@@ -30,15 +29,22 @@ import {
   drawFigure,
   drawFloaters,
   drawLoot,
+  drawRings,
   drawSparks,
   drawWeather,
+  type FigureLight,
   type Floater,
-  idlePose,
   isWet,
-  type Pose,
+  LAMPS,
+  MID,
+  type PoseSpring,
+  poseSpring,
+  type Ring,
   readPalette,
   renderBackdrop,
   type Spark,
+  springFor,
+  springPose,
   targetPose,
   toScreen,
 } from './draw';
@@ -57,6 +63,7 @@ import {
   moveReady,
   playerOf,
   ROLE_NAMES,
+  SLOWMO,
   sideHealth,
   stepBrawl,
   timeLeft,
@@ -100,7 +107,7 @@ const PLAYER_LOOK: Partial<Look> = {
 interface Figure {
   look: Look;
   colors: Colors;
-  pose: Pose;
+  spring: PoseSpring;
   walk: number;
   lastX: number;
   bulk: number;
@@ -124,6 +131,8 @@ interface Hud {
   callout: { text: string; tone: 'info' | 'bad' | 'good'; key: number } | null;
   counter: boolean;
   guard: boolean;
+  /** Treffer in Folge ohne selbst getroffen zu werden. */
+  combo: number;
 }
 
 function sfx(id: string, volume: number): void {
@@ -162,12 +171,13 @@ function hudOf(state: ReturnType<typeof initBrawl>, setup: BrawlSetup, prev: Hud
     callout: prev?.callout ?? null,
     counter: state.time <= state.counterUntil,
     guard: state.guardBy !== null,
+    combo: state.combo,
   };
 }
 
 function sameHud(a: Hud, b: Hud): boolean {
   if (Math.ceil(a.left * 10) !== Math.ceil(b.left * 10) || a.own !== b.own || a.foe !== b.foe) return false;
-  if (a.counter !== b.counter || a.guard !== b.guard) return false;
+  if (a.counter !== b.counter || a.guard !== b.guard || a.combo !== b.combo) return false;
   return a.fighters.every((f, i) => {
     const g = b.fighters[i];
     return g && f.hp === g.hp && f.state === g.state && Math.ceil(f.cd ?? -1) === Math.ceil(g.cd ?? -1);
@@ -190,7 +200,7 @@ export function BrawlGame(props: MinigameViewProps) {
       map.set(f.id, {
         look,
         colors: colorsFor(look, hashSeed(f.lookSeed)),
-        pose: idlePose(),
+        spring: poseSpring(),
         walk: 0,
         lastX: 0,
         bulk: f.kind === 'bruiser' ? 1.3 : f.kind === 'nervous' ? 0.9 : 1,
@@ -207,6 +217,10 @@ export function BrawlGame(props: MinigameViewProps) {
     flash: 0,
     vignette: 0,
     sparks: [] as Spark[],
+    rings: [] as Ring[],
+    /** Kamera-Ruck bei harten Treffern und Kontern (0–1, klingt ab), zum Ort des Treffers. */
+    punch: 0,
+    punchAt: { x: 0, y: 0 },
     floaters: [] as Floater[],
     drops: [] as Drop[],
     lastHud: -1,
@@ -321,14 +335,34 @@ export function BrawlGame(props: MinigameViewProps) {
     return toScreen(v.layout, fx.current.cam, f.x, f.depth);
   }
 
-  function burst(x: number, y: number, color: string, n: number, speed: number) {
+  /** Funken bzw. Tropfen; dir ±1 sprüht sie in Schlagrichtung (Kegel), 0 rundum. */
+  function burst(x: number, y: number, color: string, n: number, speed: number, dir = 0) {
     const f = fx.current;
     const count = reduced ? Math.ceil(n / 3) : n;
     for (let i = 0; i < count; i++) {
-      const a = Math.random() * Math.PI * 2;
+      const a = dir === 0 ? Math.random() * Math.PI * 2 : (dir > 0 ? 0 : Math.PI) + (Math.random() - 0.5) * 1.6;
       const v = speed * (0.4 + Math.random() * 0.8);
       f.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - speed * 0.3, life: 0.35, max: 0.35, color });
     }
+  }
+
+  function ring(x: number, y: number, color: string, size: number) {
+    if (reduced) return;
+    fx.current.rings.push({ x, y, r: size * 0.2, grow: size * 3.2, life: 0.28, max: 0.28, color });
+  }
+
+  /** Rückstoß in der Haltung: Kopf und Körper fliegen weg vom Angreifer und federn zurück. */
+  function knock(targetId: string, attackerId: string, power: number) {
+    const fig = figures.get(targetId);
+    const s = game.current;
+    const t = s.fighters.find((x) => x.id === targetId);
+    const a = s.fighters.find((x) => x.id === attackerId);
+    if (!fig || !t || !a) return;
+    const away = (a.x - t.x) * t.facing > 0 ? -1 : 1;
+    fig.spring.vel[11] += away * 2.4 * power;
+    fig.spring.vel[12] += away * 9 * power;
+    fig.spring.vel[0] += away * 4 * power;
+    fig.spring.vel[1] += 0.6 * power;
   }
 
   function float(x: number, y: number, text: string, color: string, size: number) {
@@ -361,14 +395,35 @@ export function BrawlGame(props: MinigameViewProps) {
               e.counter ? 34 : e.attack === 'light' ? 22 : 28,
             );
             if (e.counter) float(at.x, y - 34, 'KONTER', palette.gold, 30);
-            if (!e.blocked)
+            const attacker = game.current.fighters.find((x) => x.id === e.attacker);
+            const dir = attacker ? (at.x >= (screenOf(e.attacker)?.x ?? at.x) ? 1 : -1) : 0;
+            const big = e.attack !== 'light' || e.counter;
+            if (!e.blocked) {
               burst(
-                at.x,
+                at.x - dir * ppm * 0.15,
                 y + ppm * 0.2,
                 e.counter ? palette.gold : palette.ink,
-                e.attack === 'light' ? 6 : 12,
-                ppm * 6,
+                big ? 16 : 8,
+                ppm * (big ? 8 : 6),
+                dir,
               );
+              // Schweiß bzw. Regen fliegt vom Kopf.
+              burst(at.x, y + ppm * 0.05, 'rgba(210, 230, 255, 0.9)', big ? 9 : 4, ppm * 4, dir);
+              ring(
+                at.x - dir * ppm * 0.1,
+                y + ppm * 0.2,
+                e.counter ? palette.gold : own ? palette.danger : palette.ink,
+                ppm * at.scale,
+              );
+              knock(e.target, e.attacker, e.attack === 'light' ? 0.6 : e.counter ? 1.6 : 1.2);
+              if (big && !reduced) {
+                f.punch = e.counter ? 1 : 0.6;
+                f.punchAt = { x: at.x, y: y + ppm * 0.4 };
+              }
+            } else {
+              burst(at.x - dir * ppm * 0.2, y + ppm * 0.35, palette.place, 5, ppm * 3, dir);
+              knock(e.target, e.attacker, 0.3);
+            }
           }
           if (e.blocked) sfx(BRAWL_SOUNDS.block, 0.7);
           else sfx(e.attack === 'light' ? BRAWL_SOUNDS.punch : BRAWL_SOUNDS.heavy, 0.9);
@@ -449,6 +504,38 @@ export function BrawlGame(props: MinigameViewProps) {
     }
   }
 
+  /** Licht auf einer Figur: nächste Laterne (bzw. Himmel am Tag) und das nächste Leuchtschild für den farbigen Rand. */
+  function lightOn(fighter: Fighter, sx: number): FigureLight | null {
+    const v = view.current;
+    if (!v || reduced) return null;
+    const dim = setup.phase !== 'day';
+    let lamp = LAMPS[0] + 0.46;
+    for (const l of LAMPS) if (Math.abs(l + 0.46 - fighter.x) < Math.abs(lamp - fighter.x)) lamp = l + 0.46;
+    const dx = lamp - fighter.x;
+    const key = dim ? Math.max(0.15, 1 - Math.abs(dx) / 3.6) : 0.7;
+    const { layout, backdrop } = v;
+    const left = fx.current.cam - layout.view / 2;
+    const midX = -left * layout.ppm * MID - 20;
+    const reach = layout.ppm * 4.5;
+    let rim: { side: -1 | 1; amt: number; color: string } = { side: 1, amt: 0, color: palette.place };
+    if (dim) {
+      for (const l of backdrop.lights) {
+        const lx = midX + l.x * layout.ppm;
+        const d = Math.abs(lx - sx);
+        const amt = (1 - d / reach) * 0.8;
+        if (amt > rim.amt) rim = { side: lx >= sx ? 1 : -1, amt, color: l.color };
+      }
+    }
+    return {
+      keyX: Math.max(-1, Math.min(1, dx / 2)),
+      keyColor: dim ? palette.gold : '#fff4dc',
+      keyAmt: key,
+      rimSide: rim.side,
+      rimColor: rim.color,
+      rimAmt: rim.amt,
+    };
+  }
+
   function draw(dt: number) {
     const st = stage.current;
     const v = view.current;
@@ -461,6 +548,13 @@ export function BrawlGame(props: MinigameViewProps) {
     ctx.clearRect(0, 0, width, height);
     const shake = f.shake * (reduced ? 2 : 9);
     if (shake > 0.2) ctx.translate(Math.sin(f.t * 71) * shake, Math.cos(f.t * 57) * shake * 0.6);
+    if (f.punch > 0.01) {
+      // Kamera-Ruck: kurz an den Treffer heran (Ease-out).
+      const z = 1 + 0.045 * f.punch * f.punch;
+      ctx.translate(f.punchAt.x, f.punchAt.y);
+      ctx.scale(z, z);
+      ctx.translate(-f.punchAt.x, -f.punchAt.y);
+    }
     drawBackdrop(ctx, layout, backdrop, f.cam);
     if (setup.loot) {
       const at = toScreen(layout, f.cam, setup.loot.x, 1);
@@ -479,14 +573,17 @@ export function BrawlGame(props: MinigameViewProps) {
       if (!fig) continue;
       const at = toScreen(layout, f.cam, fighter.x, fighter.depth);
       if (at.x < -layout.ppm * 2 || at.x > width + layout.ppm * 2) continue;
-      // Haltung weich nachführen (Schläge schnell, sonst weicher).
+      // Haltung mit Schwung: Federn schwingen beim Schlag nach, im Treffer-Stopp steht alles, in Zeitlupe langsam.
       fig.walk += Math.abs(fighter.x - fig.lastX) * 3.4;
       fig.lastX = fighter.x;
-      const snap = fighter.state === 'strike' || fighter.state === 'hit' ? 30 : fighter.state === 'down' ? 9 : 16;
-      fig.pose =
-        dt > 0
-          ? blendPose(fig.pose, targetPose(fighter, fig.walk, f.t), Math.min(1, dt * snap))
-          : targetPose(fighter, fig.walk, f.t);
+      const target = targetPose(fighter, fig.walk, f.t);
+      const poseDt = s.hitStop > 0 ? 0 : s.slowmo > 0 ? dt * SLOWMO : dt;
+      if (dt === 0) Object.assign(fig.spring.pose, target);
+      else if (poseDt > 0) {
+        const [freq, damping] = springFor(fighter.state);
+        springPose(fig.spring, target, poseDt, freq, damping);
+      }
+      const pose = fig.spring.pose;
       const ppm = layout.ppm * at.scale;
       const ring =
         fighter.state === 'down' || fighter.out
@@ -508,6 +605,7 @@ export function BrawlGame(props: MinigameViewProps) {
         knife: fighter.knife && fighter.state !== 'down',
         bulk: fig.bulk,
         ring,
+        light: lightOn(fighter, at.x),
       };
       // Nasse Straße: blasse Spiegelung unter der Figur.
       if (wet && fighter.state !== 'down') {
@@ -515,19 +613,20 @@ export function BrawlGame(props: MinigameViewProps) {
         ctx.translate(0, at.y * 2);
         ctx.scale(1, -1);
         ctx.globalAlpha = 0.12;
-        drawFigure(ctx, fig.pose, fig.look, fig.colors, { ...opts, ring: null, opacity: 0.12 });
+        drawFigure(ctx, pose, fig.look, fig.colors, { ...opts, ring: null, opacity: 0.12, light: null });
         ctx.restore();
       }
       if (fighter.state === 'dodge' && !reduced) {
         // Nachbild beim Ausweichen.
-        drawFigure(ctx, fig.pose, fig.look, fig.colors, {
+        drawFigure(ctx, pose, fig.look, fig.colors, {
           ...opts,
           x: at.x + fighter.facing * ppm * 0.35,
           opacity: 0.18,
           ring: null,
+          light: null,
         });
       }
-      drawFigure(ctx, fig.pose, fig.look, fig.colors, opts);
+      drawFigure(ctx, pose, fig.look, fig.colors, opts);
       // Zeichen über dem Kopf: Ansage, Zögern, Beute, Konter bereit.
       const headY = at.y - ppm * 2.15;
       const badge = Math.max(18, ppm * 0.34);
@@ -542,6 +641,7 @@ export function BrawlGame(props: MinigameViewProps) {
         drawBadge(ctx, 'counter', at.x, headY, badge, palette, f.t);
       }
     }
+    drawRings(ctx, f.rings);
     drawSparks(ctx, f.sparks);
     drawFloaters(ctx, f.floaters);
     ctx.restore();
@@ -612,6 +712,12 @@ export function BrawlGame(props: MinigameViewProps) {
       sp.life -= dt;
     }
     f.sparks = f.sparks.filter((sp) => sp.life > 0);
+    for (const r of f.rings) {
+      r.r += r.grow * dt * slow;
+      r.life -= dt;
+    }
+    f.rings = f.rings.filter((r) => r.life > 0);
+    if (s.hitStop <= 0) f.punch = Math.max(0, f.punch - dt * 3.2);
     for (const fl of f.floaters) {
       fl.y -= 50 * dt;
       fl.life -= dt * 0.9;
@@ -693,7 +799,7 @@ export function BrawlGame(props: MinigameViewProps) {
           {hud.callout.text}
         </p>
       )}
-      {running && (hud.counter || hud.guard) && (
+      {running && (hud.counter || hud.guard || hud.combo >= 2) && (
         <p class="brawl__status">
           {hud.counter && (
             <span class="brawl__chip is-gold">
@@ -705,6 +811,12 @@ export function BrawlGame(props: MinigameViewProps) {
             <span class="brawl__chip is-people">
               <Icon name="shield" />
               Deckung
+            </span>
+          )}
+          {hud.combo >= 2 && (
+            <span key={hud.combo} class="brawl__chip is-combo">
+              <Icon name="fist" />
+              {hud.combo}er-Serie
             </span>
           )}
         </p>

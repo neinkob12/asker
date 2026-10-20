@@ -1,6 +1,7 @@
 // Spiellogik vom Straßenkampf (Auftrag 44, Teil 2), ohne DOM.
 
 import { describe, expect, it } from 'vitest';
+import { BOT_CASUAL, BOT_MASHER, BOT_SKILLED, type BrawlBot, playBrawl } from './bot';
 import {
   ATTACKS,
   type BrawlInput,
@@ -8,12 +9,14 @@ import {
   type BrawlState,
   brawlPicks,
   brawlScore,
+  brawlStats,
   createBrawl,
   type Fighter,
   FOE_TELL,
   fighterById,
   finished,
   foesLeft,
+  HELD_BLOCK_HEAVY,
   initBrawl,
   moveReady,
   playerOf,
@@ -173,7 +176,7 @@ describe('Straßenkampf: Schläge', () => {
     expect(p.hp).toBeLessThan(p.maxHp);
   });
 
-  it('Block hält fast alles ab; im letzten Moment ist es ein Konter mit Zeitlupe und doppeltem Schaden', () => {
+  it('Block hält leichte Schläge ab; im letzten Moment ist es ein Konter mit Zeitlupe und doppeltem Schaden', () => {
     const s = setup({ ...PARAMS, crew: [] }, 0);
     // Gehaltener Block: wenig Schaden.
     const held = initBrawl(s);
@@ -183,9 +186,11 @@ describe('Straßenkampf: Schläge', () => {
     place(p, 5, 0, 1);
     place(f, 5.9, 0);
     f.cooldown = 0;
-    run(s, held, 1.5, () => ({ dx: 0, block: true }));
+    const heldEvents = run(s, held, 1.5, () => ({ dx: 0, block: true }));
     expect(p.maxHp - p.hp).toBeGreaterThan(0);
-    expect(p.maxHp - p.hp).toBeLessThan(ATTACKS.heavy.damage * f.power * 0.5);
+    // Gegen den schweren Schlag geht die Deckung durch (Flamme: ausweichen oder Konter), sonst fast nichts.
+    const broke = heldEvents.some((e) => e.type === 'guardBreak' && e.id === 'player');
+    expect(p.maxHp - p.hp).toBeLessThan(ATTACKS.heavy.damage * f.power * (broke ? HELD_BLOCK_HEAVY + 0.05 : 0.2));
 
     // Block erst kurz vor dem Treffer: Konter.
     const late = initBrawl(s);
@@ -367,5 +372,52 @@ describe('Straßenkampf: Ende und Ergebnis', () => {
     expect(picks.filter((p) => p === 'hurt:s2')).toHaveLength(1);
     expect(picks).toContain('playerHurt');
     expect(picks.length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe('Straßenkampf: Schwierigkeit (Test-Bot)', () => {
+  const FIGHT = {
+    ...PARAMS,
+    crew: [PARAMS.crew[0]],
+    intent: { id: 'grabGoods', label: 'Sie gehen auf die Ware', stake: 'goods' },
+  };
+
+  function measure(bot: BrawlBot, difficulty: number) {
+    let won = 0;
+    let seconds = 0;
+    const n = 30;
+    for (let seed = 1; seed <= n; seed++) {
+      const s = createBrawl(seed, difficulty, FIGHT);
+      const out = playBrawl(s, initBrawl(s), bot);
+      if (out.end === 'won') won += 1;
+      seconds += out.seconds / n;
+    }
+    return { won: won / n, seconds };
+  }
+
+  it('Können zählt: wer blockt, kontert und ausweicht, gewinnt; wer nur draufhaut, verliert schwer meistens', () => {
+    const skilled = measure(BOT_SKILLED, 0.9);
+    const casual = measure(BOT_CASUAL, 0.9);
+    const masher = measure(BOT_MASHER, 0.9);
+    expect(skilled.won).toBeGreaterThanOrEqual(0.75);
+    expect(casual.won).toBeGreaterThanOrEqual(0.6);
+    expect(masher.won).toBeLessThanOrEqual(0.5);
+    expect(skilled.won).toBeGreaterThan(masher.won + 0.3);
+  });
+
+  it('leicht ist leicht, und ein Kampf dauert eine Weile (nicht nach zehn Sekunden vorbei)', () => {
+    const easy = measure(BOT_CASUAL, 0.2);
+    expect(easy.won).toBeGreaterThanOrEqual(0.95);
+    expect(easy.seconds).toBeGreaterThan(18);
+    expect(measure(BOT_MASHER, 0.2).won).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('Ergebnis-Werte: Gegner am Boden, Serie, Konter, Zeit', () => {
+    const s = createBrawl(3, 0.5, FIGHT);
+    const state = initBrawl(s);
+    playBrawl(s, state, BOT_SKILLED);
+    const stats = brawlStats(state);
+    expect(stats.map((x) => x.label)).toEqual(['Am Boden', 'Beste Serie', 'Konter', 'Zeit']);
+    expect(state.bestCombo).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,8 @@
 // Zivi oder Kunde (Auftrag 44, Teil 5): Am Spot kommen Leute nacheinander, jeder als Karte mit Gesicht, einem Satz und
 // dem, was du siehst. Wischen nach rechts (→, D) verkauft, nach links (←, A) wimmelt ab. Karten fliegen mit Schwung,
 // der Stapel hat Tiefe. Wer zu lange zögert, lässt den Kunden gehen. Spiellogik in model.ts, Merkmale in tells.ts.
+// Hinschauen (Auftrag 48): Der Satz wird gesprochen (tippt sich), Merkmale zeigen sich nach und nach im Bild und als
+// Chip (Kopf dreht sich zum Ohr, Blick zum Auto, Jacke verrutscht); solange noch etwas kommt, steht „…“ da.
 
 import { memo } from 'preact/compat';
 import { useMemo, useRef, useState } from 'preact/hooks';
@@ -15,11 +17,13 @@ import type { MinigameViewProps } from '../../registry';
 import { LowerBody, PortraitMarks } from './figure';
 import {
   canDecide,
+  cardElapsed,
   createShift,
   type Decision,
   decide,
   initShift,
   inputFrom,
+  LINE_SECONDS,
   type Person,
   type ShiftEvent,
   type ShiftOutcome,
@@ -28,11 +32,13 @@ import {
   shiftScore,
   step,
   type Verdict,
+  visibleTells,
 } from './model';
 import { UNDERCOVER_SOUNDS } from './sounds';
 import { tellDef } from './tells';
 
 const KEYS = ['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'];
+const NONE: readonly string[] = [];
 /** Ab so vielen Pixeln Ziehen zählt es beim Loslassen als Entscheidung. */
 const SWIPE_PX = 90;
 /** Oder so schnell (Pixel pro Millisekunde) geschnippt. */
@@ -95,10 +101,39 @@ interface Toast {
   key: number;
 }
 
-/** Eine Karte: Gesicht mit Merkmalen, Satz, was du siehst, unten Gürtel und Schuhe. */
-const PersonCard = memo(function PersonCard(props: { person: Person; total: number }) {
-  const { person, total } = props;
+/** Was im Bild schon zu sehen ist: nur die gezeigten Merkmale (Ohr, Kragen, Gürtel, Schuhe, Kopfhörer). */
+function seenPerson(person: Person, seen: readonly string[]): Person {
+  if (seen.length === person.tells.length) return person;
+  const shows: Person['shows'] = {};
+  for (const id of seen) {
+    const show = tellDef(id)?.show;
+    if (show && show !== 'none' && show !== 'speech') shows[show] = true;
+  }
+  const shoes = seen.includes('newShoes') ? 'new' : seen.includes('worn') ? 'worn' : 'plain';
+  return { ...person, shows, shoes };
+}
+
+/** Eine Karte: Gesicht mit Merkmalen, Satz, was du siehst, unten Gürtel und Schuhe. seen = was schon zu sehen ist. */
+const PersonCard = memo(function PersonCard(props: {
+  person: Person;
+  total: number;
+  seen: readonly string[];
+  lineRef?: { current: HTMLParagraphElement | null };
+}) {
+  const { total, seen } = props;
+  const person = useMemo(() => seenPerson(props.person, seen), [props.person, seen]);
   const amount = formatAmount(person.amount, person.unit);
+  const more = seen.length < props.person.tells.length;
+  const has = (id: string) => seen.includes(id);
+  const life = [
+    'uc-card__portrait',
+    has('watchesCar') ? 'is-glance' : '',
+    has('earpiece') ? 'is-ear' : '',
+    has('nervous') || has('shaky') ? 'is-jitter' : '',
+    has('phone') ? 'is-down' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <>
       <header class="uc-card__head">
@@ -110,13 +145,19 @@ const PersonCard = memo(function PersonCard(props: { person: Person; total: numb
           {amount}
         </span>
       </header>
-      <div class="uc-card__portrait">
-        <Face look={person.look} />
-        <PortraitMarks person={person} />
+      <div class={life} style={{ '--uc-delay': `${-(person.index * 0.77) % 3}s` }}>
+        <div class="uc-card__figure">
+          <Face look={person.look} />
+          <PortraitMarks person={person} />
+        </div>
       </div>
-      <p class="uc-card__line">„{person.line}“</p>
+      {/* Der Satz steht ganz da (gleicher Umbruch), der noch nicht gesagte Rest ist durchsichtig. */}
+      <p class="uc-card__line" ref={props.lineRef}>
+        <span>{props.lineRef ? '' : `„${person.line}“`}</span>
+        <span class="uc-card__line-rest">{props.lineRef ? `„${person.line}“` : ''}</span>
+      </p>
       <ul class="uc-card__tells" aria-label="Was du siehst">
-        {person.tells.map((id) => {
+        {seen.map((id) => {
           const def = tellDef(id);
           if (!def) return null;
           return (
@@ -126,15 +167,51 @@ const PersonCard = memo(function PersonCard(props: { person: Person; total: numb
             </li>
           );
         })}
+        {more && (
+          <li class="uc-chip is-more" aria-label="Schau genau hin, da kommt noch was">
+            <Icon name="eye" />
+            <span>…</span>
+          </li>
+        )}
       </ul>
-      <div class="uc-card__below">
+      <div class={`uc-card__below${has('nervous') ? ' is-jitter' : ''}`}>
         <LowerBody person={person} />
       </div>
     </>
   );
 });
 
-/** Straße hinter dem Stapel: Häuser, Laterne, das Auto gegenüber, der Spot. Tag oder Nacht nach der Stunde. */
+/** Fenster der Häuserfront (x, y im 400er-Raster); jedes dritte ist dunkel. */
+const WINDOWS: [number, number][] = [
+  [10, 60],
+  [44, 60],
+  [10, 100],
+  [44, 140],
+  [100, 90],
+  [126, 130],
+  [172, 50],
+  [206, 50],
+  [172, 96],
+  [206, 140],
+  [258, 80],
+  [290, 120],
+  [336, 64],
+  [372, 104],
+  [336, 144],
+];
+
+/** Leute, die hinten über die Straße gehen (Silhouetten, x-Start, Tempo in s, Größe). */
+const PASSERS: { from: number; dur: number; scale: number; delay: number }[] = [
+  { from: -30, dur: 19, scale: 1, delay: -4 },
+  { from: 430, dur: 24, scale: 0.85, delay: -13 },
+  { from: -30, dur: 28, scale: 0.9, delay: -21 },
+];
+
+/**
+ * Straße hinter dem Stapel (Auftrag 48 mit Licht): Himmel mit Verlauf, ferne Dächer, Häuser mit leuchtenden Fenstern,
+ * Laterne mit Lichtkegel und Lichtfleck, nasser Gehweg mit Spiegelungen, Leute im Hintergrund, das Auto gegenüber.
+ * Tag oder Nacht nach der Stunde. Alles SVG mit Verläufen, Farben aus den Tokens (CSS).
+ */
 const Scene = memo(function Scene(props: { night: boolean; spot: string; watched: boolean; flash: number }) {
   return (
     <div class={`uc-scene${props.night ? ' is-night' : ''}`} aria-hidden="true">
@@ -145,60 +222,111 @@ const Scene = memo(function Scene(props: { night: boolean; spot: string; watched
         aria-hidden="true"
         focusable="false"
       >
-        <rect class="uc-scene__sky" x="0" y="0" width="400" height="240" />
-        <g class="uc-scene__houses">
+        <defs>
+          <linearGradient id="uc-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" class="uc-stop-sky-top" />
+            <stop offset="1" class="uc-stop-sky-low" />
+          </linearGradient>
+          <linearGradient id="uc-house" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" class="uc-stop-house-top" />
+            <stop offset="1" class="uc-stop-house-low" />
+          </linearGradient>
+          <linearGradient id="uc-walk" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" class="uc-stop-walk-top" />
+            <stop offset="1" class="uc-stop-walk-low" />
+          </linearGradient>
+          <linearGradient id="uc-cone" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" class="uc-stop-light" stop-opacity="0.5" />
+            <stop offset="1" class="uc-stop-light" stop-opacity="0" />
+          </linearGradient>
+          <radialGradient id="uc-pool" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" class="uc-stop-light" stop-opacity="0.55" />
+            <stop offset="1" class="uc-stop-light" stop-opacity="0" />
+          </radialGradient>
+          <filter id="uc-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" />
+          </filter>
+        </defs>
+        <rect x="0" y="0" width="400" height="240" fill="url(#uc-sky)" />
+        <path
+          class="uc-scene__far"
+          d="M0 120 L30 120 L30 96 L58 96 L58 110 L92 110 L92 70 L104 58 L116 70 L116 108 L150 108 L150 90 L190 90 L190 112 L232 112 L232 80 L262 80 L262 100 L300 100 L300 66 L312 50 L324 66 L324 104 L360 104 L360 88 L400 88 L400 200 L0 200 Z"
+        />
+        <g fill="url(#uc-house)">
           <rect x="-10" y="40" width="96" height="160" />
           <rect x="86" y="70" width="70" height="130" />
           <rect x="156" y="30" width="88" height="170" />
           <rect x="244" y="60" width="76" height="140" />
           <rect x="320" y="44" width="96" height="156" />
         </g>
+        <g class="uc-scene__edges">
+          <rect x="84" y="70" width="2" height="130" />
+          <rect x="154" y="30" width="2" height="170" />
+          <rect x="242" y="60" width="2" height="140" />
+          <rect x="318" y="44" width="2" height="156" />
+        </g>
+        <g class="uc-scene__glow" filter="url(#uc-glow)">
+          {WINDOWS.filter((_, i) => i % 3 !== 1).map(([x, y]) => (
+            <rect key={`g${x}-${y}`} x={x - 2} y={y - 2} width="22" height="26" />
+          ))}
+        </g>
         <g class="uc-scene__windows">
-          {[
-            [10, 60],
-            [44, 60],
-            [10, 100],
-            [44, 140],
-            [100, 90],
-            [126, 130],
-            [172, 50],
-            [206, 50],
-            [172, 96],
-            [206, 140],
-            [258, 80],
-            [290, 120],
-            [336, 64],
-            [372, 104],
-            [336, 144],
-          ].map(([x, y], i) => (
+          {WINDOWS.map(([x, y], i) => (
             <rect
-              key={i}
+              key={`w${x}-${y}`}
               x={x}
               y={y}
               width="18"
               height="22"
+              rx="1"
               class={i % 3 === 1 ? 'uc-scene__window-dark' : undefined}
             />
           ))}
         </g>
-        <rect class="uc-scene__walk" x="0" y="200" width="400" height="40" />
-        <rect class="uc-scene__curb" x="0" y="198" width="400" height="4" />
+        <g class="uc-scene__passers">
+          {PASSERS.map((p, i) => (
+            <g
+              key={i}
+              class={`uc-scene__passer${p.from > 200 ? ' is-left' : ''}`}
+              style={{ animationDuration: `${p.dur}s`, animationDelay: `${p.delay}s` }}
+            >
+              <g transform={`translate(0 ${200 - 34 * p.scale}) scale(${p.scale})`}>
+                <circle cx="0" cy="4" r="4" />
+                <path d="M-5 9 Q0 7 5 9 L6 24 L-6 24 Z" />
+                <path class="uc-scene__leg" d="M-4 23 L-5 34 L-2 34 L-1 23 Z" />
+                <path class="uc-scene__leg is-back" d="M1 23 L2 34 L5 34 L4 23 Z" />
+              </g>
+            </g>
+          ))}
+        </g>
+        <rect x="0" y="200" width="400" height="40" fill="url(#uc-walk)" />
+        <g class="uc-scene__wet">
+          {WINDOWS.filter((_, i) => i % 3 !== 1 && i % 2 === 0).map(([x], i) => (
+            <rect key={`r${x}-${i}`} x={x + 4} y={204} width="10" height={14 + (i % 3) * 6} rx="3" />
+          ))}
+        </g>
+        <rect class="uc-scene__curb" x="0" y="198" width="400" height="3" />
         <g class={`uc-scene__car${props.watched ? ' is-watched' : ''}`}>
+          <ellipse class="uc-scene__shadow" cx="70" cy="205" rx="58" ry="4" />
           <path
             class="uc-scene__body"
             d="M18 196 L24 178 Q28 170 40 169 L86 169 Q96 170 102 178 L112 186 L120 188 Q124 190 124 196 Z"
           />
+          <path class="uc-scene__shine" d="M30 180 Q60 175 100 179" />
           <path class="uc-scene__glass" d="M32 181 L38 173 L62 173 L62 181 Z M66 173 L86 173 L94 181 L66 181 Z" />
           <circle class="uc-scene__wheel" cx="40" cy="197" r="8" />
           <circle class="uc-scene__wheel" cx="102" cy="197" r="8" />
           <circle class="uc-scene__head" cx="54" cy="177" r="3.4" />
           <circle class="uc-scene__head" cx="78" cy="177" r="3.4" />
           <rect key={props.flash} class="uc-scene__lights" x="116" y="184" width="8" height="5" rx="2" />
+          <ellipse class="uc-scene__lights-pool" cx="132" cy="206" rx="16" ry="3" />
         </g>
         <g class="uc-scene__lamp">
-          <rect x="330" y="96" width="4" height="104" />
-          <path d="M318 96 L346 96 L340 90 L324 90 Z" />
-          <path class="uc-scene__cone" d="M322 98 L342 98 L392 200 L272 200 Z" />
+          <path class="uc-scene__cone" d="M322 98 L342 98 L392 200 L272 200 Z" fill="url(#uc-cone)" />
+          <ellipse class="uc-scene__pool" cx="332" cy="206" rx="70" ry="12" fill="url(#uc-pool)" />
+          <rect class="uc-scene__pole" x="330" y="96" width="4" height="104" />
+          <path class="uc-scene__pole" d="M318 96 L346 96 L340 90 L324 90 Z" />
+          <rect class="uc-scene__bulb" x="322" y="96" width="20" height="3" rx="1.5" />
         </g>
       </svg>
       <span class="uc-scene__sign">
@@ -231,6 +359,9 @@ export function UndercoverGame(props: MinigameViewProps) {
   const [toast, setToast] = useState<Toast | null>(null);
   const [flash, setFlash] = useState(0);
   const [bust, setBust] = useState(0);
+  /** Was an der obersten Karte schon zu sehen ist (wächst, während man hinschaut). */
+  const [seen, setSeen] = useState<string[]>(() => visibleTells(shift.people[0], 0));
+  const line = useRef<HTMLParagraphElement>(null);
 
   const stage = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
@@ -240,7 +371,18 @@ export function UndercoverGame(props: MinigameViewProps) {
   const drag = useRef<{ id: number; sx: number; sy: number; x: number; y: number; lt: number; lx: number; vx: number }>(
     null,
   );
-  const motion = useRef({ x: 0, y: 0, shake: 0, lastHud: -1, endAt: -1, sent: false, lastTick: -1, slow: 1 });
+  const motion = useRef({
+    x: 0,
+    y: 0,
+    shake: 0,
+    lastHud: -1,
+    endAt: -1,
+    sent: false,
+    lastTick: -1,
+    slow: 1,
+    seenCount: -1,
+    seenIndex: -1,
+  });
 
   /** Karte wegfliegen lassen (dir 1 rechts, -1 links, 0 nach unten: gegangen). */
   const launch = (event: Extract<ShiftEvent, { type: 'decided' }>, dir: number, speed: number) => {
@@ -366,6 +508,30 @@ export function UndercoverGame(props: MinigameViewProps) {
         }
       }
     }
+    // Hinschauen: neue Merkmale zeigen sich (mit leisem Ton), der Satz tippt sich.
+    const person = shift.people[g.index];
+    if (person && !g.done) {
+      const elapsed = cardElapsed(shift, g);
+      const now = visibleTells(person, elapsed);
+      if (now.length !== m.seenCount || g.index !== m.seenIndex) {
+        if (g.index === m.seenIndex && now.length > m.seenCount) playSound(MINIGAME_SOUNDS.click, 0.25);
+        m.seenCount = now.length;
+        m.seenIndex = g.index;
+        setSeen(now);
+      }
+      const el = line.current;
+      const said = el?.children[0];
+      const rest = el?.children[1];
+      if (said && rest) {
+        const full = `„${person.line}“`;
+        const chars = reduced ? full.length : Math.ceil((elapsed / LINE_SECONDS) * full.length);
+        const text = full.slice(0, Math.max(0, chars));
+        if (said.textContent !== text) {
+          said.textContent = text;
+          rest.textContent = full.slice(text.length);
+        }
+      }
+    }
     // Oberste Karte: folgt dem Finger, sonst federt sie zurück.
     const d = drag.current;
     if (d) {
@@ -434,7 +600,7 @@ export function UndercoverGame(props: MinigameViewProps) {
 
   return (
     <div class={`uc${reduced ? ' is-reduced' : ''}`}>
-      <Scene night={night} spot={spotName} watched={!!current?.shows.car && live} flash={flash} />
+      <Scene night={night} spot={spotName} watched={live && seen.includes('watchesCar')} flash={flash} />
       {bust > 0 && <div key={bust} class="uc-bust" aria-hidden="true" />}
       <HudBar class="uc-hud">
         <HudTimer seconds={left} total={shift.perCard} urgentAt={2} />
@@ -477,7 +643,12 @@ export function UndercoverGame(props: MinigameViewProps) {
                     <span ref={timer} />
                   </span>
                 )}
-                <PersonCard person={person} total={total} />
+                <PersonCard
+                  person={person}
+                  total={total}
+                  seen={i === 0 ? seen : NONE}
+                  lineRef={i === 0 ? line : undefined}
+                />
                 {i === 0 && (
                   <>
                     <span class="uc-card__stamp is-sell" aria-hidden="true">
@@ -503,7 +674,7 @@ export function UndercoverGame(props: MinigameViewProps) {
                 class={`uc-card is-flying is-${f.verdict}`}
                 aria-hidden="true"
               >
-                <PersonCard person={person} total={total} />
+                <PersonCard person={person} total={total} seen={person.tells} />
                 <span class={`uc-card__reveal ${f.zivi ? 'is-zivi' : 'is-kunde'}`}>
                   <Icon name={f.zivi ? 'badge' : 'user'} />
                   {f.zivi ? 'Zivi' : 'Kunde'}
