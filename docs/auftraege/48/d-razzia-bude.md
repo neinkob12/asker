@@ -56,7 +56,7 @@ Schwacher: 1 s bzw. 0,9 s, zufällige Wahl, jedes vierte Mal daneben (Razzia) bz
 
 | Lage | Spieler | leicht 0,2 | mittel 0,5 | schwer 0,9 |
 | --- | --- | --- | --- | --- |
-| Razzia, Lager ohne Ausbau, vorher | gut / schwach | 85 / 65 % | 95 / 40 % | 45 / 8 % |
+| Razzia, Lager ohne Ausbau, vorher | gut / schwach | 85 / 65 % | 95 / 40 % | 38 / 8 % |
 | Razzia, Lager ohne Ausbau, nachher | gut / schwach | 100 / 80 % | 100 / 30 % | 73 / 3 % |
 | Razzia, Lager mit Tresor, vorher | gut / schwach | 100 / 95 % | 100 / 73 % | 100 / 20 % |
 | Razzia, Lager mit Tresor, nachher | gut / schwach | 100 / 95 % | 100 / 55 % | 100 / 3 % |
