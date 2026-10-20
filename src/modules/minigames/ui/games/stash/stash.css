@@ -1,12 +1,15 @@
-/* Razzia-Countdown (Auftrag 44, Teil 3). Bühne als Canvas, HUD und Leiste im Look Glas. */
+/* Razzia-Lauf (Auftrag 44, Teil 3; seit Auftrag 48 seitlich in 3D). Bühne als WebGL-Canvas, darüber HUD, Leiste der
+   Strecke, Namen der Verstecke, Sprechblase über dir und Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
 
 .stash {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   font-family: var(--font-hud);
   color: var(--hud-ink);
+  background: var(--hud-glass-solid);
 }
 .stash__canvas {
   position: absolute;
@@ -15,10 +18,41 @@
   height: 100%;
   display: block;
   touch-action: none;
-  cursor: grab;
+  cursor: pointer;
 }
-.stash__canvas:active {
-  cursor: grabbing;
+
+/* Rand: dunkel, in den letzten Sekunden rot pulsierend, nach dem Schließen blau-rot. */
+.stash__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 55%, color-mix(in srgb, black 55%, transparent) 100%);
+}
+.stash.is-urgent .stash__vignette {
+  animation: stash-pulse 0.55s ease-in-out infinite alternate;
+}
+.stash__flash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: var(--hud-ink);
+  opacity: 0;
+  animation: stash-flash 0.6s ease-out;
+}
+@keyframes stash-flash {
+  from {
+    opacity: 0.55;
+  }
+}
+@keyframes stash-pulse {
+  from {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+  to {
+    box-shadow: inset 0 0 90px 10px color-mix(in srgb, var(--cat-danger) 45%, transparent);
+  }
 }
 
 .stash__count {
@@ -39,25 +73,119 @@
   min-width: 140px;
 }
 
-/* Namen der Verstecke über der Szene (nur Anzeige, Tippen geht an die Leinwand). */
-.stash__label {
+/* Leiste der ganzen Strecke unter dem HUD. */
+.stash__strip {
   position: absolute;
-  z-index: 2;
-  transform: translate(-50%, calc(-100% - 4px));
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px 1px 3px;
+  z-index: 3;
+  left: 50%;
+  top: calc(var(--space-4) + 70px + env(safe-area-inset-top, 0px));
+  width: min(420px, calc(100% - 48px));
+  height: 14px;
+  transform: translateX(-50%);
   border-radius: var(--radius-round);
   background: var(--hud-glass-strong);
   border: 1px solid var(--hud-glass-edge);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
   pointer-events: none;
+}
+.stash__strip > span {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.stash__strip-gate {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--hud-ink-3);
+}
+.stash__strip-gate.is-closed {
+  background: var(--cat-danger);
+}
+.stash__strip-hide {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--hud-gold);
+}
+.stash__strip-hide.is-closed {
+  background: var(--cat-danger);
+  opacity: 0.6;
+}
+.stash__strip-pkg {
+  --swatch: var(--cat-goods);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+.stash__strip-pkg.is-3 {
+  width: 9px;
+  height: 9px;
+}
+.stash__strip-me {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--hud-ink);
+  box-shadow: 0 0 6px var(--hud-ink);
+}
+
+/* Namen der Verstecke über der Szene; Lage setzt die Bildschleife (transform). Antippen bringt das Paket hin. */
+.stash__label {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  margin: 0;
+  padding: 2px 8px 2px 4px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  translate: -50% -100%;
+  cursor: pointer;
+  touch-action: manipulation;
+  will-change: transform;
+}
+.stash__label.is-low {
+  translate: -50% 0;
+}
+.stash__label:disabled {
+  cursor: default;
+}
+.stash__label.is-ok {
+  border-color: var(--hud-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hud-gold) 35%, transparent);
+}
+.stash__label.is-no {
+  opacity: 0.8;
 }
 .stash__label.is-blocked {
   color: var(--cat-danger);
+  opacity: 0.7;
+}
+.stash__label[data-edge="left"]::before,
+.stash__label[data-edge="right"]::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+.stash__label[data-edge="left"]::before {
+  border-right-color: var(--hud-ink-2);
+  margin-left: -2px;
+}
+.stash__label[data-edge="right"]::after {
+  border-left-color: var(--hud-ink-2);
+  margin-right: -2px;
 }
 .stash kbd {
   display: inline-grid;
@@ -74,62 +202,49 @@
   color: var(--hud-gold);
 }
 
-/* Leiste: ausgewähltes Paket und Verstecke als Knöpfe (rechts am Desktop, unten am Handy). */
-.stash__panel {
+/* Sprechblase über deinem Kopf: was du trägst bzw. was vor dir liegt. */
+.stash__bubble {
   position: absolute;
-  z-index: 3;
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--hud-radius-tile);
+  z-index: 2;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.stash__tag {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  border-radius: var(--radius-round);
   background: var(--hud-glass-strong);
   border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--hud-shadow);
-  overflow: auto;
+  font-size: 13px;
+  white-space: nowrap;
 }
-.stash__pick {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 52px;
+.stash__tag.is-carry {
+  border-color: var(--hud-gold);
 }
 .stash__swatch {
   --swatch: var(--cat-goods);
   flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
   border: 2px solid var(--swatch);
-  background: color-mix(in srgb, var(--swatch) 30%, transparent);
+  background: color-mix(in srgb, var(--swatch) 35%, transparent);
 }
 .stash__swatch.is-1 {
-  width: 24px;
-  height: 24px;
+  width: 12px;
+  height: 12px;
 }
 .stash__swatch.is-3 {
-  width: 38px;
-  height: 38px;
-}
-.stash__pick-text {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.stash__pick-text strong {
-  font-size: 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.stash__pick-empty {
-  font-size: 14px;
-  color: var(--hud-ink-2);
-}
-.stash__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  width: 20px;
+  height: 20px;
 }
 .stash__chip {
   display: inline-flex;
@@ -150,77 +265,52 @@
   color: var(--cat-sky);
 }
 
-.stash__hides {
-  display: grid;
-  gap: var(--space-2);
-}
-.stash__hide {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 48px;
-  padding: 6px 10px;
-  border-radius: var(--hud-radius-button);
-  border: 1px solid var(--hud-glass-line);
-  background: var(--hud-glass-fill);
-  color: var(--hud-ink);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.stash__hide:hover:not(:disabled),
-.stash__hide:focus-visible {
-  background: var(--hud-glass-fill-active);
-}
-.stash__hide.is-ok {
-  border-color: var(--hud-gold);
-}
-.stash__hide.is-blocked {
-  opacity: 0.6;
-}
-.stash__hide:disabled {
-  cursor: default;
-}
-.stash__hide-name {
+/* Gerettet: Betrag steigt über dem Versteck auf. */
+.stash__float {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  font-family: var(--font-hud-display);
+  font-size: 22px;
+  font-weight: 800;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  pointer-events: none;
+  translate: -50% -100%;
+  text-shadow: 0 2px 8px color-mix(in srgb, black 70%, transparent);
+  animation: stash-rise 1.1s var(--ease-out) forwards;
 }
-.stash__hide-meta {
-  display: inline-flex;
-  gap: 4px;
+.stash__float.is-good {
+  color: var(--cat-money);
 }
-
-/* Am Handy unten: Paket oben, Verstecke in zwei Spalten. */
-.stash__panel.is-bottom .stash__hides {
-  grid-template-columns: 1fr 1fr;
+.stash__float.is-wet {
+  color: var(--cat-sky);
 }
-.stash__panel.is-bottom .stash__hide {
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  row-gap: 2px;
-  padding: 6px 8px;
-  font-size: 14px;
+.stash__float.is-bad {
+  color: var(--cat-danger);
 }
-.stash__panel.is-bottom .stash__hide kbd {
-  display: none;
-}
-.stash__panel.is-bottom .stash__hide-name {
-  grid-column: 1 / -1;
-}
-.stash__panel.is-bottom .stash__hide-meta {
-  grid-column: 1 / -1;
+@keyframes stash-rise {
+  from {
+    opacity: 0;
+    margin-top: 10px;
+    scale: 0.7;
+  }
+  20% {
+    opacity: 1;
+    scale: 1.15;
+  }
+  to {
+    opacity: 0;
+    margin-top: -46px;
+    scale: 1;
+  }
 }
 
 .stash__message {
   position: absolute;
   z-index: 4;
   left: 50%;
-  top: 84px;
+  top: calc(var(--space-4) + 96px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   max-width: calc(100% - 32px);
   margin: 0;
@@ -264,21 +354,39 @@
   .stash__count {
     font-size: 20px;
   }
+  .stash__strip {
+    top: calc(var(--space-3) + 60px + env(safe-area-inset-top, 0px));
+  }
   .stash__label {
-    font-size: 11px;
-    padding: 0 6px 0 2px;
+    font-size: 12px;
+    padding: 1px 6px 1px 4px;
+    min-height: 28px;
   }
   .stash__label kbd {
     display: none;
   }
   .stash__message {
-    top: 72px;
+    top: calc(var(--space-3) + 84px + env(safe-area-inset-top, 0px));
     font-size: 14px;
+  }
+}
+/* Am Desktop mit Maus: Tastenhinweis statt Knöpfen reicht nicht immer, die Knöpfe bleiben klein am Rand. */
+@media (hover: hover) and (pointer: fine) {
+  .stash__touch {
+    opacity: 0.85;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stash__message {
+  .stash__message,
+  .stash__float {
     animation: none;
+  }
+  .stash__flash {
+    display: none;
+  }
+  .stash.is-urgent .stash__vignette {
+    animation: none;
+    box-shadow: inset 0 0 60px 6px color-mix(in srgb, var(--cat-danger) 35%, transparent);
   }
 }

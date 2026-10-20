@@ -1,22 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
+  act,
+  bestMove,
   CARRY_SPEED,
   canHide,
+  contextOf,
   createStash,
-  grab,
-  hideAt,
+  getHide,
+  goTo,
+  hideCenter,
   initStash,
-  nextLoose,
-  packageAt,
-  release,
+  isLoose,
+  RUN_SPEED,
+  rightLimit,
+  type StashEvent,
   type StashInput,
   type StashSetup,
   type StashState,
+  savedValue,
   send,
+  sendTo,
   stashCounts,
   stashPicks,
   stashScore,
-  steer,
+  stashStats,
   step,
   streetClosed,
   timeLeft,
@@ -43,157 +50,330 @@ const SPOT: StashInput = {
   money: 120,
 };
 
-/** So lange laufen lassen, bis nichts mehr getragen wird (oder die Zeit um ist). */
-function settle(setup: StashSetup, state: StashState): void {
-  for (let i = 0; i < 400 && state.carry && !state.done; i++) step(setup, state, 0.05);
+const DT = 1 / 30;
+
+/** So lange laufen lassen, bis du nichts mehr vorhast (oder die Zeit um ist). */
+function settle(setup: StashSetup, state: StashState, max = 30): StashEvent[] {
+  const events: StashEvent[] = [];
+  for (let t = 0; t < max && (state.goal || state.action) && !state.done; t += DT)
+    events.push(...step(setup, state, DT));
+  return events;
 }
 
-describe('Razzia-Countdown: Modell', () => {
+/**
+ * Bot: nimmt immer den besten Zug (bestMove) und braucht für jede Entscheidung reaction Sekunden (ein Mensch schaut
+ * erst hin). Gibt den Score zurück.
+ */
+function play(setup: StashSetup, reaction: number): { state: StashState; score: number } {
+  const state = initStash(setup);
+  let wait = reaction;
+  for (let i = 0; i < 60 * 30 && !state.done; i++) {
+    if (!state.goal && !state.action) {
+      wait -= DT;
+      if (wait <= 0) {
+        const move = bestMove(setup, state);
+        if (move) send(setup, state, move.id, move.hide);
+        wait = reaction;
+      }
+    }
+    step(setup, state, DT);
+  }
+  return { state, score: stashScore(setup, state) };
+}
+
+function average(input: StashInput, difficulty: number, reaction: number): number {
+  let sum = 0;
+  for (let seed = 1; seed <= 30; seed++) sum += play(createStash(seed, difficulty, input), reaction).score;
+  return sum / 30;
+}
+
+describe('Razzia-Lauf: Szene', () => {
   it('gleicher Seed, gleiche Szene; schwerer heißt mehr Pakete und weniger Zeit', () => {
-    expect(createStash(5, 0.5, LAGER)).toEqual(createStash(5, 0.5, LAGER));
-    const easy = createStash(5, 0, LAGER);
-    const hard = createStash(5, 1, LAGER);
-    expect(easy.duration).toBe(30);
-    expect(hard.duration).toBe(20);
+    expect(createStash(3, 0.5, LAGER)).toEqual(createStash(3, 0.5, LAGER));
+    const easy = createStash(3, 0, LAGER);
+    const hard = createStash(3, 1, LAGER);
     expect(hard.packages.length).toBeGreaterThan(easy.packages.length);
-    expect(hard.closeAt).toBe(13);
+    expect(hard.duration).toBeLessThan(easy.duration);
+    expect(easy.closeAt).toBe(easy.duration - 7);
+    expect(createStash(3, 0.5, SPOT).closeAt).toBeNull();
+    expect(createStash(3, 0.5, SPOT).gate).toBeNull();
   });
 
   it('jede Partie bekommt mindestens ein Paket, Schwarzgeld ist ein Bündel, Werte gehen auf', () => {
-    const setup = createStash(2, 0.5, LAGER);
-    const products = new Set(setup.packages.map((p) => p.productId));
-    expect(products).toEqual(new Set(['weed', 'kush', 'edibles', null]));
-    expect(setup.totalValue).toBeCloseTo(13200 + 5400 + 900 + 2400, -1);
-    const weed = setup.packages.filter((p) => p.productId === 'weed');
-    expect(weed.reduce((s, p) => s + p.amount, 0)).toBe(1200);
-    // Das schwerste Paket ist groß, die Edibles sind klein.
-    expect(Math.max(...setup.packages.map((p) => p.size))).toBe(3);
-    expect(setup.packages.find((p) => p.productId === 'edibles')?.size).toBeLessThan(3);
+    const setup = createStash(4, 0.5, LAGER);
+    for (const lot of LAGER.lots) expect(setup.packages.some((p) => p.productId === lot.productId)).toBe(true);
+    expect(setup.packages.filter((p) => p.productId === null)).toHaveLength(1);
+    const total = LAGER.lots.reduce((s, l) => s + l.value, 0) + LAGER.money;
+    expect(Math.abs(setup.totalValue - total)).toBeLessThanOrEqual(setup.packages.length);
+  });
+
+  it('Pakete liegen auf eigenen Plätzen drinnen, große nie oben im Regal', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const setup = createStash(seed, 1, LAGER);
+      const xs = setup.packages.map((p) => `${Math.round(p.x)}:${p.shelf}`);
+      expect(new Set(xs).size).toBe(xs.length);
+      for (const p of setup.packages) {
+        expect(p.x).toBeLessThan(setup.gate as number);
+        if (p.size === 3) expect(p.shelf).toBe(0);
+      }
+    }
   });
 
   it('Verstecke im Lager: Tresor nur mit Ausbau, Platz nach Stufe, der Boden wächst mit der Tarnung', () => {
-    const without = createStash(1, 0.5, { ...LAGER, warehouse: { vault: 0, cover: 0 } });
-    expect(without.hides.map((h) => h.id)).toEqual(['floor', 'vent', 'trunk', 'drain']);
-    const full = createStash(1, 0.5, { ...LAGER, warehouse: { vault: 2, cover: 2 } });
-    expect(full.hides.find((h) => h.id === 'vault')?.capacity).toBe(7);
-    expect(full.hides.find((h) => h.id === 'floor')?.capacity).toBe(6);
-    const street = createStash(1, 0.5, SPOT);
-    expect(street.hides.map((h) => h.id)).toEqual(['planter', 'mailbox', 'bin', 'drain']);
-    expect(street.closeAt).toBeNull();
+    const plain = createStash(1, 0.5, { ...LAGER, warehouse: { vault: 0, cover: 0 } });
+    expect(plain.hides.map((h) => h.id)).toEqual(['vent', 'floor', 'trunk', 'drain']);
+    const big = createStash(1, 0.5, { ...LAGER, warehouse: { vault: 2, cover: 2 } });
+    expect(getHide(big, 'vault')?.capacity).toBe(7);
+    expect(getHide(big, 'floor')?.capacity).toBe(6);
+    // Von links nach rechts, draußen hinter dem Tor.
+    const xs = big.hides.map((h) => h.x);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    for (const h of big.hides) expect(h.outside).toBe(h.x > (big.gate as number));
+  });
+});
+
+describe('Razzia-Lauf: Laufen, Tragen, Verstecken', () => {
+  it('mit ←/→ laufen; Tragen macht langsam, große Pakete am meisten', () => {
+    const setup = createStash(2, 0.5, LAGER);
+    const state = initStash(setup);
+    const x0 = state.x;
+    for (let t = 0; t < 1; t += DT) step(setup, state, DT, 1);
+    expect(state.x - x0).toBeGreaterThan(RUN_SPEED * 0.8);
+    expect(state.facing).toBe(1);
+    expect(CARRY_SPEED[3]).toBeLessThan(CARRY_SPEED[2]);
+    expect(CARRY_SPEED[2]).toBeLessThan(CARRY_SPEED[1]);
+    expect(CARRY_SPEED[1]).toBeLessThan(RUN_SPEED);
   });
 
-  it('ein Paket wird hingetragen und verstaut, das dauert nach Größe und Versteck', () => {
-    const setup = createStash(3, 0.3, LAGER);
+  it('Antippen: hinlaufen, aufheben (dauert), dann ein Versteck antippen und verstauen', () => {
+    const setup = createStash(2, 0.5, LAGER);
     const state = initStash(setup);
-    const small = setup.packages.find((p) => p.size === 1) ?? setup.packages[0];
-    expect(send(setup, state, small.id, 'vault')).toBe('ok');
-    // Nur eins zur Zeit.
-    const other = setup.packages.find((p) => p.id !== small.id)?.id ?? 0;
-    expect(send(setup, state, other, 'trunk')).toBe('busy');
-    const events = [];
-    for (let i = 0; i < 200 && state.carry; i++) events.push(...step(setup, state, 0.05));
-    expect(events.map((e) => e.type)).toEqual(['arrived', 'stowed']);
-    expect(state.items[small.id].hide).toBe('vault');
-    expect(state.used.vault).toBe(small.size);
-    const hide = setup.hides.find((h) => h.id === 'vault');
-    const dist = Math.hypot(
-      (hide?.x ?? 0) + (hide?.w ?? 0) / 2 - small.x,
-      (hide?.y ?? 0) + (hide?.h ?? 0) / 2 - small.y,
-    );
-    expect(state.time).toBeGreaterThanOrEqual(dist / CARRY_SPEED[small.size] + (hide?.stow ?? 0) - 0.06);
+    const pkg = setup.packages.find((p) => p.size === 2) ?? setup.packages[0];
+    expect(goTo(setup, state, { kind: 'package', id: pkg.id })).toBe(true);
+    const picked = settle(setup, state);
+    expect(picked.map((e) => e.type)).toContain('picked');
+    expect(state.carry).toBe(pkg.id);
+    expect(isLoose(state, pkg.id)).toBe(false);
+    goTo(setup, state, { kind: 'hide', id: 'floor' });
+    const t0 = state.time;
+    const stowed = settle(setup, state);
+    expect(stowed.map((e) => e.type)).toEqual(['stowing', 'stowed']);
+    expect(state.items[pkg.id].hide).toBe('floor');
+    expect(state.carry).toBeNull();
+    // Laufen plus Verstauen: mindestens die Strecke im Trage-Tempo.
+    const floor = getHide(setup, 'floor');
+    if (!floor) throw new Error('kein Boden');
+    expect(state.time - t0).toBeGreaterThan(floor.stow);
+  });
+
+  it('Leertaste macht, was gerade geht: aufheben, verstauen, sonst ablegen', () => {
+    const setup = createStash(2, 0.5, LAGER);
+    const state = initStash(setup);
+    const pkg = setup.packages[0];
+    state.x = state.items[pkg.id].x;
+    expect(contextOf(setup, state)).toEqual({ kind: 'pickup', id: pkg.id });
+    act(setup, state);
+    settle(setup, state);
+    expect(state.carry).toBe(pkg.id);
+    // Mitten im Raum: ablegen.
+    state.x = 13.5;
+    expect(contextOf(setup, state).kind).toBe('drop');
+    act(setup, state);
+    expect(state.carry).toBeNull();
+    expect(state.items[pkg.id].x).toBe(13.5);
+    // Vor dem Versteck: verstauen (wenn es passt).
+    act(setup, state);
+    settle(setup, state);
+    expect(state.carry).toBe(pkg.id);
+    const trunk = getHide(setup, 'trunk');
+    if (!trunk) throw new Error('kein Kofferraum');
+    state.x = hideCenter(trunk);
+    expect(contextOf(setup, state)).toEqual({ kind: 'stow', hide: 'trunk', check: 'ok' });
+    act(setup, state);
+    settle(setup, state);
+    expect(state.items[pkg.id].hide).toBe('trunk');
+  });
+
+  it('selbst laufen bricht das Hinlaufen ab', () => {
+    const setup = createStash(2, 0.5, LAGER);
+    const state = initStash(setup);
+    goTo(setup, state, { kind: 'point', x: 2 });
+    step(setup, state, DT);
+    step(setup, state, DT, 1);
+    expect(state.goal).toBeNull();
   });
 
   it('zu groß, voll, draußen zu', () => {
-    const setup = createStash(3, 0.5, LAGER);
+    const setup = createStash(6, 1, { ...LAGER, warehouse: { vault: 0, cover: 0 } });
     const state = initStash(setup);
-    const big = setup.packages.find((p) => p.size === 3);
-    expect(big).toBeDefined();
-    expect(canHide(setup, state, big?.id ?? 0, 'vent')).toBe('tooBig');
-    expect(canHide(setup, state, big?.id ?? 0, 'drain')).toBe('tooBig');
-    state.used.trunk = 4;
-    expect(canHide(setup, state, big?.id ?? 0, 'trunk')).toBe('full');
-    state.used.trunk = 0;
-    state.time = (setup.closeAt ?? 0) + 0.1;
+    const big = setup.packages.find((p) => p.size >= 2);
+    if (!big) throw new Error('kein großes Paket');
+    expect(canHide(setup, state, big.id, 'vent')).toBe('tooBig');
+    const small = setup.packages.find((p) => p.size <= 2);
+    if (!small) throw new Error('kein kleines Paket');
+    state.used.floor = getHide(setup, 'floor')?.capacity;
+    expect(canHide(setup, state, small.id, 'floor')).toBe('full');
+    state.time = setup.closeAt as number;
     expect(streetClosed(setup, state)).toBe(true);
-    expect(canHide(setup, state, big?.id ?? 0, 'trunk')).toBe('closed');
-    expect(canHide(setup, state, big?.id ?? 0, 'vault')).toBe('ok');
+    expect(canHide(setup, state, setup.packages[0].id, 'trunk')).toBe('closed');
+    expect(sendTo(setup, state, 'trunk')).toBe('closed');
   });
 
-  it('Ziehen: das Paket folgt dem Finger, losgelassen über einem Versteck läuft es hinein, sonst bleibt es liegen', () => {
-    const setup = createStash(4, 0.5, LAGER);
+  it('Versteck lehnt ab, wenn du ankommst: Paket bleibt in der Hand', () => {
+    const setup = createStash(6, 1, LAGER);
     const state = initStash(setup);
-    const p = setup.packages[0];
-    expect(packageAt(setup, state, p.x + 1, p.y - 1)).toBe(p.id);
-    expect(grab(state, p.id)).toBe(true);
-    expect(packageAt(setup, state, p.x, p.y)).toBe(-1);
-    steer(state, 50, 60);
-    for (let i = 0; i < 4; i++) step(setup, state, 0.05);
-    const moved = state.items[p.id];
-    expect(Math.hypot(moved.x - p.x, moved.y - p.y)).toBeGreaterThan(1);
-    expect(release(setup, state, null)).toBe('ok');
-    expect(state.carry).toBeNull();
-    expect(state.items[p.id].hide).toBeNull();
-    // Noch einmal, diesmal über dem Gully loslassen (klein genug?).
-    const small = setup.packages.find((x) => x.size <= 2) ?? p;
-    grab(state, small.id);
-    const drain = setup.hides.find((h) => h.id === 'drain');
-    expect(hideAt(setup, (drain?.x ?? 0) + 2, (drain?.y ?? 0) + 2)).toBe('drain');
-    expect(release(setup, state, 'drain')).toBe('ok');
+    const big = setup.packages.find((p) => p.size === 3);
+    if (!big) throw new Error('kein großes Paket');
+    goTo(setup, state, { kind: 'package', id: big.id });
     settle(setup, state);
-    expect(state.items[small.id].hide).toBe('drain');
+    goTo(setup, state, { kind: 'hide', id: 'vent' });
+    const events = settle(setup, state);
+    expect(events).toContainEqual({ type: 'refused', id: big.id, hide: 'vent', check: 'tooBig' });
+    expect(state.carry).toBe(big.id);
+    expect(state.goal).toBeNull();
+  });
+
+  it('Taste für ein Versteck holt das nächste Paket, das passt', () => {
+    const setup = createStash(6, 0.5, LAGER);
+    const state = initStash(setup);
+    expect(sendTo(setup, state, 'vent')).toBe('ok');
+    settle(setup, state);
+    const inVent = setup.packages.filter((p) => state.items[p.id].hide === 'vent');
+    expect(inVent).toHaveLength(1);
+    expect(inVent[0].size).toBe(1);
+  });
+});
+
+describe('Razzia-Lauf: Tor und Zeit', () => {
+  it('Tor zu: wer nach draußen läuft, bleibt drinnen stehen, das Paket in der Hand', () => {
+    const setup = createStash(5, 1, { ...LAGER, warehouse: { vault: 0, cover: 0 } });
+    const state = initStash(setup);
+    const pkg = setup.packages.find((p) => canHide(setup, state, p.id, 'drain') === 'ok');
+    if (!pkg) throw new Error('kein passendes Paket');
+    state.x = state.items[pkg.id].x;
+    act(setup, state);
+    settle(setup, state);
+    state.time = (setup.closeAt as number) - 0.3;
+    expect(send(setup, state, pkg.id, 'drain')).toBe('ok');
+    const types = settle(setup, state).map((e) => e.type);
+    expect(types).toContain('closed');
+    expect(types).not.toContain('stowed');
+    expect(state.carry).toBe(pkg.id);
+    expect(state.x).toBeLessThanOrEqual(rightLimit(setup, state));
+    expect(savedValue(setup, state)).toBe(0);
+  });
+
+  it('wer beim Schließen draußen steht, wird reingeschoben; was dort schon verstaut wird, ist drin', () => {
+    const setup = createStash(5, 1, LAGER);
+    const outside = initStash(setup);
+    outside.x = 25;
+    outside.time = (setup.closeAt as number) - 0.01;
+    const pushed = step(setup, outside, DT).map((e) => e.type);
+    expect(pushed).toEqual(['closed', 'pushed']);
+    expect(outside.x).toBe(rightLimit(setup, outside));
+
+    const state = initStash(setup);
+    const trunk = getHide(setup, 'trunk');
+    const pkg = setup.packages.find((p) => canHide(setup, state, p.id, 'trunk') === 'ok');
+    if (!trunk || !pkg) throw new Error('kein Kofferraum');
+    state.carry = pkg.id;
+    state.x = hideCenter(trunk);
+    state.time = (setup.closeAt as number) - 0.1;
+    act(setup, state);
+    const types = settle(setup, state).map((e) => e.type);
+    expect(types).toContain('closed');
+    expect(types).toContain('stowed');
+    expect(state.items[pkg.id].hide).toBe('trunk');
   });
 
   it('Score nach Wert, nasse Ware zählt weniger; alles versteckt beendet das Spiel früh', () => {
-    const setup = createStash(6, 0, SPOT);
+    const setup = createStash(2, 0, SPOT);
     const state = initStash(setup);
-    expect(stashScore(setup, state)).toBe(0);
-    const order: Record<number, 'bin' | 'drain'> = {};
-    for (const p of setup.packages) order[p.id] = 'bin';
-    const wetOne = setup.packages.find((p) => p.size <= 2) ?? setup.packages[0];
-    order[wetOne.id] = 'drain';
-    for (const p of setup.packages) {
-      expect(send(setup, state, p.id, order[p.id])).toBe('ok');
+    const first = setup.packages.find((p) => p.size <= 2);
+    if (!first) throw new Error('kein Paket für den Gully');
+    const rest = setup.packages.filter((p) => p.id !== first.id);
+    state.carry = first.id;
+    state.x = hideCenter(getHide(setup, 'drain') as never);
+    act(setup, state);
+    settle(setup, state);
+    expect(state.items[first.id].hide).toBe('drain');
+    expect(stashScore(setup, state)).toBeCloseTo((first.value * WET_FACTOR) / setup.totalValue, 2);
+    for (const p of rest) {
+      expect(send(setup, state, p.id, p.size === 1 ? 'mailbox' : 'bin')).toBe('ok');
       settle(setup, state);
     }
     expect(state.done).toBe(true);
     expect(state.cleared).toBe(true);
-    const expected = (setup.totalValue - wetOne.value * (1 - WET_FACTOR)) / setup.totalValue;
-    expect(stashScore(setup, state)).toBeCloseTo(expected, 2);
+    expect(timeLeft(setup, state)).toBeGreaterThan(0);
     expect(stashCounts(setup, state)).toEqual({ hidden: setup.packages.length, wet: 1, left: 0 });
     expect(stashPicks(setup, state)).toContain('drain:1');
   });
 
-  it('Zeit um: was liegt, ist weg; was gerade verstaut wird, ist drin', () => {
-    const setup = createStash(7, 0.5, LAGER);
+  it('Zeit um: was liegt oder in der Hand ist, ist weg; was gerade verstaut wird, ist drin', () => {
+    const setup = createStash(2, 0.5, LAGER);
     const state = initStash(setup);
-    const p = setup.packages.find((x) => x.size <= 2) ?? setup.packages[0];
-    expect(send(setup, state, p.id, 'floor')).toBe('ok');
-    // Bis zum Verstauen tragen, dann die Zeit ablaufen lassen.
-    for (let i = 0; i < 200 && state.carry && state.carry.stowing < 0; i++) step(setup, state, 0.05);
+    const a = setup.packages.find((p) => p.size <= 2);
+    const b = setup.packages.find((p) => p.id !== a?.id);
+    if (!a || !b) throw new Error('zu wenig Pakete');
+    state.carry = a.id;
+    state.x = hideCenter(getHide(setup, 'floor') as never);
+    act(setup, state);
     state.time = setup.duration - 0.01;
-    const events = step(setup, state, 0.05);
-    expect(events.some((e) => e.type === 'timeUp')).toBe(true);
+    step(setup, state, DT);
     expect(state.done).toBe(true);
-    expect(timeLeft(setup, state)).toBe(0);
-    expect(state.items[p.id].hide).toBe('floor');
+    expect(state.items[a.id].hide).toBe('floor');
+    expect(state.items[b.id].hide).toBeNull();
     expect(stashPicks(setup, state)).toContain(`left:${setup.packages.length - 1}`);
-    expect(send(setup, state, p.id === 1 ? 2 : 1, 'vault')).toBe('done');
-  });
 
-  it('Auswahl springt über versteckte Pakete', () => {
-    const setup = createStash(8, 0.5, LAGER);
-    const state = initStash(setup);
-    state.items[1].hide = 'vault';
-    state.selected = 0;
-    expect(nextLoose(setup, state, 1)).toBe(2);
-    expect(nextLoose(setup, state, -1)).toBe(setup.packages.length - 1);
+    const holding = initStash(setup);
+    holding.carry = a.id;
+    holding.time = setup.duration - 0.01;
+    step(setup, holding, DT);
+    expect(holding.items[a.id].hide).toBeNull();
+    expect(stashScore(setup, holding)).toBe(0);
   });
 
   it('kommt ohne Ware aus (leere Szene, Score 0)', () => {
     const setup = createStash(1, 0.5, { setting: 'warehouse', lots: [], money: 0 });
-    expect(setup.packages).toEqual([]);
+    expect(setup.packages).toHaveLength(0);
     const state = initStash(setup);
-    expect(state.selected).toBe(-1);
+    expect(contextOf(setup, state)).toEqual({ kind: 'none' });
     expect(stashScore(setup, state)).toBe(0);
+    for (let t = 0; t < setup.duration + 1; t += 0.5) step(setup, state, 0.5);
+    expect(state.done).toBe(true);
+  });
+});
+
+describe('Razzia-Lauf: Schwierigkeit (Bot mit Reaktionszeit)', () => {
+  // Gemessen mit bestMove und 0,35 s Bedenkzeit pro Entscheidung (Stand Auftrag 48, siehe
+  // docs/auftraege/48-minispiele-einbruch.md): Lager mit Tresor leicht ~0,95, mittel ~0,85, schwer ~0,7.
+  it('leicht: fast alles zu retten; schwer: spürbar weniger, aber machbar', () => {
+    const easy = average(LAGER, 0.2, 0.35);
+    const mid = average(LAGER, 0.5, 0.35);
+    const hard = average(LAGER, 0.9, 0.35);
+    expect(easy).toBeGreaterThan(0.88);
+    expect(hard).toBeLessThan(easy - 0.08);
+    expect(hard).toBeGreaterThan(0.5);
+    expect(mid).toBeLessThanOrEqual(easy + 0.001);
+  });
+
+  it('ohne Tresor ist es enger, am Spot schnell erledigt', () => {
+    const plain = { ...LAGER, warehouse: { vault: 0, cover: 0 } };
+    expect(average(plain, 0.9, 0.35)).toBeGreaterThan(0.4);
+    expect(average(SPOT, 0.9, 0.35)).toBeGreaterThan(0.8);
+  });
+});
+
+describe('Razzia-Lauf: Ergebnis-Werte', () => {
+  it('versteckt, nass, gefunden; höchstens vier', () => {
+    const setup = createStash(2, 0, SPOT);
+    const state = initStash(setup);
+    const pkg = setup.packages.find((p) => p.size <= 2);
+    if (!pkg) throw new Error('kein Paket');
+    state.items[pkg.id].hide = 'drain';
+    state.done = true;
+    const stats = stashStats(setup, state);
+    expect(stats[0]).toMatchObject({ label: 'Versteckt', value: `1/${setup.packages.length}` });
+    expect(stats.map((s) => s.label)).toEqual(['Versteckt', 'Nass', 'Gefunden']);
   });
 });

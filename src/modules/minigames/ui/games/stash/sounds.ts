@@ -1,5 +1,5 @@
-// Klänge für den Razzia-Countdown (Synth, angemeldet wie in kit/sounds.ts): Sirene, Verstauen, Platschen im Gully,
-// Reinstürmen. Optik und Ton dürfen Math.random nutzen (kein Einfluss auf die Simulation).
+// Klänge für den Razzia-Lauf (Synth, angemeldet wie in kit/sounds.ts): Sirene, Verstauen, Platschen im Gully,
+// Reinstürmen, Schritte, Klopfen am Tor, Rolltor, Klappen. Optik und Ton dürfen Math.random nutzen (kein Einfluss auf die Simulation).
 
 import { audio } from '../../../../../ui';
 
@@ -14,6 +14,14 @@ export const STASH_SOUNDS = {
   lift: 'minigames.stash.lift',
   /** Tür fliegt auf, sie stürmen rein. */
   breach: 'minigames.stash.breach',
+  /** Ein Schritt (Turnschuh auf Beton). */
+  step: 'minigames.stash.step',
+  /** Faust gegen das Rolltor. */
+  knock: 'minigames.stash.knock',
+  /** Rolltor knallt runter. */
+  slam: 'minigames.stash.slam',
+  /** Klappe, Tür oder Deckel geht auf. */
+  creak: 'minigames.stash.creak',
 } as const;
 
 function noise(
@@ -120,6 +128,41 @@ export function registerStashSounds(): void {
       noise(ctx, out, t, 0.5, 'lowpass', 700, 1);
       tone(ctx, out, t, 110, 45, 0.45, 'sawtooth', 0.22);
       noise(ctx, out, t + 0.12, 0.25, 'highpass', 3000, 0.35);
+    },
+  });
+  audio.registerSound(s.step, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      noise(ctx, out, t, 0.05, 'lowpass', 520, 0.45);
+      tone(ctx, out, t, 95, 60, 0.05, 'sine', 0.12);
+    },
+  });
+  audio.registerSound(s.knock, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Drei Schläge gegen Blech: dumpf, mit Scheppern.
+      for (let i = 0; i < 3; i++) {
+        const at = t + i * 0.16;
+        noise(ctx, out, at, 0.12, 'bandpass', 380, 1);
+        noise(ctx, out, at, 0.22, 'bandpass', 2100, 0.18);
+        tone(ctx, out, at, 120, 70, 0.12, 'triangle', 0.35);
+      }
+    },
+  });
+  audio.registerSound(s.slam, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      noise(ctx, out, t, 0.32, 'bandpass', 900, 0.4);
+      noise(ctx, out, t + 0.28, 0.4, 'lowpass', 500, 1);
+      noise(ctx, out, t + 0.3, 0.5, 'bandpass', 2600, 0.22);
+      tone(ctx, out, t + 0.28, 90, 40, 0.3, 'sawtooth', 0.2);
+    },
+  });
+  audio.registerSound(s.creak, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, 260, 380, 0.16, 'sawtooth', 0.035);
+      noise(ctx, out, t, 0.1, 'bandpass', 1500, 0.15);
     },
   });
 }

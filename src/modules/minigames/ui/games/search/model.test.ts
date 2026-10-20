@@ -1,7 +1,6 @@
-// Bude durchsuchen: Modell (Wohnung aus dem Seed, Suchen, Lärm, Zeit, Score) und Lage der Dinge auf der Bühne.
+// Bude durchsuchen: Modell (Wohnung aus dem Seed, Suchen, Lärm, Zeit, Score) und Schwierigkeit mit einem Bot.
 
 import { describe, expect, it } from 'vitest';
-import { apartmentLayout, hitRect, hitTest, itemRect, neighbour, type Rect } from './layout';
 import {
   ALERT_SECONDS,
   advance,
@@ -15,6 +14,7 @@ import {
   type SearchSetup,
   searchPicks,
   searchScore,
+  searchStats,
   splitMoney,
   timeLeft,
 } from './model';
@@ -182,44 +182,68 @@ describe('Bude durchsuchen: Spiel', () => {
   });
 });
 
-describe('Bude durchsuchen: Lage', () => {
-  const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  const inside = (a: Rect, r: Rect) =>
-    a.x >= r.x - 0.01 && a.y >= r.y - 0.01 && a.x + a.w <= r.x + r.w + 0.01 && a.y + a.h <= r.y + r.h + 0.01;
+describe('Bude durchsuchen: Schwierigkeit (Bot im Ego-Blick)', () => {
+  /** Raumwechsel (Überblenden, Umschauen) und Bedenkzeit pro Ding, wie ein Mensch am Bildschirm. */
+  const WALK = 0.6;
+  const REACT = 0.35;
+  const ORDER = ['hall', 'living', 'kitchen', 'bedroom', 'bath'] as const;
 
-  for (const [name, w, h] of [
-    ['Desktop', 950, 760],
-    ['Handy', 390, 844],
-    ['Handy quer', 844, 390],
-    ['kleines Fenster', 640, 520],
-  ] as const) {
-    it(`${name}: alle Dinge im Raum, keine überlappen, Treffer mindestens 44 px`, () => {
-      const layout = apartmentLayout(w, h);
-      expect(layout.outer.x).toBeGreaterThanOrEqual(0);
-      expect(layout.outer.x + layout.outer.w).toBeLessThanOrEqual(w);
-      const rects = ITEMS.map((i) => itemRect(layout, i.id, i.room));
-      ITEMS.forEach((item, i) => {
-        expect(inside(rects[i], layout.rooms[item.room]), item.id).toBe(true);
-        expect(hitRect(rects[i]).w).toBeGreaterThanOrEqual(44);
-        for (let j = i + 1; j < rects.length; j++) {
-          expect(overlap(rects[i], rects[j]), `${item.id} / ${ITEMS[j].id}`).toBe(false);
+  /** Spürnase: Raum für Raum erst Spuren und klassische Verstecke (laute Dinge nur mit Spur), dann der Rest. */
+  function play(seed: number, difficulty: number): number {
+    const setup = createSearch(seed, difficulty, 1000);
+    const state = initSearch(setup);
+    const loud = new Set(ITEMS.filter((d) => d.loud >= 0.5).map((d) => d.id));
+    const plan: number[] = [];
+    const passes = [
+      (i: number) => setup.items[i].tell || setup.items[i].peek,
+      (i: number) => ITEMS.find((d) => d.id === setup.items[i].id)?.classic === true && !loud.has(setup.items[i].id),
+      (i: number) => !loud.has(setup.items[i].id),
+      () => true,
+    ];
+    for (const pass of passes) {
+      for (const room of ORDER) {
+        for (let i = 0; i < setup.items.length; i++) {
+          if (setup.items[i].room === room && !plan.includes(i) && pass(i)) plan.push(i);
         }
-      });
-    });
+      }
+    }
+    let room = 'hall';
+    for (const i of plan) {
+      if (state.done) break;
+      if (setup.items[i].room !== room) {
+        run(setup, state, WALK);
+        room = setup.items[i].room;
+      }
+      run(setup, state, REACT);
+      if (state.done) break;
+      searchItem(setup, state, i);
+    }
+    return searchScore(setup, state);
   }
 
-  it('Treffer: das Ding mit der nächsten Mitte; Pfeile gehen zum Nachbarn in der Richtung', () => {
-    const rects = [
-      { x: 0, y: 0, w: 20, h: 20 },
-      { x: 30, y: 0, w: 20, h: 20 },
-      { x: 0, y: 100, w: 20, h: 20 },
-    ];
-    expect(hitTest(rects, 10, 10)).toBe(0);
-    expect(hitTest(rects, 42, 12)).toBe(1);
-    expect(hitTest(rects, 300, 300)).toBe(-1);
-    expect(neighbour(rects, 0, 1, 0)).toBe(1);
-    expect(neighbour(rects, 0, 0, 1)).toBe(2);
-    expect(neighbour(rects, 0, -1, 0)).toBe(0);
-    expect(neighbour(rects, 0, 1, 0, (i) => i === 1)).toBe(0);
+  function average(difficulty: number): number {
+    let sum = 0;
+    for (let seed = 1; seed <= 40; seed++) sum += play(seed, difficulty);
+    return sum / 40;
+  }
+
+  // Gemessen (Auftrag 48, 40 Seeds): leicht 1,0, mittel 0,89, schwer 0,66 (siehe docs/auftraege/48-minispiele-einbruch.md).
+  it('leicht findet fast alles, schwer spürbar weniger, aber nie nichts', () => {
+    const easy = average(0.2);
+    const mid = average(0.5);
+    const hard = average(0.9);
+    expect(easy).toBeGreaterThan(0.85);
+    expect(mid).toBeLessThan(easy);
+    expect(hard).toBeLessThan(easy - 0.1);
+    expect(hard).toBeGreaterThan(0.35);
+  });
+});
+
+describe('Bude durchsuchen: Ergebnis-Werte', () => {
+  it('Verstecke und durchsucht, Nachbarn bei Alarm', () => {
+    const setup = createSearch(1, 0.5, 900);
+    const state = initSearch(setup);
+    state.alerted = true;
+    expect(searchStats(setup, state).map((s) => s.label)).toEqual(['Verstecke', 'Durchsucht', 'Nachbarn']);
   });
 });

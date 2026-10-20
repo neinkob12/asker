@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   advance,
+  CORRECTION,
+  comingRight,
   confirm,
   createSafe,
   dialDistance,
@@ -100,6 +102,19 @@ describe('Tresor: Drehen und Einrasten', () => {
     expect(state.step).toBe(0);
     expect(state.mistakes).toBe(2);
     expect(timeLeft(setup, state)).toBe(setup.duration - 2 * setup.penalty);
+  });
+
+  it('überdreht: ein kleines Stück zurück gilt noch als richtige Richtung, weit zurück nicht', () => {
+    const setup = createSafe(4, 0.5);
+    const state = initSafe(setup);
+    turnTo(state, setup.combo[0] + 4, 1);
+    turn(state, -4);
+    expect(comingRight(state)).toBe(true);
+    expect(confirm(setup, state)).toBe('locked');
+    const wide = initSafe(setup);
+    turnTo(wide, setup.combo[0] + CORRECTION + 3, 1);
+    turn(wide, -(CORRECTION + 3));
+    expect(confirm(setup, wide)).toBe('wrongWay');
   });
 
   it('nach dem Einrasten muss man erst wieder drehen (in die neue Richtung)', () => {

@@ -1,11 +1,13 @@
-// Razzia-Countdown (Auftrag 44, Teil 3): Anmeldung der Ansicht. Spiel in StashGame.tsx, Logik als reines Modell
-// (model.ts mit model.test.ts), Zeichnen in draw.ts, Klänge in sounds.ts. Auslöser und Folgen: police (stash.ts).
-// Vorschau: ?minispiel=stash (Lager mit Tresor), &seed=2 (gerade Seeds: Razzia am Spot, die Straße).
+// Razzia-Lauf (Auftrag 44, Teil 3; seit Auftrag 48 seitlich in 3D): Anmeldung der Ansicht. Spiel in StashGame.tsx,
+// Logik als reines Modell (model.ts mit model.test.ts), 3D-Szene in scene.ts (three.js, lädt erst beim Start), Klänge
+// in sounds.ts. draw.ts ist das alte 2D-Bild und liefert nur noch die Palette für den Container. Auslöser und Folgen:
+// police (stash.ts). Vorschau: ?minispiel=stash (Lager mit Tresor), &seed=2 (gerade Seeds: Razzia am Spot, die
+// Straße), &seed=3 bei Nacht.
 
 import { formatPercent } from '../../../../../core';
 import { STASH_MAX } from '../../../../police';
+import { lazyView } from '../../kit/lazyView';
 import { registerMinigameView } from '../../registry';
-import { StashGame } from './StashGame';
 import { registerStashSounds } from './sounds';
 import './stash.css';
 
@@ -29,16 +31,19 @@ function countPicks(picks: readonly string[]): { hidden: number; wet: number; le
 }
 
 registerMinigameView('stash', {
-  component: StashGame,
+  // three.js erst beim Start laden (eigenes Paket).
+  component: lazyView(() => import('./StashGame').then((m) => m.StashGame)),
   layout: 'stage',
   icon: 'siren',
   controls: {
-    keys: '←/→ Paket wählen, Zahlentaste: ins Versteck. Maus: ziehen.',
-    touch: 'Paket in ein Versteck ziehen oder antippen, dann das Versteck.',
+    keys: '←/→ laufen, Leertaste aufheben bzw. verstecken, 1–5 bringt etwas ins Versteck. Oder klicken.',
+    touch: 'Paket antippen: hinlaufen und aufheben. Versteck antippen: hinbringen. Oder Pfeile und Knopf.',
     help:
-      'Du trägst immer nur ein Paket, große sind langsamer. Jedes Versteck hat seinen Platz: der Schacht nur für ' +
-      'Kleines, der Tresor nur mit Ausbau. Der Gully ist schnell, aber die Ware wird nass und ist weniger wert. ' +
-      'Kurz vor Schluss steht die Streife vor dem Tor, dann sind Kofferraum und Gully zu. Was offen liegt, ist weg.',
+      'Du rennst selbst und trägst immer nur ein Paket; große sind schwer und machen dich langsam. Jedes Versteck ' +
+      'hat seinen Platz: der Schacht oben an der Leiter nur für Kleines, der Tresor nur mit Ausbau. Der Gully ist ' +
+      'schnell, aber die Ware wird nass und ist weniger wert. Kurz vor Schluss kommt die Streife: Das Tor geht ' +
+      'runter, Kofferraum und Gully sind dann weg. Wenn sie reinstürmen, ist alles weg, was offen liegt oder du ' +
+      'noch in der Hand hast.',
   },
   previewParams: (seed) =>
     seed % 2 === 0
@@ -54,6 +59,7 @@ registerMinigameView('stash', {
           money: 180,
           minutes: 180,
           tip: 'Ömer (Büdchen am Ring)',
+          phase: seed % 4 === 0 ? 'night' : 'dusk',
         }
       : {
           scope: 'veedel',
@@ -69,6 +75,7 @@ registerMinigameView('stash', {
           money: 2400,
           minutes: 180,
           tip: 'Ömer (Büdchen am Ring)',
+          phase: seed % 3 === 0 ? 'night' : seed % 3 === 1 ? 'day' : 'dusk',
         },
   previewSituation:
     'Tipp von Ömer (Büdchen am Ring): Um 14:30 kommt die Razzia in Ehrenfeld. Im Lager liegt noch Ware.',
