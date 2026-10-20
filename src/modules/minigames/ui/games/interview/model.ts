@@ -579,3 +579,26 @@ export function interviewScore(_setup: InterviewSetup, s: InterviewState): numbe
 export function interviewPicks(s: InterviewState): string[] {
   return [...new Set(discovered(s))];
 }
+
+/** Wert unter der Wertung im Ergebnis (wie MinigameStat im Rahmen). */
+export interface InterviewStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Werte fürs Ergebnis: Runden, erkannte Zeichen, Fehlalarme, wie oft die Person zugemacht hat. */
+export function interviewStats(s: InterviewState): InterviewStat[] {
+  const right = correctCount(s);
+  const hits = s.results.reduce((n, r) => n + r.hits, 0);
+  const tells = s.results.reduce((n, r) => n + r.tells, 0);
+  const alarms = s.results.reduce((n, r) => n + r.falseAlarms, 0);
+  const closed = s.results.filter((r) => r.closed).length;
+  return [
+    { label: 'Richtig gelesen', value: `${right}/${ROUNDS}`, icon: 'check', tone: right >= 2 ? 'good' : 'bad' },
+    { label: 'Zeichen erkannt', value: `${hits}/${tells}`, icon: 'search' },
+    { label: 'Fehlalarme', value: String(alarms), icon: 'alert', ...(alarms > 0 ? { tone: 'bad' as const } : {}) },
+    { label: 'Zugemacht', value: String(closed), icon: 'close', ...(closed > 0 ? { tone: 'bad' as const } : {}) },
+  ];
+}

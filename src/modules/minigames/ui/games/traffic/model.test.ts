@@ -24,6 +24,7 @@ import {
   type TrafficState,
   trafficPicks,
   trafficScore,
+  trafficStats,
 } from './model';
 import { QUESTIONS, type Story } from './questions';
 
@@ -365,5 +366,18 @@ describe('Verkehrskontrolle: Schwierigkeit (Test-Bot)', () => {
     const setup = createTraffic(4, 0.9, OPTIONS);
     const slow = play(4, 0.9, setup.slowAfter * SILENT + 1, true);
     expect(slow.state.outcome).toBe('fail');
+  });
+});
+
+describe('Verkehrskontrolle: Werte fürs Ergebnis', () => {
+  it('liefert vier Werte, Widersprüche zuerst', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    answer(setup, state, state.question?.good ?? 0);
+    const stats = trafficStats(state);
+    expect(stats.length).toBe(4);
+    expect(stats[0].value).toBe(`0/${MAX_HITS}`);
+    expect(stats[2].value).toBe('1');
   });
 });

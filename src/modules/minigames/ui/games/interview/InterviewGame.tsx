@@ -147,6 +147,8 @@ export function InterviewGame(props: MinigameViewProps) {
     heartAt: 0,
     zone: 'calm' as Zone,
     pressure: -1,
+    /** In der Pause angehaltene Stimme: geht es weiter, spricht sie den Rest. */
+    resume: false,
   });
   const keys = useGameKeys(
     KEYS,
@@ -366,9 +368,27 @@ export function InterviewGame(props: MinigameViewProps) {
     if (isDone(s)) finish();
   }, running);
 
-  // Loslassen, wenn das Spiel anhält.
+  // Pause (Tab im Hintergrund, Karte „Kurz angehalten“): loslassen, Stimme anhalten. Geht es weiter, spricht die
+  // Person den Rest der Antwort ab dem Wort, bei dem der Text steht (nichts doppelt, nichts neu gestartet).
   useEffect(() => {
-    if (!running) fx.current.held = false;
+    const f = fx.current;
+    if (!running) {
+      f.held = false;
+      if (f.speech) {
+        stopSpeech();
+        f.resume = true;
+      }
+      return;
+    }
+    if (!f.resume) return;
+    f.resume = false;
+    const s = state();
+    const round = currentRound(setup, s);
+    if (s.phase !== 'answer' || !round) return;
+    const from = typedChars(setup, s);
+    const cut = round.answer.lastIndexOf(' ', from);
+    const rest = round.answer.slice(cut < 0 ? 0 : cut + 1).trim();
+    if (rest) speak(rest);
   }, [running]);
 
   // Neue Antwort: Text von vorn (oder ganz, wenn die Phase schon weiter ist).

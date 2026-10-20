@@ -94,6 +94,14 @@ direkt ins DOM (`setAttribute`, CSS-Variable), gerendert wird höchstens alle 0,
 - CLAUDE.md / Architektur: Bewerbungsgespräch „eigene Fragen, Druck steuern“ ist erledigt (Stellschrauben oben),
   Verkehrskontrolle mit Geduld, „Du sagtest“ und `contradictionTopics`.
 
+- Pause (Rahmen-PR #136): Beim Anhalten verstummt die Stimme und „Blick halten“ lässt los. Im Gespräch spricht die
+  Person beim Weitermachen den Rest der Antwort ab dem Wort, bei dem der Text steht. In der Kontrolle wiederholt der
+  Beamte seine Frage, wenn er auf eine Antwort wartet. Zeit, Geduld und Druck stehen in der Pause still (die
+  Bildschleife steht). Getestet nur im Code, nicht mit dem Pause-Haken aus #136.
+- Ergebnis-Werte: `interviewStats(state)` (Richtig gelesen, Zeichen erkannt, Fehlalarme, Zugemacht) und
+  `trafficStats(state)` (Widersprüche, Misstrauen, Antworten, Dauer) liefern je vier Werte in der Form von
+  `MinigameStat`. Sie hängen noch nicht an `onFinish`, weil das dritte Argument erst mit #136 in main kommt.
+
 ## Offen
 
 - Bewerbungsgespräch: „Schweigen aushalten“ (am Ende einer Antwort weiter den Blick halten, dann rutscht ein Nachsatz

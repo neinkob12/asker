@@ -17,6 +17,7 @@ import {
   initInterview,
   interviewPicks,
   interviewScore,
+  interviewStats,
   isDone,
   mark,
   OFFER,
@@ -351,5 +352,15 @@ describe('Bewerbungsgespräch: Schwierigkeit (Test-Bot)', () => {
       expect(time).toBeGreaterThan(30);
       expect(time).toBeLessThan(90);
     }
+  });
+});
+
+describe('Bewerbungsgespräch: Werte fürs Ergebnis', () => {
+  it('liefert vier Werte aus dem Spiel', () => {
+    const r = play(7, 0.5, PERSON, { pressure: 'keep', reaction: 0.2 });
+    const stats = interviewStats(r.s);
+    expect(stats.length).toBe(4);
+    expect(stats[0].value).toBe(`${ROUNDS}/${ROUNDS}`);
+    expect(stats[0].tone).toBe('good');
   });
 });

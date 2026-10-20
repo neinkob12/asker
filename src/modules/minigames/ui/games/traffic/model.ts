@@ -493,3 +493,27 @@ export function trafficPicks(state: TrafficState): string[] {
   if (state.outcome === 'pass' && state.hits > 0) picks.push(`lies:${state.hits}`);
   return picks;
 }
+
+/** Wert unter der Wertung im Ergebnis (wie MinigameStat im Rahmen). */
+export interface TrafficStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Werte fürs Ergebnis: Widersprüche, Misstrauen, beantwortete Fragen, Dauer. */
+export function trafficStats(state: TrafficState): TrafficStat[] {
+  const sus = Math.round(state.suspicion * 100);
+  return [
+    {
+      label: 'Widersprüche',
+      value: `${state.hits}/${MAX_HITS}`,
+      icon: 'alert',
+      tone: state.hits === 0 ? 'good' : 'bad',
+    },
+    { label: 'Misstrauen', value: `${sus} %`, icon: 'eye', ...(sus >= 60 ? { tone: 'bad' as const } : {}) },
+    { label: 'Antworten', value: String(state.given.length), icon: 'message' },
+    { label: 'Dauer', value: `${Math.round(state.t)} s`, icon: 'clock' },
+  ];
+}

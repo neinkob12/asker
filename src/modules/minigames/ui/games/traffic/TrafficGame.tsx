@@ -388,11 +388,17 @@ export function TrafficGame(props: MinigameViewProps) {
     else if (f.endAt >= 0 && f.t >= f.endAt && isDone(s)) finish();
   }, running);
 
+  // Pause: Stimme anhalten. Geht es weiter und er wartet auf eine Antwort, wiederholt er seine Frage (sonst nichts
+  // doppelt); Zeit, Geduld und Misstrauen stehen still, weil die Bildschleife steht.
   useEffect(() => {
     draw(0);
+    const f = fx.current;
     if (!running) {
-      fx.current.speech?.();
-      fx.current.speech = null;
+      if (f.speech) {
+        f.speech();
+        f.speech = null;
+        if (game.current.phase === 'ask') f.spokenLine = -1;
+      }
     }
   }, [running]);
 
