@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createPilot, pilotInput } from './bot';
 import {
   BLOCK_FIRST,
   CAR_RADIUS,
@@ -14,9 +15,13 @@ import {
   forward,
   GRID,
   HIDEOUT_RADIUS,
+  IMPACT_MAX_DAMAGE,
   initChase,
   lineAt,
+  NEAR_MISS_SHAKE,
   onRoad,
+  PARKED_DAMAGE,
+  PARKING,
   PITCH,
   RAM_DAMAGE,
   SHAKE_NEAR,
@@ -101,6 +106,7 @@ describe('Verfolgungsjagd: Stadt aus dem Seed', () => {
 describe('Verfolgungsjagd: Fahren', () => {
   it('Vollgas beschleunigt bis zum Höchsttempo, Bremse hält an, rückwärts langsam', () => {
     const setup = createChase({ seed: 2, difficulty: 0.3 });
+    setup.shakeRate = 0; // keine Tiefgarage auf der Geraden
     const state = initChase(setup);
     noCops(state);
     noTraffic(state);
@@ -113,6 +119,7 @@ describe('Verfolgungsjagd: Fahren', () => {
 
   it('Turbo zündet einmal, geht über das Höchsttempo und lädt nach', () => {
     const setup = createChase({ seed: 2, difficulty: 0.3 });
+    setup.shakeRate = 0; // keine Tiefgarage auf der Geraden
     const state = initChase(setup);
     noCops(state);
     noTraffic(state);
@@ -351,4 +358,129 @@ describe('Verfolgungsjagd: Abhängen, Sperren, Ende', () => {
     expect(state.end).toBe('escaped');
     expect(chaseScore(state)).toBeCloseTo(1, 2);
   });
+});
+
+describe('Verfolgungsjagd: Auftrag 48 (parken, knapp vorbei, Warnung)', () => {
+  it('parkende Autos stehen am Bordstein, nie an Kreuzungen, nie vor der Blockmitte, und sind Wände', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const parked = setup.city.parked;
+    expect(parked.length).toBeGreaterThan(40);
+    for (const car of parked) {
+      const along = car.axis === 'x' ? car.x : car.z;
+      const across = car.axis === 'x' ? car.z : car.x;
+      const off = Math.abs(across - lineAt(across) * PITCH);
+      expect(off).toBeCloseTo(PARKING.offset, 5);
+      const fromNode = Math.abs(along - lineAt(along) * PITCH);
+      expect(fromNode).toBeGreaterThanOrEqual(PARKING.clearNode - PARKING.slot / 2);
+      const mid = (Math.floor(along / PITCH) + 0.5) * PITCH;
+      expect(Math.abs(along - mid)).toBeGreaterThanOrEqual(PARKING.clearMid);
+    }
+    expect(setup.city.walls.filter((w) => w.kind === 'parked').length).toBe(parked.length);
+    // Gleicher Seed, gleiche Autos; die übrige Stadt bleibt dieselbe wie ohne Parkplätze.
+    expect(createChase({ seed: 3, difficulty: 0.5 }).city.parked).toEqual(parked);
+  });
+
+  it('auf ein parkendes Auto: weniger Schaden als gegen ein Haus, Alarm', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    noTraffic(state);
+    const car = setup.city.parked[0];
+    const p = state.player;
+    // Quer von der Straßenmitte auf das Auto zu.
+    const fromX = car.axis === 'z';
+    p.x = fromX ? lineAt(car.x) * PITCH : car.x;
+    p.z = fromX ? car.z : lineAt(car.z) * PITCH;
+    p.heading = fromX ? (car.x > p.x ? Math.PI / 2 : -Math.PI / 2) : car.z > p.z ? Math.PI : 0;
+    p.course = p.heading;
+    p.v = 30;
+    let alarm = false;
+    for (let t = 0; t < 1 && !alarm; t += 1 / 60) {
+      stepChase(setup, state, GAS, 1 / 60);
+      alarm = state.events.some((e) => e.kind === 'alarm');
+    }
+    expect(alarm).toBe(true);
+    expect(p.damage).toBeGreaterThan(0);
+    expect(p.damage).toBeLessThan(IMPACT_MAX_DAMAGE * PARKED_DAMAGE + 0.01);
+  });
+
+  it('knapp am Verkehr vorbei: Abhängen steigt einmal je Wagen', () => {
+    const setup = createChase({ seed: 5, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    noTraffic(state);
+    const p = state.player;
+    p.v = 40;
+    const f = forward(p.heading);
+    // Wagen steht neben der Fahrlinie, 0,8 m Luft.
+    const side = CAR_RADIUS * 2 + 0.8;
+    state.traffic.push({
+      id: 998,
+      kind: 'car',
+      x: p.x + f.x * 20 - f.z * side,
+      z: p.z + f.z * 20 + f.x * side,
+      axis: 'z',
+      dir: -1,
+      line: lineAt(p.x),
+      v: 0,
+      cruise: 0,
+      color: 0,
+      pushed: 100,
+      braking: false,
+      heading: p.heading,
+      hitCooldown: 0,
+      missed: false,
+    });
+    const before = state.shake;
+    let misses = 0;
+    for (let t = 0; t < 1.2; t += 1 / 60) {
+      stepChase(setup, state, GAS, 1 / 60);
+      misses += state.events.filter((e) => e.kind === 'nearMiss').length;
+    }
+    expect(misses).toBe(1);
+    expect(state.shake).toBeGreaterThanOrEqual(before + NEAR_MISS_SHAKE - 0.001);
+  });
+
+  it('setzt die Streife zum Rammen an, warnt das Modell vorher (charge)', () => {
+    const setup = createChase({ seed: 5, difficulty: 0.5 });
+    const state = initChase(setup);
+    noTraffic(state);
+    const cop = state.cops[0];
+    cop.ramCooldown = 0;
+    let warnedAt = -1;
+    let rammedAt = -1;
+    run(setup, state, 6, (t) => {
+      if (warnedAt < 0 && state.events.some((e) => e.kind === 'charge')) warnedAt = t;
+      if (rammedAt < 0 && state.events.some((e) => e.kind === 'ram')) rammedAt = t;
+      return IDLE;
+    });
+    expect(warnedAt).toBeGreaterThanOrEqual(0);
+    if (rammedAt >= 0) expect(rammedAt).toBeGreaterThan(warnedAt);
+  });
+});
+
+describe('Verfolgungsjagd: Schwierigkeit mit dem Fahr-Bot', () => {
+  const play = (difficulty: number, seeds: number) => {
+    let wins = 0;
+    let time = 0;
+    for (let k = 1; k <= seeds; k++) {
+      const setup = createChase({ seed: k * 7919, difficulty });
+      const state = initChase(setup);
+      const pilot = createPilot();
+      while (!state.end) stepChase(setup, state, pilotInput(setup, state, pilot), 1 / 30);
+      if (state.end === 'escaped') wins++;
+      time += state.endAt;
+    }
+    return { wins, time: time / seeds };
+  };
+
+  it('leicht: fast immer entkommen und kurz; schwer: hart, aber machbar und länger', () => {
+    const easy = play(0.2, 12);
+    const hard = play(0.9, 12);
+    expect(easy.wins).toBeGreaterThanOrEqual(10);
+    expect(easy.time).toBeLessThan(45);
+    expect(hard.wins).toBeGreaterThanOrEqual(2);
+    expect(hard.wins).toBeLessThanOrEqual(9);
+    expect(hard.time).toBeGreaterThan(easy.time);
+  }, 60000);
 });
