@@ -18,6 +18,12 @@ export const TRAFFIC_SOUNDS = {
   rev: 'minigames.traffic.rev',
   /** Fingerknöchel an der Scheibe (Beginn, „Aussteigen!“). */
   knock: 'minigames.traffic.knock',
+  /** Widerspruch aufgeflogen: tiefer Schlag mit Nachhall (Auftrag 48). */
+  caught: 'minigames.traffic.caught',
+  /** Regen auf Dach und Scheibe als Schleife (audio.loop, Wert rain 0 bis 1). */
+  rain: 'minigames.traffic.rain',
+  /** Er tippt zweimal aufs Dach: Gute Fahrt. */
+  tap: 'minigames.traffic.tap',
 } as const;
 
 function noise(
@@ -131,6 +137,63 @@ export function registerTrafficSounds(): void {
         noise(ctx, out, t + dt, 0.06, 'bandpass', 900, 0.8, 2);
         tone(ctx, out, t + dt, 240, 160, 0.06, 'sine', 0.2);
       }
+    },
+  });
+  audio.registerSound(s.caught, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Schlag: tiefer Sinus, der fällt, dazu ein dumpfer Rauschstoß und ein dissonanter Ton darüber.
+      tone(ctx, out, t, 110, 38, 0.7, 'sine', 0.6);
+      tone(ctx, out, t, 233, 180, 0.5, 'triangle', 0.08);
+      tone(ctx, out, t + 0.01, 311, 240, 0.45, 'triangle', 0.06);
+      noise(ctx, out, t, 0.25, 'lowpass', 400, 0.5);
+    },
+  });
+  audio.registerSound(s.tap, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      for (const dt of [0, 0.22]) {
+        noise(ctx, out, t + dt, 0.05, 'bandpass', 600, 0.6, 1.5);
+        tone(ctx, out, t + dt, 160, 90, 0.08, 'sine', 0.25);
+      }
+    },
+  });
+  audio.registerSound(s.rain, {
+    kind: 'loop',
+    start: (ctx, out, t) => {
+      // Rauschen in einer Schleife (zwei Sekunden), Bandpass wie Regen aufs Blech, dazu tiefes Rumpeln.
+      const length = ctx.sampleRate * 2;
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 2400;
+      band.Q.value = 0.5;
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowpass';
+      low.frequency.value = 260;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.0001;
+      gain.gain.setTargetAtTime(0.16, t, 0.4);
+      const rumble = ctx.createGain();
+      rumble.gain.value = 0.25;
+      src.connect(band).connect(gain);
+      src.connect(low).connect(rumble).connect(gain);
+      gain.connect(out);
+      src.start(t);
+      return {
+        set: (params, time) => {
+          gain.gain.setTargetAtTime(0.16 * Math.max(0, Math.min(1, params.rain ?? 1)), time, 0.3);
+        },
+        stop: (time) => {
+          gain.gain.setTargetAtTime(0.0001, time, 0.08);
+          src.stop(time + 0.4);
+        },
+      };
     },
   });
 }

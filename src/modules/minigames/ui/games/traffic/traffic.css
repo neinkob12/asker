@@ -1,6 +1,7 @@
-/* Verkehrskontrolle (Auftrag 47, Auftrag 48): 3D-Blick aus dem Auto im Canvas, darüber Blaulicht im Innenraum und die
-   Blendung der Taschenlampe (--traffic-blue, --traffic-red, --traffic-glare setzt die Bildschleife), HUD, Fakten mit
-   deinen Aussagen, Sprechblase mit Geduld, Antworten und Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
+/* Verkehrskontrolle (Auftrag 47, Auftrag 48): 3D-Blick aus dem Auto im Canvas (Blaulicht, Gesicht und Licht sind in der
+   Szene), darüber die Blendung der Taschenlampe an der Linse (--traffic-glare, --traffic-glare-x/-y setzt die
+   Bildschleife), HUD, Fakten mit deinen Aussagen, Sprechblase mit deiner letzten Antwort und der Geduld, Antworten und
+   Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
 
 .traffic {
   position: absolute;
@@ -21,99 +22,25 @@
   touch-action: none;
 }
 
-/* Gesicht des Beamten über dem Kopf in der Szene (Lage setzt die Bildschleife). */
-.traffic__face {
-  position: absolute;
-  z-index: 2;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  will-change: transform;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
-  transition: opacity var(--duration) var(--ease-out);
-}
-.traffic-officer {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-.traffic-officer .ui-face,
-.traffic-officer__cap {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-/* Unten (Schultern im Porträt) weich ausblenden: Dort übernimmt der Körper in der Szene. */
-.traffic-officer {
-  mask-image: linear-gradient(180deg, black 66%, transparent 86%);
-  -webkit-mask-image: linear-gradient(180deg, black 66%, transparent 86%);
-}
-/* Blaulicht und Lampe auf dem Gesicht: im Takt, nur auf dem Porträt (Maske wie oben). */
-.traffic__face-light {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  mix-blend-mode: soft-light;
-  background:
-    radial-gradient(
-      ellipse 70% 60% at 20% 40%,
-      color-mix(in srgb, var(--cat-law-a) calc(var(--traffic-blue, 0) * 70%), transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 70% 60% at 20% 40%,
-      color-mix(in srgb, var(--cat-danger-a) calc(var(--traffic-red, 0) * 45%), transparent),
-      transparent 70%
-    );
-  mask-image: linear-gradient(180deg, black 66%, transparent 86%);
-  -webkit-mask-image: linear-gradient(180deg, black 66%, transparent 86%);
-}
-.traffic--day .traffic__face-light {
-  opacity: 0.45;
-}
-
-/* Blaulicht wandert durch den Innenraum: Schein von hinten links, abwechselnd blau und rot. */
-.traffic__cabin {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(
-      ellipse 55% 80% at 0% 55%,
-      color-mix(in srgb, var(--cat-law-a) calc(var(--traffic-blue, 0) * 32%), transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 50% 70% at 8% 30%,
-      color-mix(in srgb, var(--cat-danger-a) calc(var(--traffic-red, 0) * 20%), transparent),
-      transparent 70%
-    );
-}
-.traffic--day .traffic__cabin {
-  opacity: 0.4;
-}
-.traffic.is-reduced .traffic__cabin {
-  opacity: 0.25;
-}
-/* Taschenlampe ins Gesicht: weißer Schein von der Lampe aus, Ränder brennen aus. */
+/* Taschenlampe ins Gesicht: weißer Schein von der Linse aus (Lage setzt die Szene), Ränder brennen aus. */
 .traffic__glare {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   mix-blend-mode: screen;
-  background: radial-gradient(
-    circle at 38% 46%,
-    color-mix(in srgb, var(--hud-ink) 95%, transparent) 0%,
-    color-mix(in srgb, var(--hud-ink) 40%, transparent) 18%,
-    transparent 55%
-  );
-  opacity: calc(var(--traffic-glare, 0) * 0.85);
+  background:
+    radial-gradient(
+      circle at var(--traffic-glare-x, 40%) var(--traffic-glare-y, 45%),
+      color-mix(in srgb, var(--hud-ink) 95%, transparent) 0%,
+      color-mix(in srgb, var(--hud-ink) 45%, transparent) 14%,
+      transparent 48%
+    ),
+    radial-gradient(ellipse at 50% 50%, transparent 30%, color-mix(in srgb, var(--hud-ink) 30%, transparent));
+  opacity: calc(var(--traffic-glare, 0) * 0.9);
+}
+.traffic.is-reduced .traffic__glare {
+  opacity: calc(var(--traffic-glare, 0) * 0.5);
 }
 
 /* Roter Blitz bei einem Widerspruch, Blaulicht-Wash am Ende. */
@@ -122,8 +49,8 @@
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: radial-gradient(ellipse at 30% 50%, transparent 40%, var(--cat-danger));
-  opacity: calc(var(--traffic-flash, 0) * 0.45);
+  background: radial-gradient(ellipse at 40% 45%, transparent 35%, var(--cat-danger));
+  opacity: calc(var(--traffic-flash, 0) * 0.55);
 }
 .traffic.is-fail .traffic__wash {
   background: radial-gradient(ellipse at 50% 60%, transparent 30%, color-mix(in srgb, var(--cat-law) 55%, transparent));
@@ -137,6 +64,38 @@
 }
 
 /* ---------------------------------------------------------------- HUD */
+.traffic__sus {
+  position: relative;
+  display: inline-flex;
+}
+/* Misstrauen springt: die Zahl ploppt über dem Balken auf und steigt weg. */
+.traffic__jump {
+  position: absolute;
+  right: 0;
+  top: -6px;
+  font: 800 18px var(--font-hud-display);
+  color: var(--cat-danger);
+  text-shadow: 0 2px 8px color-mix(in srgb, var(--cat-danger) 60%, transparent);
+  pointer-events: none;
+  animation: traffic-jump 1.4s var(--ease-out) both;
+}
+@keyframes traffic-jump {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.35);
+  }
+  30% {
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(1);
+  }
+}
 .traffic__hud .mg-hud-meter {
   min-width: 130px;
 }
@@ -276,6 +235,50 @@
 .traffic__speech-card.is-pause {
   border-color: var(--cat-danger);
 }
+/* Deine letzte Antwort: aufgeflogen wird sie rot durchgestrichen und wackelt. */
+.traffic__said {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 0 0 2px;
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  animation: traffic-pop var(--duration) var(--ease-out);
+}
+.traffic__said-who {
+  flex: none;
+  font-family: var(--font-hud-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-3, var(--hud-ink-2));
+}
+.traffic__said.is-hit .traffic__said-text {
+  color: var(--cat-danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  animation: traffic-strike 0.6s var(--ease-out) both;
+}
+@keyframes traffic-strike {
+  0% {
+    text-decoration-color: transparent;
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+    text-decoration-color: var(--cat-danger);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
 /* Geduld: läuft ab, solange er auf deine Antwort wartet. */
 .traffic__patience {
   display: block;
@@ -297,6 +300,12 @@
 }
 .traffic__patience span[data-low="critical"] {
   background: var(--cat-danger);
+  animation: traffic-blink 0.5s steps(2) infinite;
+}
+@keyframes traffic-blink {
+  50% {
+    opacity: 0.45;
+  }
 }
 .traffic__patience.is-idle {
   opacity: 0.3;
@@ -350,12 +359,16 @@
 .traffic__answer span {
   white-space: normal;
 }
-.traffic__waiting {
-  margin: 0;
-  padding: var(--space-2) 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--hud-ink-2);
+/* Antworten kommen nacheinander herein (die Frage ist schon gestellt, die Zeit läuft). */
+.traffic__answer {
+  animation: traffic-in 0.32s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes traffic-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 .traffic kbd {
   flex: none;
@@ -429,6 +442,10 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .traffic__fact.is-caught,
+  .traffic__said.is-hit .traffic__said-text,
+  .traffic__answer,
+  .traffic__jump,
+  .traffic__patience span[data-low="critical"],
   .traffic__line,
   .traffic__message,
   .traffic.is-fail .traffic__wash {
