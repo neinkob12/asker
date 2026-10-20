@@ -45,6 +45,8 @@ export interface StashParams {
   minutes: number;
   /** Wer den Tipp gibt. */
   tip: string;
+  /** Tageszeit, zu der sie kommen ('day' | 'dusk' | 'night' …, clock.dayPhase), für Licht und Himmel im Minispiel. */
+  phase?: string;
 }
 
 function round2(value: number): number {
@@ -153,6 +155,7 @@ export function stashParams(
     money: money >= 50 ? money : 0,
     minutes: Math.max(0, Math.round(raid.at - state.time)),
     tip: tipper(state, cityId),
+    phase: clock.dayPhase(raid.at),
   };
 }
 

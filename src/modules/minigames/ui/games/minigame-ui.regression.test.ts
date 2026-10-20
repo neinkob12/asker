@@ -25,19 +25,6 @@ import {
   mark,
   newlyDiscovered,
 } from './interview/model';
-import {
-  canHide,
-  createStash,
-  getHide,
-  initStash,
-  isLoose,
-  type StashInput,
-  type StashSetup,
-  type StashState,
-  savedValue,
-  send,
-  step,
-} from './stash/model';
 
 describe('Tastendruck während einer Trefferpause im Straßenkampf', () => {
   const DT = 1 / 60;
@@ -181,63 +168,7 @@ describe('Tastendruck während einer Trefferpause im Straßenkampf', () => {
   });
 });
 
-describe('Razzia-Countdown, Ware unterwegs, wenn die Straße zu ist', () => {
-  const LAGER: StashInput = {
-    setting: 'warehouse',
-    lots: [
-      { productId: 'weed', name: 'Gras', amount: 1200, unit: 'g', grams: 1200, value: 13200 },
-      { productId: 'kush', name: 'OG Kush', amount: 300, unit: 'g', grams: 300, value: 5400 },
-    ],
-    money: 2400,
-    warehouse: { vault: 0, cover: 0 },
-  };
-
-  function settle(setup: StashSetup, state: StashState): string[] {
-    const types: string[] = [];
-    for (let i = 0; i < 200 && state.carry && !state.done; i++)
-      types.push(...step(setup, state, 0.05).map((e) => e.type));
-    return types;
-  }
-
-  for (const hideId of ['trunk', 'drain'] as const) {
-    it(`was kurz vor dem Schließen zum ${hideId === 'trunk' ? 'Kofferraum' : 'Gully'} geht, bleibt liegen`, () => {
-      const setup = createStash(5, 1, LAGER);
-      const state = initStash(setup);
-      const closeAt = setup.closeAt as number;
-      const pkg = setup.packages.find((p) => canHide(setup, state, p.id, hideId) === 'ok');
-      if (!pkg) throw new Error('kein passendes Paket');
-      state.time = closeAt - 0.1;
-      expect(send(setup, state, pkg.id, hideId)).toBe('ok');
-      const types = settle(setup, state);
-      expect(types).toContain('closed');
-      expect(types).not.toContain('stowed');
-      expect(state.items[pkg.id].hide).toBeNull();
-      expect(isLoose(state, pkg.id)).toBe(true);
-      expect(savedValue(setup, state)).toBe(0);
-      // Es liegt nicht im Versteck, du hast die Hände frei, und das Versteck draußen bleibt zu.
-      expect(state.carry).toBeNull();
-      expect(canHide(setup, state, pkg.id, hideId)).toBe('closed');
-    });
-  }
-
-  it('was beim Schließen schon im Kofferraum verstaut wird, ist drin', () => {
-    const setup = createStash(5, 1, LAGER);
-    const state = initStash(setup);
-    const trunk = getHide(setup, 'trunk');
-    if (!trunk) throw new Error('kein Kofferraum');
-    const pkg = setup.packages.find((p) => canHide(setup, state, p.id, 'trunk') === 'ok');
-    if (!pkg) throw new Error('kein passendes Paket');
-    // Liegt schon am Kofferraum: kommt sofort an und wird verstaut, während die Straße zugeht.
-    state.items[pkg.id].x = trunk.x + trunk.w / 2;
-    state.items[pkg.id].y = trunk.y + trunk.h / 2;
-    state.time = (setup.closeAt as number) - 0.1;
-    expect(send(setup, state, pkg.id, 'trunk')).toBe('ok');
-    const types = settle(setup, state);
-    expect(types).toContain('closed');
-    expect(types).toContain('stowed');
-    expect(state.items[pkg.id].hide).toBe('trunk');
-  });
-});
+// Razzia-Countdown: Ware unterwegs, wenn das Tor zugeht, steht seit Auftrag 48 in stash/model.test.ts.
 
 describe('Lügendetektor, Akte ohne Doppel', () => {
   function play(person: InterviewPerson, seed: number): InterviewState {
