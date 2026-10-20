@@ -15,6 +15,7 @@ import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
+import { Hands } from './Hands';
 import {
   activeCue,
   advance,
@@ -312,9 +313,10 @@ export function InterviewGame(props: MinigameViewProps) {
     }
     if (fill) fill.setAttribute('stroke-dasharray', `${(p * ARC).toFixed(2)} 100`);
     if (knob) knob.setAttribute('transform', `rotate(${(p * 270).toFixed(1)} 50 50)`);
-    if (root.current && Math.abs(p - fx.current.pressure) > 0.004) {
+    // In Stufen (2 %): Die Variable erbt der ganze Baum, jedes Setzen kostet Stil und Malen.
+    if (root.current && Math.abs(p - fx.current.pressure) >= 0.02) {
       fx.current.pressure = p;
-      root.current.style.setProperty('--iv-p', p.toFixed(3));
+      root.current.style.setProperty('--iv-p', p.toFixed(2));
     }
   };
 
@@ -518,6 +520,8 @@ export function InterviewGame(props: MinigameViewProps) {
         )}
       </div>
 
+      <Hands look={look} pose={listening ? hud.zone : 'idle'} cue={cue && !cue.faint ? cue.kind : null} />
+
       <div class="iv-table" aria-hidden="true">
         <svg class="iv-table__ashtray" viewBox="0 0 60 24" aria-hidden="true" focusable="false">
           <ellipse class="iv-table__tray" cx="30" cy="14" rx="26" ry="9" />
@@ -698,19 +702,23 @@ export function InterviewGame(props: MinigameViewProps) {
                   : 'Richtig: Die Antwort war ehrlich.'
                 : last.closed
                   ? `Zu viel Druck: ${firstName} hat dichtgemacht.`
-                  : last.falseAlarms > 1
-                    ? 'Zu oft daneben getippt: Das waren nur Gesten.'
-                    : last.tells > 0
-                      ? `Verpasst: ${last.hits} von ${last.tells} Zeichen erwischt.`
-                      : 'Daneben.'}
+                  : last.soft && last.reveals === 'none'
+                    ? `Zu locker gefragt: ${firstName} war kaum angespannt.`
+                    : last.falseAlarms > 1
+                      ? 'Zu oft daneben getippt: Das waren nur Gesten.'
+                      : last.tells > 0
+                        ? `Verpasst: ${last.hits} von ${last.tells} Zeichen erwischt.`
+                        : 'Daneben.'}
             </p>
             <p class="iv-verdict__detail">
               {last.reveals !== 'none' && !last.correct
                 ? `Die Antwort verriet: ${traitName(last.reveals, person.name)}. ${lastKnown ? 'Steht schon in der Akte.' : 'Nicht in der Akte.'}`
                 : last.reveals === 'none'
-                  ? excluded.length > 0
-                    ? `Nichts davon: ${excluded.map((t) => traitName(t, person.name)).join(', ')}.`
-                    : 'Nichts Neues.'
+                  ? last.soft
+                    ? 'Ohne Druck sagt eine ruhige Antwort nichts. Halt den Blick, bis der Ring in der Zone ist.'
+                    : excluded.length > 0
+                      ? `Nichts davon: ${excluded.map((t) => traitName(t, person.name)).join(', ')}.`
+                      : 'Nichts Neues.'
                   : lastKnown
                     ? 'Steht schon in der Akte.'
                     : 'Kommt in die Akte.'}

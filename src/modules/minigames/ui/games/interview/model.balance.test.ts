@@ -1,6 +1,6 @@
 // Bewerbungsgespräch (Auftrag 48, Teil E): Schwierigkeit als Simulation. Ein Mensch schaut nur ab und zu auf den Ring
-// (`glance`) und hält den Druck grob in der Zone, braucht `reaction` Sekunden, bis er ein Zeichen antippt, und hält
-// manche Geste für ein Zeichen (`confuse`). Geschafft ab Score 0,5 (zwei von drei Runden richtig).
+// (`glance`) und hält den Druck grob in der Zone, braucht etwa `reaction` Sekunden (mal 0,75 bis 1,35), bis er ein
+// Zeichen antippt, und hält manche Geste für ein Zeichen (`confuse`). Geschafft ab Score 0,5 (zwei von drei Runden richtig).
 // BALANCE_REPORT=1 npx vitest run src/modules/minigames/ui/games/interview/model.balance.test.ts druckt die Tabelle.
 
 import { describe, expect, it } from 'vitest';
@@ -29,7 +29,7 @@ interface Player {
 }
 
 const PLAYERS: Record<'good' | 'weak', Player> = {
-  good: { reaction: 0.45, glance: 0.3, aim: 0.25, confuse: 0.1 },
+  good: { reaction: 0.5, glance: 0.3, aim: 0.25, confuse: 0.1 },
   weak: { reaction: 0.7, glance: 0.6, aim: 0.6, confuse: 0.25 },
 };
 
@@ -70,10 +70,13 @@ function playInterview(seed: number, d: number, player: Player | null) {
     const key = `${s.round}:${active.index}`;
     let note = seen.get(key);
     if (!note) {
-      note = { at: total, tap: active.cue.tell ? true : rng() < player.confuse };
+      note = {
+        at: total + player.reaction * (0.75 + 0.6 * rng()),
+        tap: active.cue.tell ? true : rng() < player.confuse,
+      };
       seen.set(key, note);
     }
-    if (note.tap && total - note.at >= player.reaction) {
+    if (note.tap && total >= note.at) {
       mark(setup, s);
       note.tap = false;
     }
@@ -102,6 +105,16 @@ describe('Bewerbungsgespräch: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, weak: weak.rate, none: none.rate, seconds: Math.round(good.time) };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
+    // Gemessen (Auftrag 48, Teil E): gut 100 / 98 / 68 %, schwach 95 / 58 / 30 %, ohne Eingabe nie, 38 bis 43 s.
+    const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);
+    expect(easy.good).toBeGreaterThanOrEqual(0.95);
+    expect(mid.good).toBeGreaterThanOrEqual(0.85);
+    expect(hard.good).toBeGreaterThanOrEqual(0.55);
+    expect(hard.good).toBeLessThanOrEqual(0.85);
+    expect(mid.weak).toBeGreaterThanOrEqual(0.3);
+    expect(mid.weak).toBeLessThanOrEqual(0.65);
+    expect(hard.weak).toBeLessThan(mid.weak);
+    for (const r of rows) expect(r.seconds).toBeGreaterThanOrEqual(30);
   }, 30000);
 });

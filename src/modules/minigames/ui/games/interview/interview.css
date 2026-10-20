@@ -123,8 +123,8 @@
   clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%);
   pointer-events: none;
   /* Mehr Druck: Die Lampe brennt heller auf das Gesicht. */
-  opacity: calc(0.75 + var(--iv-p, 0) * 0.9);
-  filter: brightness(calc(1 + var(--iv-p, 0) * 0.8));
+  opacity: calc(0.75 + var(--iv-p, 0) * 1.2);
+  will-change: opacity;
 }
 
 /* Ränder werden mit dem Druck dunkler, der Raum zieht sich um die Person zusammen. */
@@ -138,6 +138,7 @@
     color-mix(in srgb, var(--hud-glass-solid) 88%, transparent) 100%
   );
   opacity: calc(var(--iv-p, 0) * 1.1 - 0.05);
+  will-change: opacity;
 }
 .iv.is-zone-over .iv-vignette {
   background: radial-gradient(
@@ -306,7 +307,21 @@
   cursor: pointer;
   touch-action: none;
   -webkit-touch-callout: none;
-  filter: drop-shadow(0 18px 30px color-mix(in srgb, var(--hud-glass-solid) 80%, transparent));
+  /* Sie sitzt hinter dem Tisch: Was unter der Tischkante läge, ist abgeschnitten (die Arme liegen darauf). */
+  clip-path: inset(-30% -30% var(--iv-under, 14%) -30%);
+}
+/* Schatten der Person als eigene Fläche (ein Filter auf dem atmenden Porträt kostete jedes Bild). */
+.iv-seat::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -6%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--hud-glass-solid) 75%, transparent), transparent);
+  z-index: -1;
+  pointer-events: none;
 }
 .iv-person:disabled {
   cursor: default;
@@ -396,8 +411,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--hud-ink) 30%, transparent);
-  filter: blur(4px);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--hud-ink) 34%, transparent), transparent);
   animation: iv-smoke 3.6s ease-out infinite;
 }
 .iv-table__smoke span:nth-child(2) {
@@ -414,6 +428,91 @@
   100% {
     transform: translate(8px, -70px) scale(2.4);
     opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- Hände auf dem Tisch (Hands.tsx) */
+.iv-hands {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--iv-table) - var(--iv-face) * 0.035);
+  width: calc(var(--iv-face) * 1.6);
+  transform: translateX(-50%);
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+.iv-arm {
+  transform-box: view-box;
+  transform-origin: 36px 4px;
+  transform: rotate(9deg);
+  transition:
+    transform 0.35s cubic-bezier(0.3, 1.4, 0.5, 1),
+    opacity 0.15s;
+}
+.iv-hand {
+  transform-box: view-box;
+  transform-origin: 66px 28px;
+  transition: transform 0.3s;
+}
+/* Angespannt: Hände näher beisammen, fester. */
+.iv-hands[data-pose="tense"] .iv-arm {
+  transform: rotate(1deg);
+}
+.iv-hands[data-pose="tense"] .iv-hand {
+  transform: scale(0.94, 0.9);
+}
+/* Macht zu: Arme verschränkt (schieben übereinander, rechter oben). */
+.iv-hands[data-pose="over"] .iv-arm {
+  transform: translate(12px, -6px) rotate(-12deg);
+}
+.iv-hands[data-pose="over"] .iv-arm.is-r {
+  transform: translate(10px, -3px) rotate(-10deg);
+}
+/* Gesten: Schulterzucken (Hände kurz hoch und offen), Vorbeugen (Arme nach vorn), Nicken (nichts). */
+.iv-hands[data-cue="shrug"] .iv-arm {
+  transform: translate(-3px, -7px) rotate(16deg);
+}
+.iv-hands[data-cue="shrug"] .iv-hand {
+  transform: rotate(-24deg) scale(1.05);
+}
+.iv-hands[data-cue="lean"] .iv-arm {
+  transform: translate(0, 6px) rotate(4deg) scale(1.08);
+}
+/* Kratzen am Hals: die rechte Hand ist oben am Hals; Schluck: die linke hebt den Becher. */
+.iv-hands[data-cue="scratch"] .iv-arm.is-r,
+.iv-hands[data-cue="sip"] .iv-arm.is-l,
+.iv-hands[data-cue="sip"] .iv-cup {
+  opacity: 0;
+}
+.iv-cup {
+  transition: opacity 0.15s;
+}
+/* Zappeln: die Finger der rechten Hand trommeln. */
+.iv-finger {
+  transform-box: fill-box;
+  transform-origin: 0 50%;
+}
+.iv:not(.is-reduced) .iv-hands[data-cue="fidget"] .iv-arm.is-r .iv-finger {
+  animation: iv-drum 0.24s ease-in-out infinite alternate;
+}
+.iv:not(.is-reduced) .iv-hands[data-cue="fidget"] .iv-arm.is-r .iv-finger.is-2 {
+  animation-delay: 0.08s;
+}
+.iv:not(.is-reduced) .iv-hands[data-cue="fidget"] .iv-arm.is-r .iv-finger.is-3 {
+  animation-delay: 0.16s;
+}
+.iv:not(.is-reduced) .iv-hands[data-cue="fidget"] .iv-arm.is-r .iv-hand {
+  animation: iv-fidget 0.24s ease-in-out infinite alternate;
+}
+@keyframes iv-drum {
+  to {
+    transform: scaleX(1.35) translateY(-0.6px);
+  }
+}
+@keyframes iv-fidget {
+  to {
+    transform: translate(0.8px, -1.2px) rotate(-3deg);
   }
 }
 
@@ -1098,6 +1197,7 @@
   }
   .iv-seat {
     top: calc(var(--iv-table) - var(--iv-face));
+    --iv-under: 0%;
   }
   /* Neben der Schulter statt darunter (darunter liegt die Akte). */
   .iv-zone {
@@ -1142,7 +1242,7 @@
   .iv-file {
     left: var(--space-4);
     right: var(--space-4);
-    top: calc(var(--iv-table) + var(--space-2));
+    top: calc(var(--iv-table) + var(--iv-face) * 0.36);
     max-width: none;
     padding: 6px var(--space-2);
     gap: var(--space-2);
@@ -1172,7 +1272,7 @@
   .iv-talk {
     left: var(--space-4);
     right: var(--space-4);
-    top: calc(var(--iv-table) + 48px);
+    top: calc(var(--iv-table) + var(--iv-face) * 0.36 + 44px);
     width: auto;
     gap: var(--space-2);
   }
@@ -1243,5 +1343,9 @@
   .iv-tell__cup,
   .iv-person .ui-face {
     animation: none;
+  }
+  .iv-arm,
+  .iv-hand {
+    transition: none;
   }
 }

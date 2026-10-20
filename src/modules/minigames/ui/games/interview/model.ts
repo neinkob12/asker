@@ -26,9 +26,11 @@ export const OFFER = 3;
 export const CHOOSE_TIME = 9;
 /** So viele Zeichen pro Antwort, harmlose Gesten dazu (leicht bis schwer). */
 export const TELLS = { min: 2, max: 3 };
-export const DECOYS = { easy: 1, hard: 3 };
+export const DECOYS = { easy: 1, hard: 4 };
 /** Ein Zeichen steht so lange, wenn die Person angespannt ist (Sekunden, leicht bis schwer). */
-export const TELL_WINDOW = { easy: 1.3, hard: 0.68 };
+export const TELL_WINDOW = { easy: 1.3, hard: 0.55 };
+/** Wie schnell das Fenster mit der Schwierigkeit schrumpft (Exponent: unter 1 wird es schon in der Mitte knapp). */
+export const TELL_CURVE = 0.5;
 /** Ist sie locker (Druck unter der Zone), huscht es nur so kurz vorbei (Anteil am Fenster, leicht bis schwer). */
 export const CALM_LEN = { easy: 0.5, hard: 0.3 };
 /** Gesten dauern so lange. */
@@ -42,6 +44,11 @@ export const ASK_TIME = 1.3;
 export const VERDICT_TIME = 1.8;
 /** Anteil der Zeichen, die du erwischen musst (leicht bis schwer, aufgerundet). */
 export const HITS_NEEDED = { easy: 0.5, hard: 0.75 };
+/**
+ * Zu wenig Druck verrät nichts (Auftrag 48, Teil E): Eine unauffällige Antwort zählt nur als gelesen, wenn die Person
+ * so lange angespannt war (Anteil der Antwort). Wer nie den Blick hält, weiß hinterher nichts.
+ */
+export const TENSE_NEEDED = 0.35;
 /** So viele Fehlalarme in einer Runde darf man sich leisten. */
 export const FALSE_ALARMS_ALLOWED = 1;
 
@@ -148,6 +155,8 @@ export interface RoundResult {
   falseAlarms: number;
   /** Die Person hat abgebrochen (zu viel Druck). */
   closed: boolean;
+  /** Du hast zu wenig Druck gemacht: Die Antwort sagt nichts (nur bei unauffälliger Antwort von Belang). */
+  soft: boolean;
   /** Richtig beurteilt: Zeichen erkannt (bzw. bei unauffälliger Antwort nicht getippt). */
   correct: boolean;
   /** Was in die Akte kommt (nur bei correct und einer Eigenschaft). */
@@ -174,6 +183,8 @@ export interface InterviewState {
   over: number;
   /** Zone beim letzten Schritt (für die Signale beim Wechsel). */
   zone: Zone;
+  /** Diese Runde: so lange war die Person angespannt (Sekunden in der Zone während der Antwort). */
+  tense: number;
   results: RoundResult[];
 }
 
@@ -247,7 +258,7 @@ function cuesFor(
   reveals: TraitId | 'none',
   difficulty: number,
 ): { cues: Cue[]; duration: number } {
-  const tellLen = lerp(TELL_WINDOW.easy, TELL_WINDOW.hard, difficulty);
+  const tellLen = lerp(TELL_WINDOW.easy, TELL_WINDOW.hard, difficulty ** TELL_CURVE);
   const tells = reveals === 'none' ? 0 : TELLS.min + Math.round(rng() * (TELLS.max - TELLS.min));
   const decoys = Math.round(lerp(DECOYS.easy, DECOYS.hard, difficulty)) + (reveals === 'none' ? 1 : 0);
   const kinds: Cue[] = [];
@@ -334,6 +345,7 @@ export function initInterview(setup: InterviewSetup): InterviewState {
     pressing: false,
     over: 0,
     zone: 'calm',
+    tense: 0,
     results: [],
   };
   s.offer = offerFor(setup, s);
@@ -423,9 +435,10 @@ function judge(setup: InterviewSetup, round: Round, s: InterviewState, closed: b
   const tells = round.cues.filter((c) => c.tell).length;
   const hits = s.caught.filter((i) => round.cues[i]?.tell).length;
   const falseAlarms = s.falseAlarms;
+  const soft = s.tense < round.duration * TENSE_NEEDED - 1e-9;
   const correct =
     round.reveals === 'none'
-      ? falseAlarms <= FALSE_ALARMS_ALLOWED
+      ? falseAlarms <= FALSE_ALARMS_ALLOWED && !soft
       : hits >= neededHits(setup, tells) && falseAlarms <= FALSE_ALARMS_ALLOWED;
   return {
     questionId: round.questionId,
@@ -434,6 +447,7 @@ function judge(setup: InterviewSetup, round: Round, s: InterviewState, closed: b
     tells,
     falseAlarms,
     closed,
+    soft,
     correct,
     exposed: correct && round.reveals !== 'none' ? round.reveals : null,
   };
@@ -486,6 +500,7 @@ export function advance(setup: InterviewSetup, s: InterviewState, dt: number): S
       s.caught = [];
       s.falseAlarms = 0;
       s.over = 0;
+      s.tense = 0;
       s.lens = round.cues.map(() => 0);
       out.push('answering');
     }
@@ -499,6 +514,7 @@ export function advance(setup: InterviewSetup, s: InterviewState, dt: number): S
       const len = s.lens[i] || cue.len;
       if (cue.tell && !s.caught.includes(i) && was < cue.at + len && s.t >= cue.at + len) out.push('miss');
     }
+    if (zone === 'tense') s.tense += dt;
     // Zu viel Druck: Sie macht zu.
     s.over = zone === 'over' ? s.over + dt : Math.max(0, s.over - dt * 2);
     if (s.over >= setup.closeAfter) {
@@ -556,7 +572,7 @@ export function discovered(s: InterviewState): TraitId[] {
 export function ruledOutBy(setup: InterviewSetup, s: InterviewState, index: number): TraitId[] {
   const r = s.results[index];
   const round = s.rounds[index];
-  if (!r || !round || r.reveals !== 'none') return [];
+  if (!r || !round || r.reveals !== 'none' || r.soft) return [];
   const shown = new Set(s.rounds.slice(0, index).flatMap((x) => (x.reveals === 'none' ? [] : [x.reveals])));
   const probes = questionById(round.questionId)?.probes ?? [];
   return probes.filter((t) => !setup.person.known.includes(t) && !shown.has(t));

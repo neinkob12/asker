@@ -279,6 +279,17 @@ describe('Bewerbungsgespräch: Zeichen und Urteil', () => {
     expect(mark(setup, { ...s, phase: 'verdict' })).toBeNull();
   });
 
+  it('zu wenig Druck: Eine unauffällige Antwort sagt dann nichts', () => {
+    const setup = createInterview(2, 0.5, { traits: ['ambitious'] });
+    const s = initInterview(setup);
+    const neutral = s.offer.findIndex((id) => !questionById(id)?.probes.includes('ambitious'));
+    choose(setup, s, neutral);
+    step(setup, s, 30);
+    expect(s.results[0].soft).toBe(true);
+    expect(s.results[0].correct).toBe(false);
+    expect(ruledOutBy(setup, s, 0)).toEqual([]);
+  });
+
   it('zu viele Fehlalarme verderben die Runde', () => {
     const setup = createInterview(4, 0.5, PERSON);
     const s = initInterview(setup);
@@ -294,7 +305,7 @@ describe('Bewerbungsgespräch: Zeichen und Urteil', () => {
     const s = initInterview(setup);
     const neutral = s.offer.findIndex((id) => !questionById(id)?.probes.includes('ambitious'));
     choose(setup, s, neutral);
-    step(setup, s, 30);
+    step(setup, s, 30, () => keepPressure(setup, s));
     expect(s.results[0].reveals).toBe('none');
     expect(s.results[0].correct).toBe(true);
     const out = ruledOutBy(setup, s, 0);
@@ -338,10 +349,10 @@ describe('Bewerbungsgespräch: Schwierigkeit (Test-Bot)', () => {
     expect(average(0.9, slow).score).toBeLessThan(0.6);
   });
 
-  it('ohne Druck klappt es leicht noch, schwer kaum; Dauerdruck lässt die Leute zumachen', () => {
+  it('ohne Druck verrät niemand etwas; Dauerdruck lässt die Leute zumachen', () => {
     const lazy: Bot = { pressure: 'none', reaction: 0.4 };
     const skilled: Bot = { pressure: 'keep', reaction: 0.4 };
-    expect(average(0.2, lazy).score).toBeGreaterThanOrEqual(0.6);
+    expect(average(0.2, lazy).score).toBeLessThan(average(0.2, skilled).score - 0.3);
     expect(average(0.9, lazy).score).toBeLessThan(average(0.9, skilled).score - 0.2);
     expect(average(0.6, { pressure: 'max', reaction: 0.3 }).score).toBeLessThan(average(0.6, skilled).score - 0.2);
   });
