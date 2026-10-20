@@ -10,6 +10,7 @@ import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { productColor, readGoodsPalette } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
 import { HitStop } from '../../kit/indoor3d';
+import { PauseButton } from '../../kit/pause';
 import { phaseOf } from '../../kit/scene3d';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useStage3d } from '../../kit/stage3d';
@@ -636,6 +637,7 @@ export function StashGame(props: MinigameViewProps) {
       <div class="stash__vignette" aria-hidden="true" />
       {hud.done && fx.current.breachT >= 0 && <div class="stash__flash" aria-hidden="true" />}
       <HudBar class="stash__hud">
+        <PauseButton />
         <HudTimer seconds={hud.left} total={setup.duration} urgentAt={KNOCK_FROM} />
         <span class="stash__count" role="img" aria-label={`${hud.hidden} von ${total} Paketen versteckt`}>
           <Icon name="package" />

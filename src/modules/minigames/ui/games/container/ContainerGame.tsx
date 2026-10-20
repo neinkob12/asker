@@ -8,6 +8,7 @@ import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { productColor } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer, type MeterColor } from '../../kit/hud';
 import { readPalette } from '../../kit/palette';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
@@ -787,6 +788,7 @@ export function ContainerGame(props: MinigameViewProps) {
         onWheel={onWheel}
       />
       <HudBar class="pack__hud">
+        <PauseButton />
         <HudTimer seconds={hud.left} total={setup.duration} urgentAt={10} />
         <span class="pack__count" role="img" aria-label={`${hud.goods} von ${goodsTotal} Ware-Blöcken verstaut`}>
           <Icon name="package" />
