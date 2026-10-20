@@ -1,10 +1,11 @@
-// Bude durchsuchen (Auftrag 44, Teil 6): Anmeldung der Ansicht. Spiel in SearchGame.tsx, Logik als reines Modell
-// (model.ts mit model.test.ts), Lage in layout.ts, Zeichnen in draw.ts, Klänge in sounds.ts. Auslöser und Folgen:
-// gangs (search.ts). Vorschau: ?minispiel=search (seed 1 bei Nacht, &seed=2 bei Tag, &seed=3 in der Dämmerung).
+// Bude durchsuchen (Auftrag 44, Teil 6; seit Auftrag 48 Ego-Blick mit Taschenlampe in 3D): Anmeldung der Ansicht.
+// Spiel in SearchGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Räume und Dinge in room3d.ts, Szene
+// in scene.ts (three.js, lädt erst beim Start), Klänge in sounds.ts. Auslöser und Folgen: gangs (search.ts).
+// Vorschau: ?minispiel=search (seed 1 bei Nacht, &seed=2 bei Tag, &seed=3 in der Dämmerung).
 
 import { formatEuro } from '../../../../../core';
+import { lazyView } from '../../kit/lazyView';
 import { registerMinigameView } from '../../registry';
-import { SearchGame } from './SearchGame';
 import { registerSearchSounds } from './sounds';
 import './search.css';
 
@@ -25,16 +26,18 @@ function countOf(picks: readonly string[], prefix: string): number {
 const PREVIEW_PHASES = ['night', 'day', 'dusk'];
 
 registerMinigameView('search', {
-  component: SearchGame,
+  // three.js erst beim Start laden (eigenes Paket).
+  component: lazyView(() => import('./SearchGame').then((m) => m.SearchGame)),
   layout: 'stage',
   icon: 'search',
   controls: {
-    keys: 'Pfeile wählen, Leertaste durchsuchen. Oder mit der Maus klicken.',
-    touch: 'Antippen, was du durchsuchen willst. Ziehen führt die Taschenlampe.',
+    keys: 'Maus leuchtet, Klick durchsucht. Pfeile wählen, Leertaste sucht, 1–5 oder Q/E wechseln den Raum.',
+    touch: 'Finger ziehen führt die Taschenlampe, Antippen durchsucht. Unten den Raum wechseln.',
     help:
-      'In drei bis fünf Verstecken liegt Geld. Was verrutscht aussieht oder Kratzer hat, lohnt sich oft, aber nicht ' +
-      'immer. Geschirr, Mikrowelle und Co. können klirren: Ist der Lärm-Balken voll, ruft der Nachbar die Polizei, ' +
-      'dann bleiben nur noch Sekunden. Nach 30 Sekunden steht der Schuldner wieder vor der Tür.',
+      'Du stehst mit der Taschenlampe in der Bude, fünf Räume. In drei bis fünf Verstecken liegt Geld. Leuchte ' +
+      'alles ab: Was schief sitzt oder Kratzer am Boden davor hat, lohnt sich oft, aber nicht immer. Geschirr, ' +
+      'Mikrowelle und Co. können klirren: Ist der Lärm-Balken voll, ruft der Nachbar die Polizei, dann bleiben nur ' +
+      'noch Sekunden. Nach 30 Sekunden dreht sich der Schlüssel im Schloss.',
   },
   previewParams: (seed) => ({
     max: 1560,

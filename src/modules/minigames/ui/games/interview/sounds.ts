@@ -1,5 +1,6 @@
 // Klänge für das Bewerbungsgespräch (Synth, angemeldet wie in kit/sounds.ts): Stift kratzt in der Akte, Karte wird
-// über den Tisch geschoben, Uhr tickt in den letzten Sekunden. Optik und Ton dürfen Math.random nutzen (keine
+// über den Tisch geschoben, Uhr tickt in den letzten Sekunden, Herzschlag unter Druck, Stuhl knarrt, wenn die Person
+// zumacht. Optik und Ton dürfen Math.random nutzen (keine
 // Simulation).
 
 import { audio } from '../../../../../ui';
@@ -11,7 +12,25 @@ export const INTERVIEW_SOUNDS = {
   slide: 'minigames.interview.slide',
   /** Wanduhr tickt (letzte Sekunden). */
   tick: 'minigames.interview.tick',
+  /** Herzschlag (doppelter dumpfer Schlag), solange die Person angespannt ist. */
+  heart: 'minigames.interview.heart',
+  /** Stuhl rückt nach hinten: Die Person macht zu. */
+  chair: 'minigames.interview.chair',
 } as const;
+
+function thump(ctx: AudioContext, out: AudioNode, t: number, gain: number): void {
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(70, t);
+  osc.frequency.exponentialRampToValueAtTime(38, t + 0.14);
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  osc.connect(env).connect(out);
+  osc.start(t);
+  osc.stop(t + 0.2);
+}
 
 function scratch(ctx: AudioContext, out: AudioNode, t: number, duration: number, freq: number, gain: number): void {
   const length = Math.max(1, Math.round(ctx.sampleRate * duration));
@@ -47,6 +66,21 @@ export function registerInterviewSounds(): void {
   audio.registerSound(INTERVIEW_SOUNDS.slide, {
     kind: 'synth',
     play: (ctx, out, t) => scratch(ctx, out, t, 0.22, 900, 0.4),
+  });
+  audio.registerSound(INTERVIEW_SOUNDS.heart, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      thump(ctx, out, t, 0.55);
+      thump(ctx, out, t + 0.16, 0.35);
+    },
+  });
+  audio.registerSound(INTERVIEW_SOUNDS.chair, {
+    kind: 'synth',
+    play: (ctx, out, t) => {
+      // Knarzen: zwei tiefe, raue Striche.
+      scratch(ctx, out, t, 0.28, 260, 0.6);
+      scratch(ctx, out, t + 0.22, 0.2, 340, 0.45);
+    },
   });
   audio.registerSound(INTERVIEW_SOUNDS.tick, {
     kind: 'synth',

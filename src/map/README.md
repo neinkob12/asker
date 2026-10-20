@@ -255,6 +255,10 @@ nur läuft, solange jemand zuhört, das Spiel nicht pausiert ist und der Tab sic
   einer laufenden Lieferung; keine Long Task über 50 ms bei Tempo 4× mit zehn offenen Aufträgen.
 - Verkehr und Figuren zusammen höchstens 2 ms pro Bild (Handy 4 ms), Verkehr allein 1,5 ms bei 40 Fahrzeugen.
 - Jede Quelle (`setData`) höchstens 20-mal pro Sekunde und nur bei Änderung.
+- Fahrzeuge (`createVehicle`) zeichnet die Flotte nur im Bildausschnitt mit halbem Rand je Seite; außerhalb gibt es
+  keine Geometrie und kein Etikett, neu ausgewählt wird nach `moveend`, beim Zoomen und spätestens jede Sekunde, solange
+  etwas außerhalb fährt. Module zeigen nur, was in der aktiven Stadt fährt, und bündeln Gleiches (Lieferungen als
+  Konvoi je Lieferant und Ziel, `suppliers/ui/convoys.ts`) statt ein Fahrzeug pro Auftrag.
 - Layer bekommen `update()` nur, wenn sich Spielzeit, ein Befehl, das offene Panel, Handy, Kamera, Overlay oder die
   Verkehrs-Einstellung geändert haben (`GameMap.update`, `invalidate`). Marker-DOM nur bei neuem Text (`setText`).
 - In einem Bild (`onMapFrame`, `render`) nichts lesen, was ein Layout erzwingt: kein `clientWidth`,

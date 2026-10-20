@@ -41,7 +41,8 @@ export const YAW_FULL_AT = 16;
 /** Abhängen: Abstand der nächsten Streife, ab dem der Balken fällt bzw. steigt (Meter). */
 export const SHAKE_NEAR = 34;
 export const SHAKE_FAR = 66;
-export const SHAKE_RATE = 0.15;
+/** Füllrate des Balkens (pro Sekunde, leicht bis schwer): Schwerer dauert das Abhängen länger. */
+export const SHAKE_RATE = { easy: 0.13, hard: 0.075 };
 export const SHAKE_LEAD = 120;
 export const SHAKE_DRAIN = 0.16;
 /** Tiefgarage: so weit vor dir (Meter) und so nah muss man ran; verschwindet, fällt der Balken darunter. */
@@ -56,11 +57,14 @@ export const CATCH_SECONDS = 3;
 /** Ware aus dem Fenster: so lange zögern die Streifen (Sekunden). */
 export const DUMP_HESITATE = 3.5;
 /** Schaden: Rammen, Sperre; Aufprall nach Geschwindigkeit (ab IMPACT_FREE m/s, voll bei IMPACT_FULL). */
-export const RAM_DAMAGE = 0.07;
+export const RAM_DAMAGE = { easy: 0.045, hard: 0.07 };
 export const BLOCK_DAMAGE = 0.3;
 export const IMPACT_FREE = 5;
 export const IMPACT_FULL = 42;
 export const IMPACT_MAX_DAMAGE = 0.4;
+/** Unfälle (Wände, Sperren, Verkehr) kosten so viel des Schadens oben (leicht bis schwer): Fahrfehler verzeiht die
+ * leichte Stufe eher, die Streifen bleiben gleich gefährlich. */
+export const CRASH_FACTOR = { easy: 0.45, hard: 0.8 };
 /** Halber Durchmesser der Wagen für Zusammenstöße (Meter). */
 export const CAR_RADIUS = 1.35;
 export const TRUCK_RADIUS = 2.4;
@@ -71,6 +75,31 @@ export const BLOCK_FIRST = 14;
 export const BLOCK_EVERY = { easy: 26, hard: 17 };
 export const BLOCK_LIFETIME = 25;
 export const BLOCK_AHEAD = { min: 70, max: 160 };
+
+/** Parkende Autos am Bordstein: Anteil der Straßenseiten mit Parkplätzen, Belegung, Abstand zur Straßenmitte (Meter). */
+export const PARKING = { sides: 0.45, fill: 0.6, slot: 6.2, offset: 5.25, clearNode: 13, clearMid: 9 };
+/** Laternen und Bäume am Gehweg, Ampeln an den Ecken (Abstand zur Straßenmitte bzw. Kreuzung, Meter). */
+export const POSTS = {
+  lamp: ROAD_W / 2 + 0.7,
+  tree: ROAD_W / 2 + 1.5,
+  signal: ROAD_W / 2 + 2,
+  treeChance: 0.5,
+  radius: 0.32,
+};
+/** Zusammenstoß mit einem parkenden Auto: so viel des Aufprall-Schadens (Blech gibt nach). */
+export const PARKED_DAMAGE = 0.55;
+/** Gegen Laterne, Baum, Ampel: so viel des Aufprall-Schadens. */
+export const POST_DAMAGE = 0.6;
+/** Knapp vorbei: ab diesem Tempo (m/s), so dicht am Verkehr (Meter Luft zwischen den Wagen), so viel Abhängen. */
+export const NEAR_MISS_SPEED = 24;
+export const NEAR_MISS_GAP = 1.5;
+export const NEAR_MISS_SHAKE = 0.045;
+/** Knapp vorbei lädt auch den Turbo (Anteil der vollen Ladung; nicht, solange er brennt). */
+export const NEAR_MISS_TURBO = 0.2;
+/** Durch die Lücke einer Sperre: so viel Abhängen. */
+export const BLOCK_PASS_SHAKE = 0.1;
+/** Streife setzt zum Rammen an (Warnung in der Oberfläche): so nah dahinter (Meter). */
+export const CHARGE_GAP = 16;
 
 const ACCEL = 10;
 const TURBO_ACCEL = 16;
@@ -84,7 +113,7 @@ const STEER_SMOOTH = 9;
 /** Rutschen nach Zusammenstößen: so lange kein Gas (Sekunden). */
 const SKID_SECONDS = 0.6;
 /** Streifen: Tempo relativ zum Höchsttempo (leicht bis schwer), Gummiband weit hinten, Rammen. */
-const COP_SPEED = { easy: 0.86, hard: 1.0 };
+const COP_SPEED = { easy: 0.86, hard: 0.95 };
 const COP_RUBBER_GAP = 160;
 const COP_RUBBER = 1.2;
 const COP_YAW = 2.4;
@@ -125,8 +154,12 @@ export interface City {
   blocks: CityBlock[];
   /** Spalte des Flusses (−1 ohne). Die Straßen quer dazu sind Brücken. */
   riverCol: number;
-  /** Harte Rechtecke (Gebäude, Wasser, Rand) für Zusammenstöße. */
+  /** Harte Rechtecke (Gebäude, Wasser, Rand, parkende Autos) für Zusammenstöße. */
   walls: Wall[];
+  /** Parkende Autos am Bordstein. */
+  parked: ParkedCar[];
+  /** Laternen, Bäume, Ampeln. */
+  posts: Post[];
 }
 
 export interface Wall {
@@ -134,7 +167,29 @@ export interface Wall {
   z0: number;
   x1: number;
   z1: number;
-  kind: 'building' | 'water' | 'edge' | 'block';
+  kind: 'building' | 'water' | 'edge' | 'block' | 'parked' | 'post';
+}
+
+/** Laterne, Straßenbaum oder Ampel (Optik und kleine Wand). */
+export interface Post {
+  x: number;
+  z: number;
+  kind: 'lamp' | 'tree' | 'signal';
+  /** Laterne und Ampel: Achse der Straße, Seite (−1/1) zur Straßenmitte hin. */
+  axis: 'x' | 'z';
+  side: -1 | 1;
+}
+
+/** Ein parkendes Auto am Bordstein (Optik und Wand). */
+export interface ParkedCar {
+  x: number;
+  z: number;
+  /** Achse der Straße (der Wagen steht längs). */
+  axis: 'x' | 'z';
+  /** Fahrtrichtung der Spur, an der er steht (Nase zeigt dorthin). */
+  dir: 1 | -1;
+  kind: 'car' | 'van';
+  color: number;
 }
 
 export type TrafficKind = 'car' | 'van' | 'truck';
@@ -159,6 +214,8 @@ export interface Vehicle {
   heading: number;
   /** Nach einem Zusammenstoß mit dir: so lange kein weiterer Schaden (Sekunden). */
   hitCooldown: number;
+  /** Schon knapp an ihm vorbei (zählt nur einmal je Wagen und Begegnung). */
+  missed?: boolean;
 }
 
 export type CopState = 'chase' | 'hesitate' | 'wrecked';
@@ -184,6 +241,8 @@ export interface Cop {
   node: { i: number; j: number };
   /** Direkt hinter dir (Sichtkontakt auf derselben Straße). */
   pursuit: boolean;
+  /** Setzt gerade zum Rammen an (dicht hinter dir, Rammen bereit): Warnung in der Oberfläche. */
+  charging: boolean;
 }
 
 export interface Roadblock {
@@ -240,6 +299,9 @@ export type ChaseEventKind =
   | 'cop'
   | 'copCrash'
   | 'near'
+  | 'nearMiss'
+  | 'alarm'
+  | 'charge'
   | 'clear'
   | 'hideout'
   | 'hideoutLost'
@@ -283,6 +345,10 @@ export interface ChaseSetup {
   copFactor: number;
   traffic: number;
   blockEvery: number;
+  /** Füllrate des Balkens „Abhängen“ (pro Sekunde). */
+  shakeRate: number;
+  /** Anteil des Schadens bei Unfällen (CRASH_FACTOR). */
+  crashFactor: number;
   /** Start: mitten auf einer Straße nach Norden. */
   start: { x: number; z: number; heading: number };
 }
@@ -316,6 +382,8 @@ export interface ChaseState {
   endAt: number;
   /** Ereignisse dieses Schritts (für Ton und Effekte), werden bei jedem Schritt geleert. */
   events: ChaseEvent[];
+  /** Zähler für die Ergebnis-Werte (chaseStats). */
+  tally: { nearMisses: number; blocksPassed: number; copsWrecked: number };
   nextId: number;
   random: () => number;
 }
@@ -443,7 +511,115 @@ export function buildCity(random: () => number): City {
   walls.push({ x0: -1000, z0: WORLD + m, x1: WORLD + 1000, z1: WORLD + 1000, kind: 'edge' });
   walls.push({ x0: -1000, z0: -1000, x1: -m, z1: WORLD + 1000, kind: 'edge' });
   walls.push({ x0: WORLD + m, z0: -1000, x1: WORLD + 1000, z1: WORLD + 1000, kind: 'edge' });
-  return { blocks, riverCol, walls };
+  return { blocks, riverCol, walls, parked: [], posts: [] };
+}
+
+/**
+ * Laternen (alle 36 m, beide Seiten), Straßenbäume (zwischen den Laternen, nie vor der Blockmitte) und Ampeln (zwei
+ * Ecken je Kreuzung), fest aus einem eigenen Zufall. Jede ist eine kleine Wand: Wer über den Gehweg abkürzt, trifft sie.
+ */
+export function addPosts(city: City, random: () => number): void {
+  const kindAt = (i: number, j: number): BlockKind | null =>
+    i < 0 || j < 0 || i >= GRID || j >= GRID ? null : city.blocks[j * GRID + i].kind;
+  const add = (post: Post) => {
+    city.posts.push(post);
+    const r = POSTS.radius;
+    city.walls.push({ x0: post.x - r, x1: post.x + r, z0: post.z - r, z1: post.z + r, kind: 'post' });
+  };
+  for (const axis of ['x', 'z'] as const) {
+    for (let line = 0; line <= GRID; line++) {
+      if (axis === 'z' && (line === city.riverCol || line === city.riverCol + 1)) continue;
+      for (let seg = 0; seg < GRID; seg++) {
+        for (const side of [-1, 1] as const) {
+          const kind = axis === 'x' ? kindAt(seg, side > 0 ? line : line - 1) : kindAt(side > 0 ? line : line - 1, seg);
+          const bridge = axis === 'x' && seg === city.riverCol;
+          if (!kind && !bridge) continue;
+          const at = (along: number, off: number, k: Post['kind']) =>
+            add({
+              x: axis === 'x' ? along : line * PITCH + side * off,
+              z: axis === 'x' ? line * PITCH + side * off : along,
+              kind: k,
+              axis,
+              side,
+            });
+          for (const k of [18, 54]) at(seg * PITCH + k, POSTS.lamp, 'lamp');
+          if (bridge || kind === 'water') continue;
+          for (const k of [24, 48]) if (random() < POSTS.treeChance) at(seg * PITCH + k, POSTS.tree, 'tree');
+        }
+      }
+    }
+  }
+  for (let i = 1; i < GRID; i++) {
+    for (let j = 1; j < GRID; j++) {
+      if (i === city.riverCol || i === city.riverCol + 1) continue;
+      const flip = random() < 0.5 ? 1 : -1;
+      for (const s of [1, -1] as const) {
+        add({
+          x: i * PITCH + s * POSTS.signal,
+          z: j * PITCH + s * flip * POSTS.signal,
+          kind: 'signal',
+          axis: 'x',
+          side: s,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Parkende Autos am Bordstein, fest aus einem eigenen Zufall (verschiebt die übrige Stadt nicht): auf manchen
+ * Straßenseiten eine Reihe, nie an Kreuzungen, nie vor der Mitte eines Blocks (da kann die Tiefgarage liegen), nie
+ * auf Brücken oder am Wasser. Jeder Wagen ist eine Wand, etwas schmaler als er aussieht (Streifen auf ihrer Spur
+ * streifen ihn nicht).
+ */
+export function addParking(city: City, random: () => number): void {
+  const kindAt = (i: number, j: number): BlockKind | null =>
+    i < 0 || j < 0 || i >= GRID || j >= GRID ? null : city.blocks[j * GRID + i].kind;
+  for (const axis of ['x', 'z'] as const) {
+    for (let line = 0; line <= GRID; line++) {
+      for (let seg = 0; seg < GRID; seg++) {
+        for (const side of [-1, 1] as const) {
+          // Block an dieser Straßenseite: axis x (z = line·PITCH) Süden = Block (seg, line), Norden (seg, line − 1);
+          // axis z (x = line·PITCH) Osten = Block (line, seg), Westen (line − 1, seg).
+          const kind = axis === 'x' ? kindAt(seg, side > 0 ? line : line - 1) : kindAt(side > 0 ? line : line - 1, seg);
+          if (!kind || kind === 'water') continue;
+          if (axis === 'x' && seg === city.riverCol) continue; // Brücke
+          const r1 = random();
+          const r2 = random();
+          if (r1 >= PARKING.sides) continue;
+          const dir: 1 | -1 = axis === 'x' ? side : side > 0 ? -1 : 1;
+          const n = Math.floor((PITCH - 2 * PARKING.clearNode) / PARKING.slot);
+          const start = seg * PITCH + (PITCH - n * PARKING.slot) / 2 + PARKING.slot / 2;
+          for (let k = 0; k < n; k++) {
+            const along = start + k * PARKING.slot;
+            const fill = random();
+            const look = random();
+            if (Math.abs(along - (seg + 0.5) * PITCH) < PARKING.clearMid) continue;
+            if (fill >= PARKING.fill * (0.6 + r2 * 0.6)) continue;
+            const kindCar: ParkedCar['kind'] = look < 0.18 ? 'van' : 'car';
+            const across = line * PITCH + side * PARKING.offset;
+            const car: ParkedCar = {
+              x: axis === 'x' ? along : across,
+              z: axis === 'x' ? across : along,
+              axis,
+              dir,
+              kind: kindCar,
+              color: Math.floor(look * 1000) % 8,
+            };
+            city.parked.push(car);
+            const half = (kindCar === 'van' ? 5.2 : 4.4) / 2 - 0.25;
+            const lo = across - 0.75;
+            const hi = across + 0.75;
+            city.walls.push(
+              axis === 'x'
+                ? { x0: along - half, x1: along + half, z0: lo, z1: hi, kind: 'parked' }
+                : { x0: lo, x1: hi, z0: along - half, z1: along + half, kind: 'parked' },
+            );
+          }
+        }
+      }
+    }
+  }
 }
 
 /** Feste Inhalte aus Seed und Schwierigkeit. */
@@ -456,6 +632,8 @@ export function createChase(options: ChaseOptions): ChaseSetup {
   let col = 2 + Math.floor(random() * (GRID - 3));
   if (col === city.riverCol || col === city.riverCol + 1) col = col > 2 ? col - 2 : col + 2;
   const row = GRID - 3;
+  addParking(city, createRng(options.seed ^ 0x2545f491));
+  addPosts(city, createRng(options.seed ^ 0x68e31da4));
   return {
     seed: options.seed,
     difficulty,
@@ -464,6 +642,8 @@ export function createChase(options: ChaseOptions): ChaseSetup {
     copFactor: lerp(COP_SPEED.easy, COP_SPEED.hard, difficulty),
     traffic: Math.round(lerp(TRAFFIC.min, TRAFFIC.max, difficulty) * (options.mobile ? 0.75 : 1)),
     blockEvery: lerp(BLOCK_EVERY.easy, BLOCK_EVERY.hard, difficulty),
+    shakeRate: lerp(SHAKE_RATE.easy, SHAKE_RATE.hard, difficulty),
+    crashFactor: lerp(CRASH_FACTOR.easy, CRASH_FACTOR.hard, difficulty),
     start: { x: col * PITCH + LANE_OFF, z: row * PITCH + PITCH / 2, heading: 0 },
   };
 }
@@ -491,6 +671,7 @@ function makeCop(setup: ChaseSetup, state: ChaseState, behind: number, spawnAt: 
     dir: -1,
     node: { i: lineAt(s.x), j: lineAt(s.z - f.z * behind) - 1 },
     pursuit: true,
+    charging: false,
   };
 }
 
@@ -528,6 +709,7 @@ export function initChase(setup: ChaseSetup): ChaseState {
     end: null,
     endAt: -1,
     events: [],
+    tally: { nearMisses: 0, blocksPassed: 0, copsWrecked: 0 },
     nextId: 1,
     random,
   };
@@ -612,6 +794,7 @@ function spawnTraffic(setup: ChaseSetup, state: ChaseState, initial: boolean): v
     braking: false,
     heading: headingOf(axis, dir),
     hitCooldown: 0,
+    missed: false,
   };
   placeOnLane(v, axis, dir, line, along);
   state.traffic.push(v);
@@ -789,13 +972,20 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
         p.crashCooldown = 0.5;
         const power = clamp((into - IMPACT_FREE) / (IMPACT_FULL - IMPACT_FREE), 0, 1);
         const blockWall = w.kind === 'block';
-        p.damage = clamp(p.damage + (blockWall ? BLOCK_DAMAGE : power * IMPACT_MAX_DAMAGE), 0, 1);
+        const soft = w.kind === 'parked' ? PARKED_DAMAGE : w.kind === 'post' ? POST_DAMAGE : 1;
+        p.damage = clamp(
+          p.damage + (blockWall ? BLOCK_DAMAGE : power * IMPACT_MAX_DAMAGE * soft) * setup.crashFactor,
+          0,
+          1,
+        );
         state.events.push({
           kind: w.kind === 'water' ? 'splash' : blockWall ? 'blockHit' : 'crash',
           power,
           x: p.x,
           z: p.z,
         });
+        if (w.kind === 'parked')
+          state.events.push({ kind: 'alarm', power, x: (w.x0 + w.x1) / 2, z: (w.z0 + w.z1) / 2 });
         if (blockWall) for (const b of state.blocks) if (b.walls.includes(w)) b.hit = true;
         // Abprallen: Fahrtrichtung weg von der Wand, Tempo runter.
         p.v = Math.max(0, p.v * (1 - 0.55 * power) - into * 0.3);
@@ -817,7 +1007,7 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
   }
 }
 
-function collideTraffic(state: ChaseState): void {
+function collideTraffic(setup: ChaseSetup, state: ChaseState): void {
   const p = state.player;
   const c = forward(p.course);
   for (const v of state.traffic) {
@@ -825,7 +1015,25 @@ function collideTraffic(state: ChaseState): void {
     const dx = v.x - p.x;
     const dz = v.z - p.z;
     const d = Math.hypot(dx, dz);
-    if (d >= r || d < 1e-6) continue;
+    if (d >= r) {
+      // Knapp vorbei: schnell und dicht, ohne Berührung (einmal je Begegnung; weiter weg zählt wieder neu).
+      if (d > r + 6) v.missed = false;
+      else if (!v.missed && d < r + NEAR_MISS_GAP && p.v > NEAR_MISS_SPEED && v.hitCooldown <= 0) {
+        v.missed = true;
+        state.shake = clamp(state.shake + NEAR_MISS_SHAKE, 0, 1);
+        if (!p.turboOn) p.turbo = clamp(p.turbo + NEAR_MISS_TURBO, 0, 1);
+        state.tally.nearMisses++;
+        state.events.push({
+          kind: 'nearMiss',
+          power: clamp((r + NEAR_MISS_GAP - d) / NEAR_MISS_GAP, 0.2, 1),
+          x: v.x,
+          z: v.z,
+        });
+      }
+      continue;
+    }
+    if (d < 1e-6) continue;
+    v.missed = true;
     const nx = dx / d;
     const nz = dz / d;
     const into = (c.x * nx + c.z * nz) * p.v - v.v * (Math.sin(v.heading) * nx - Math.cos(v.heading) * nz);
@@ -847,7 +1055,7 @@ function collideTraffic(state: ChaseState): void {
     }
     v.hitCooldown = 0.8;
     if (frontal) {
-      p.damage = clamp(p.damage + 0.03 + power * 0.22, 0, 1);
+      p.damage = clamp(p.damage + (0.03 + power * 0.22) * setup.crashFactor, 0, 1);
       p.v = Math.max(0, p.v * 0.4);
       p.skid = Math.max(p.skid, SKID_SECONDS * 0.6);
       state.events.push({ kind: 'crash', power, x: v.x, z: v.z });
@@ -912,6 +1120,7 @@ function seesPlayer(cop: Cop, px: number, pz: number): boolean {
 function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): void {
   const p = state.player;
   if (cop.state === 'wrecked') {
+    cop.charging = false;
     cop.wreckT -= dt;
     cop.v = Math.max(0, cop.v - 20 * dt);
     if (cop.wreckT <= 0) {
@@ -982,12 +1191,16 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
     cop.z += hit.nz * hit.depth;
     cop.v *= 0.8 ** (dt * 60); // je Sekunde gleich viel, bei 60 Hz wie bisher 0,8 je Bild
   }
+  // Ansetzen zum Rammen (Warnung): dicht hinter dir, Rammen bereit.
+  const charging = sees && cop.state === 'chase' && cop.ramCooldown <= 0 && gap < CHARGE_GAP && !state.end;
+  if (charging && !cop.charging) state.events.push({ kind: 'charge', power: 1, x: cop.x, z: cop.z });
+  cop.charging = charging;
   // Rammen: dicht hinter dir mit Tempo.
   if (sees && cop.state === 'chase' && cop.ramCooldown <= 0 && gap < CAR_RADIUS * 2 + 0.6 && !state.end) {
     const rel = cop.v - Math.abs(p.v);
     if (rel > 1 || gap < CAR_RADIUS * 2) {
       cop.ramCooldown = RAM_COOLDOWN;
-      p.damage = clamp(p.damage + RAM_DAMAGE, 0, 1);
+      p.damage = clamp(p.damage + lerp(RAM_DAMAGE.easy, RAM_DAMAGE.hard, setup.difficulty), 0, 1);
       const side = state.random() < 0.5 ? -1 : 1;
       // Anschieben: Tempo rauf, Kurs seitlich verdreht.
       p.v += RAM_PUSH;
@@ -1003,6 +1216,7 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
       if (cop.v > 24 && state.random() < 0.35) {
         cop.state = 'wrecked';
         cop.wreckT = COP_WRECK_SECONDS;
+        state.tally.copsWrecked++;
         v.pushed = 3;
         state.events.push({ kind: 'copCrash', power: 1, x: cop.x, z: cop.z });
       } else {
@@ -1125,7 +1339,11 @@ function stepBlocks(setup: ChaseSetup, state: ChaseState): void {
       const line = b.axis === 'x' ? c.x : c.z;
       if ((along - line) * b.dir > 2 && dist(p.x, p.z, c.x, c.z) < PITCH / 2) {
         b.passed = true;
-        if (!b.hit) state.events.push({ kind: 'blockPassed', power: 1, x: c.x, z: c.z });
+        if (!b.hit) {
+          state.shake = clamp(state.shake + BLOCK_PASS_SHAKE, 0, 1);
+          state.tally.blocksPassed++;
+          state.events.push({ kind: 'blockPassed', power: 1, x: c.x, z: c.z });
+        }
       }
     }
     if (state.t > b.until) state.blocks.splice(k, 1);
@@ -1172,7 +1390,7 @@ function stepShake(setup: ChaseSetup, state: ChaseState, dt: number): void {
   const p = state.player;
   const nearest = state.nearest;
   let rate = 0;
-  if (nearest > SHAKE_FAR) rate = SHAKE_RATE * clamp(0.35 + (nearest - SHAKE_FAR) / SHAKE_LEAD, 0.35, 1.2);
+  if (nearest > SHAKE_FAR) rate = setup.shakeRate * clamp(0.35 + (nearest - SHAKE_FAR) / SHAKE_LEAD, 0.35, 1.2);
   else if (nearest < SHAKE_NEAR) rate = -SHAKE_DRAIN;
   state.shake = clamp(state.shake + rate * dt, 0, 1);
   if (nearest < CATCH_GAP && Math.abs(p.v) < CATCH_SPEED) state.contact += dt;
@@ -1223,7 +1441,7 @@ export function stepChase(setup: ChaseSetup, state: ChaseState, input: ChaseInpu
   collideWalls(setup, state, dt);
   stepTraffic(setup, state, dt);
   stepBlocks(setup, state);
-  if (!state.end) collideTraffic(state);
+  if (!state.end) collideTraffic(setup, state);
   stepCops(setup, state, dt);
   if (state.end) return;
   stepShake(setup, state, dt);
@@ -1264,6 +1482,34 @@ export function chasePicks(state: ChaseState): string[] {
   if (state.end === 'escaped') picks.push('hideout');
   if (state.end === 'time') picks.push('time');
   return picks;
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface ChaseStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Ergebnis-Werte: Zeit, Schaden, Knapp vorbei (mit Sperren), zerlegte Streifen. */
+export function chaseStats(state: ChaseState): ChaseStat[] {
+  const t = Math.min(chaseTime(state), TIME_LIMIT);
+  const damage = Math.round(state.player.damage * 100);
+  const stats: ChaseStat[] = [
+    { label: 'Zeit', value: `${Math.round(t)} s`, icon: 'timer' },
+    {
+      label: 'Schaden',
+      value: `${damage} %`,
+      icon: 'car',
+      tone: damage >= 60 ? 'bad' : damage <= 20 ? 'good' : undefined,
+    },
+  ];
+  const risky = state.tally.nearMisses + state.tally.blocksPassed;
+  if (risky > 0) stats.push({ label: 'Knapp vorbei', value: String(risky), icon: 'bolt', tone: 'good' });
+  if (state.tally.copsWrecked > 0)
+    stats.push({ label: 'Streifen zerlegt', value: String(state.tally.copsWrecked), icon: 'siren', tone: 'good' });
+  return stats;
 }
 
 /** Für Screenshots und Playwright: sofort beenden. */

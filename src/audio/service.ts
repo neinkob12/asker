@@ -75,17 +75,22 @@ export interface AudioServiceOptions {
 }
 
 /** Lautstärke der Busse aus den Einstellungen und der Lage: Im Gespräch bleibt nur die Stimme übrig. */
+/** Musik während eines Minispiels (setFocus): Anteil der normalen Lautstärke. */
+export const FOCUS_MUSIC = 0.25;
+
 export function busLevels(
   s: AudioSettings,
-  state: { speaking: boolean; inCall: boolean },
+  state: { speaking: boolean; inCall: boolean; focus?: boolean },
 ): { master: number; music: number; sfx: number; ambience: number; voice: number } {
   const call = state.inCall ? 0 : 1;
   return {
     master: s.muted ? 0 : s.master,
-    // Spricht jemand (Profil "Stimme anhören"), tritt die Musik zurück; im Anruf ist sie ganz aus.
-    music: s.music * 2.2 * (state.speaking ? 0.3 : 1) * call,
+    // Spricht jemand (Profil "Stimme anhören"), tritt die Musik zurück, ebenso im Minispiel (das hat eigene Klänge);
+    // im Anruf ist sie ganz aus.
+    music: s.music * 2.2 * (state.speaking ? 0.3 : 1) * (state.focus ? FOCUS_MUSIC : 1) * call,
     sfx: s.sfx * call,
-    ambience: s.sfx * call,
+    // Die Geräusche der Stadt gehören zur Karte: im Minispiel aus.
+    ambience: s.sfx * call * (state.focus ? 0 : 1),
     voice: Math.max(0.6, s.sfx),
   };
 }
@@ -144,6 +149,8 @@ export class AudioService {
   private piperEngine: PiperEngine | null | undefined = undefined;
   /** Läuft gerade ein Gespräch? Dann sind Musik, Effekte und Geräusche aus. */
   private callActive = false;
+  /** Minispiel offen (setFocus). */
+  private focusActive = false;
   /**
    * Zählt hoch, wenn ein Gespräch endet (stopSpeaking, setCall(false)). Vorrechnen wartet auf das Modell und merkt
    * sich die Zahl: Ist sie danach eine andere, ist der Anruf vorbei und die Zeilen bleiben ungerechnet.
@@ -532,7 +539,11 @@ export class AudioService {
   private applyVolumes(immediate: boolean): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || !this.musicBus || !this.sfxBus || !this.ambienceBus) return;
-    const levels = busLevels(this.settings, { speaking: this.speaking > 0, inCall: this.callActive });
+    const levels = busLevels(this.settings, {
+      speaking: this.speaking > 0,
+      inCall: this.callActive,
+      focus: this.focusActive,
+    });
     const set = (param: AudioParam, value: number) => {
       if (immediate) param.setValueAtTime(value, ctx.currentTime);
       else param.setTargetAtTime(value, ctx.currentTime, 0.08);
@@ -558,6 +569,18 @@ export class AudioService {
 
   get inCall(): boolean {
     return this.callActive;
+  }
+
+  /** Minispiel läuft: Musik tritt zurück (FOCUS_MUSIC), Geräusche der Stadt aus, Effekte bleiben. */
+  setFocus(active: boolean): void {
+    if (this.focusActive === active) return;
+    this.focusActive = active;
+    this.applyVolumes(false);
+    this.emit();
+  }
+
+  get inFocus(): boolean {
+    return this.focusActive;
   }
 
   // -------------------------------------------------------------------------------------------

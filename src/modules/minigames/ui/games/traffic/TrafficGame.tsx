@@ -1,8 +1,10 @@
-// Verkehrskontrolle (Auftrag 47): Du sitzt im Auto und schaust aus dem Fenster (3D-Szene in scene.ts). Der Beamte
-// fragt, du wählst eine von drei Antworten (1 bis 3); richtig ist, was zu Kennzeichen, Uhrzeit, Ladung und deinen
-// früheren Antworten passt (Modell in model.ts, Fragen in questions.ts). Jederzeit „Schein zustecken“ (B) und „Gas
-// geben“ (G). Der Beamte spricht seine Zeilen (audio.speak), sein Gesicht kommt aus dem Look-System über der
-// projizierten Kopfposition.
+// Verkehrskontrolle (Auftrag 47, nachgeschärft in Auftrag 48): Du sitzt im Auto und schaust aus dem Fenster (3D-Szene
+// in scene.ts). Der Beamte fragt, du wählst eine von drei Antworten (1 bis 3); richtig ist, was zu Kennzeichen,
+// Uhrzeit, Ladung und deinen früheren Antworten passt (Modell in model.ts, Fragen in questions.ts). Links steht, was er
+// sieht und was du schon gesagt hast; fliegt etwas auf, leuchtet auf, woran es hing. Unter der Frage läuft seine
+// Geduld ab. Jederzeit „Schein zustecken“ (B) und „Gas geben“ (G). Der Beamte spricht seine Zeilen (audio.speak), sein
+// Gesicht kommt aus dem Look-System über der projizierten Kopfposition; Blaulicht und Taschenlampe liegen als Licht
+// über dem Bild.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { clock, formatEuro, type MouthStyle, type VoiceSpec, voiceFor, wallet } from '../../../../../core';
@@ -24,15 +26,27 @@ import {
   initTraffic,
   isDone,
   MAX_HITS,
+  patience,
   progress,
   type Question,
   type Signal,
+  type Topic,
   type TrafficState,
   trafficPicks,
   trafficScore,
+  trafficStats,
 } from './model';
 import { Officer, officerLook } from './Officer';
-import { OFFICER_LINES, plateAdjective, QUESTIONS, VEHICLE_NAMES, VISIBLE_NAMES } from './questions';
+import {
+  type FactKey,
+  OFFICER_LINES,
+  plateAdjective,
+  QUESTIONS,
+  STORY_LABELS,
+  storyText,
+  VEHICLE_NAMES,
+  VISIBLE_NAMES,
+} from './questions';
 import { createTrafficScene, type TrafficScene } from './scene';
 import { TRAFFIC_SOUNDS } from './sounds';
 
@@ -49,7 +63,15 @@ interface Hud {
   message: { text: string; tone: 'good' | 'bad' | 'warn'; key: number } | null;
   done: boolean;
   outcome: TrafficState['outcome'];
+  /** Was du bisher gesagt hast (in der Reihenfolge der Sachen). */
+  story: { key: FactKey; text: string }[];
+  /** Woran der letzte Widerspruch hing (leuchtet auf), mit Zähler für die Animation. */
+  caught: { topics: Topic[]; key: number } | null;
+  /** Er überlegt noch, was er sagt (Pause nach einem Widerspruch). */
+  pause: boolean;
 }
+
+const STORY_ORDER: FactKey[] = ['from', 'to', 'owner', 'cargo', 'purpose'];
 
 function whereText(s: TrafficState): string {
   switch (s.phase) {
@@ -102,7 +124,14 @@ export function TrafficGame(props: MinigameViewProps) {
     spokenLine: -1,
     speech: null as (() => void) | null,
     flash: 0,
+    lineAt: 0,
+    messageUntil: 0,
+    caughtKey: 0,
+    caught: null as Hud['caught'],
+    light: { blue: -1, red: -1, glare: -1 },
   });
+  const root = useRef<HTMLDivElement>(null);
+  const patienceBar = useRef<HTMLSpanElement>(null);
   const [hud, setHud] = useState<Hud>(() => snapshot(game.current, 'neutral', null));
 
   function snapshot(s: TrafficState, mouth: MouthStyle, message: Hud['message']): Hud {
@@ -114,15 +143,22 @@ export function TrafficGame(props: MinigameViewProps) {
       question: s.phase === 'ask' ? s.question : null,
       mouth,
       where: whereText(s),
-      message,
+      message: message && fx.current.t < fx.current.messageUntil ? message : null,
       done: s.phase === 'end',
       outcome: s.outcome,
+      story: STORY_ORDER.flatMap((key) => {
+        const v = s.story[key];
+        return v ? [{ key, text: storyText(key, v) }] : [];
+      }),
+      caught: fx.current.caught,
+      pause: fx.current.t < fx.current.lineAt,
     };
   }
   const refreshHud = (message?: Hud['message']) =>
     setHud((h) => snapshot(game.current, fx.current.mouth, message === undefined ? h.message : message));
   const say = (text: string, tone: 'good' | 'bad' | 'warn') => {
     fx.current.messageKey += 1;
+    fx.current.messageUntil = fx.current.t + 2.8;
     refreshHud({ text, tone, key: fx.current.messageKey });
   };
 
@@ -136,6 +172,8 @@ export function TrafficGame(props: MinigameViewProps) {
       vehicle: setup.evidence.vehicle,
       visible: setup.evidence.visible,
       skin: LOOK_COLORS.skin[look.skin] ?? LOOK_COLORS.skin[1],
+      jacket: LOOK_COLORS.top[look.topColor] ?? LOOK_COLORS.top[0],
+      seed: challenge.seed,
     });
     return f.scene;
   };
@@ -152,10 +190,27 @@ export function TrafficGame(props: MinigameViewProps) {
     const el = face.current;
     const h = scene.head;
     if (el) {
-      el.style.transform = `translate(${(h.x - h.size / 2).toFixed(1)}px, ${(h.y - h.size * 0.52).toFixed(1)}px)`;
+      el.style.transform = `translate(${(h.x - h.size / 2).toFixed(1)}px, ${(h.y - h.size * 0.47).toFixed(1)}px)`;
       el.style.width = `${h.size.toFixed(1)}px`;
       el.style.height = `${h.size.toFixed(1)}px`;
       el.style.opacity = h.visible ? '1' : '0';
+    }
+    // Blaulicht und Blendung als Licht über dem Bild (nur bei Änderung ins DOM).
+    const box = root.current;
+    const l = scene.light;
+    const last = fx.current.light;
+    if (box && (l.blue !== last.blue || l.red !== last.red || Math.abs(l.glare - last.glare) > 0.01)) {
+      last.blue = l.blue;
+      last.red = l.red;
+      last.glare = l.glare;
+      box.style.setProperty('--traffic-blue', l.blue.toFixed(2));
+      box.style.setProperty('--traffic-red', l.red.toFixed(2));
+      box.style.setProperty('--traffic-glare', l.glare.toFixed(2));
+    }
+    if (patienceBar.current) {
+      const p = patience(setup, game.current);
+      patienceBar.current.style.transform = `scaleX(${p.toFixed(3)})`;
+      patienceBar.current.dataset.low = p < 0.45 ? (p < 0.2 ? 'critical' : 'low') : '';
     }
   }
   useEffect(
@@ -185,7 +240,7 @@ export function TrafficGame(props: MinigameViewProps) {
   const speakLine = () => {
     const f = fx.current;
     const line = game.current.line;
-    if (!line || line.n === f.spokenLine) return;
+    if (!line || line.n === f.spokenLine || f.t < f.lineAt) return;
     f.spokenLine = line.n;
     f.speech?.();
     f.speech = audio.speak(line.text, voice, () => {
@@ -199,7 +254,7 @@ export function TrafficGame(props: MinigameViewProps) {
     f.sent = true;
     f.speech?.();
     f.speech = null;
-    onFinish(trafficScore(game.current), trafficPicks(game.current));
+    onFinish(trafficScore(game.current), trafficPicks(game.current), trafficStats(game.current));
   };
 
   // ------------------------------------------------------------------ Eingaben
@@ -212,22 +267,33 @@ export function TrafficGame(props: MinigameViewProps) {
       audio.playThrottled(MINIGAME_SOUNDS.click, 40, { volume: 0.5 });
       haptic('selection');
       f.mouth = 'neutral';
-    } else if (result === 'hit') {
-      playSound(MINIGAME_SOUNDS.fail, 0.8);
-      haptic('error');
-      f.mouth = 'hard';
-      f.flash = 1;
-      say('Das passt nicht zu dem, was er sieht oder gehört hat.', 'bad');
-    } else if (result === 'fail') {
-      audio.play(TRAFFIC_SOUNDS.knock, { volume: 0.9 });
-      haptic('error');
-      f.mouth = 'hard';
-      f.flash = 1;
-      f.endAt = f.t + 2.6;
-      say('Zweiter Widerspruch. „Aussteigen.“', 'bad');
+    } else if (result === 'hit' || result === 'fail') {
+      // Erst ein Moment Stille: Er stutzt, beugt sich vor, leuchtet dir ins Gesicht. Dann der Satz.
+      caughtOut(result === 'fail');
     }
     refreshHud();
   };
+  /** Widerspruch aufgeflogen: Pause, Ruck, Blendung, die Fakten leuchten auf. */
+  const caughtOut = (final: boolean) => {
+    const f = fx.current;
+    const s = game.current;
+    f.lineAt = f.t + 0.7;
+    f.mouth = 'hard';
+    f.flash = 1;
+    f.caughtKey += 1;
+    f.caught = { topics: [...s.caught], key: f.caughtKey };
+    f.scene?.shake(final ? 1 : 0.7);
+    playSound(MINIGAME_SOUNDS.fail, 0.8);
+    haptic('error');
+    if (final) {
+      audio.play(TRAFFIC_SOUNDS.knock, { volume: 0.9 });
+      f.endAt = f.t + 3.2;
+      say('Zweiter Widerspruch. „Aussteigen.“', 'bad');
+    } else {
+      say(s.caught.length > 0 ? 'Das passt nicht zusammen. Er hat es gemerkt.' : 'Zu lange geschwiegen.', 'bad');
+    }
+  };
+
   const onFlee = () => {
     if (!running || !flee(game.current)) return;
     audio.play(TRAFFIC_SOUNDS.rev, { volume: 0.9 });
@@ -288,6 +354,9 @@ export function TrafficGame(props: MinigameViewProps) {
           f.mouth = 'smirk';
           say('Er wird ungeduldig.', 'warn');
           break;
+        case 'silent':
+          caughtOut(game.current.outcome === 'fail');
+          break;
         case 'pass':
           f.mouth = 'grin';
           f.endAt = f.t + 1.8;
@@ -295,7 +364,7 @@ export function TrafficGame(props: MinigameViewProps) {
           break;
         case 'fail':
           f.mouth = 'hard';
-          f.endAt = f.t + 2;
+          f.endAt = Math.max(f.endAt, f.t + 2);
           break;
         default:
           break;
@@ -320,25 +389,36 @@ export function TrafficGame(props: MinigameViewProps) {
     else if (f.endAt >= 0 && f.t >= f.endAt && isDone(s)) finish();
   }, running);
 
+  // Pause: Stimme anhalten. Geht es weiter und er wartet auf eine Antwort, wiederholt er seine Frage (sonst nichts
+  // doppelt); Zeit, Geduld und Misstrauen stehen still, weil die Bildschleife steht.
   useEffect(() => {
     draw(0);
+    const f = fx.current;
     if (!running) {
-      fx.current.speech?.();
-      fx.current.speech = null;
+      if (f.speech) {
+        f.speech();
+        f.speech = null;
+        if (game.current.phase === 'ask') f.spokenLine = -1;
+      }
     }
   }, [running]);
 
   const ev = setup.evidence;
   const q = hud.question;
+  const lit = (topic: Topic) => (hud.caught?.topics.includes(topic) ? ' is-caught' : '');
   return (
     <div
-      class={`traffic traffic--${phase}${hud.done ? ' is-done' : ''}${hud.outcome ? ` is-${hud.outcome}` : ''}`}
+      ref={root}
+      class={`traffic traffic--${phase}${hud.done ? ' is-done' : ''}${hud.outcome ? ` is-${hud.outcome}` : ''}${reduced ? ' is-reduced' : ''}`}
       style={{ '--traffic-flash': fx.current.flash }}
     >
       <canvas ref={canvas} class="traffic__canvas" role="img" aria-label="Blick vom Fahrersitz aus dem Fenster" />
       <div ref={face} class="traffic__face" aria-hidden="true">
         <Officer look={look} mouth={hud.mouth} />
+        <span class="traffic__face-light" />
       </div>
+      <div class="traffic__cabin" aria-hidden="true" />
+      <div class="traffic__glare" aria-hidden="true" />
       <div class="traffic__wash" aria-hidden="true" />
 
       <HudBar class="traffic__hud">
@@ -352,39 +432,58 @@ export function TrafficGame(props: MinigameViewProps) {
         <HudMeter label="Gespräch" value={hud.progress} color="law" detail={`${Math.round(hud.progress * 100)} %`} />
       </HudBar>
 
-      <aside class="traffic__facts" aria-label="Was er sieht">
-        <span class="traffic__fact">
+      <aside class="traffic__facts" aria-label="Was er sieht und was du gesagt hast" data-key={hud.caught?.key ?? 0}>
+        <p class="traffic__facts-head">Er sieht</p>
+        <span key={`h${hud.caught?.key ?? 0}`} class={`traffic__fact${lit('hour')}`}>
           <Icon name="clock" />
           {`${ev.hour} Uhr`}
         </span>
-        <span class="traffic__fact">
+        <span key={`v${hud.caught?.key ?? 0}`} class={`traffic__fact${lit('vehicle')}`}>
           <Icon name="car" />
           {VEHICLE_NAMES[ev.vehicle]}
         </span>
-        <span class={`traffic__fact${ev.plateHome ? '' : ' is-warn'}`}>
+        <span key={`p${hud.caught?.key ?? 0}`} class={`traffic__fact${ev.plateHome ? '' : ' is-warn'}${lit('plate')}`}>
           <Icon name="idCard" />
           {`${plateAdjective(ev.plateCity)} Kennzeichen`}
         </span>
-        <span class="traffic__fact">
+        <span key={`l${hud.caught?.key ?? 0}`} class={`traffic__fact${lit('visible')}`}>
           <Icon name="package" />
           {`Hinten: ${VISIBLE_NAMES[ev.visible]}`}
         </span>
+        {hud.story.length > 0 && (
+          <>
+            <p class="traffic__facts-head">Du sagtest</p>
+            {hud.story.map((item) => (
+              <span key={`${item.key}${hud.caught?.key ?? 0}`} class={`traffic__fact is-said${lit('story')}`}>
+                <span class="traffic__fact-label">{STORY_LABELS[item.key]}</span>
+                {item.text}
+              </span>
+            ))}
+          </>
+        )}
       </aside>
 
-      <div class="traffic__speech-card" aria-live="polite">
-        {hud.line && (
-          <p key={hud.line.n} class="traffic__line">
-            {hud.line.text}
-          </p>
+      <div class={`traffic__speech-card${hud.pause ? ' is-pause' : ''}`} aria-live="polite">
+        {hud.pause ? (
+          <p class="traffic__line traffic__line--pause">…</p>
+        ) : (
+          hud.line && (
+            <p key={hud.line.n} class="traffic__line">
+              {hud.line.text}
+            </p>
+          )
         )}
-        <p class="traffic__where">{hud.where}</p>
+        {hud.message ? (
+          <p key={hud.message.key} class={`traffic__where traffic__message is-${hud.message.tone}`}>
+            {hud.message.text}
+          </p>
+        ) : (
+          <p class="traffic__where">{hud.where}</p>
+        )}
+        <span class={`traffic__patience${q ? '' : ' is-idle'}`} aria-hidden="true">
+          <span ref={patienceBar} />
+        </span>
       </div>
-
-      {hud.message && (
-        <p key={hud.message.key} class={`traffic__message is-${hud.message.tone}`} aria-live="polite">
-          {hud.message.text}
-        </p>
-      )}
 
       <div class="traffic__bottom">
         <div class="traffic__answers">

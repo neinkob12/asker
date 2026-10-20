@@ -4,26 +4,64 @@
 // Erst „Weiter“ schickt das Ergebnis: zuerst den Dialog schließen, dann den Befehl (sonst schlösse man den Dialog,
 // den die Folgen öffnen, z.B. die Akte der Konfrontation).
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatPercent } from '../../../core';
-import { Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
+import { audio, Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
 import { type Challenge, delegateInfo, getChallenge, MINIGAME_KINDS, winAt } from '../index';
+import { ARCADE_ORIGIN, backToArcade } from './arcade';
 import { restoreDialog, setDevFinish } from './flow';
 import { HudBar, ResultStamp } from './kit/hud';
 import { useMapTakeover } from './kit/mapTakeover';
+import { PauseContext } from './kit/pause';
 import { MINIGAME_SOUNDS, playSound } from './kit/sounds';
 import { useFrameLoop } from './kit/useFrameLoop';
-import { minigameView } from './registry';
+import { nextArcadeSeed, recordResult } from './records';
+import { type MinigameStat, minigameView } from './registry';
 
-type Phase = 'intro' | 'countdown' | 'play' | 'result';
+type Phase = 'intro' | 'countdown' | 'play' | 'paused' | 'result';
 
 /** Dauer des Countdowns (3, 2, 1, Los) in Sekunden. */
 const COUNTDOWN = 3.6;
+
+/** So nah an der Schwelle (winAt) heißt es im Ergebnis „Knapp!“. */
+const CLOSE_MARGIN = 0.08;
+
+/** Wertung im Ergebnis: Dauer, bis der Balken steht (echte Sekunden). */
+const SCORE_COUNT_SECONDS = 0.8;
+
+/** Höchstens so viele Werte aus dem Spiel stehen im Ergebnis, jeder höchstens so lang. */
+const STATS_MAX = 4;
+const STAT_MAX_LENGTH = 24;
+
+/** Lage aus der Schwierigkeit (challenge.difficulty): Wort, Stufe (1–4 Striche) und Farbe in der Einleitung. */
+const SITUATION_LEVELS = [
+  { below: 0.35, label: 'Ruhig', level: 1 },
+  { below: 0.6, label: 'Angespannt', level: 2 },
+  { below: 0.8, label: 'Brenzlig', level: 3 },
+  { below: Number.POSITIVE_INFINITY, label: 'Kritisch', level: 4 },
+] as const;
+
+function situationLevel(difficulty: number): (typeof SITUATION_LEVELS)[number] {
+  return SITUATION_LEVELS.find((s) => difficulty < s.below) ?? SITUATION_LEVELS[SITUATION_LEVELS.length - 1];
+}
 
 interface Outcome {
   score: number;
   picks: string[];
   won: boolean;
+  stats: MinigameStat[];
+  /** Nur in der Vorschau: Bestwert dieses Geräts nach dem Durchgang (records.ts). */
+  record?: { best: number; newBest: boolean; first: boolean };
+}
+
+/** Werte aus dem Spiel: nur Texte, kurz, höchstens STATS_MAX (nur Anzeige, nichts davon geht in den Spielstand). */
+function cleanStats(stats: readonly MinigameStat[] | undefined): MinigameStat[] {
+  if (!Array.isArray(stats)) return [];
+  const cut = (text: unknown) => String(text ?? '').slice(0, STAT_MAX_LENGTH);
+  return stats
+    .filter((s) => s && typeof s === 'object')
+    .slice(0, STATS_MAX)
+    .map((s) => ({ label: cut(s.label), value: cut(s.value), icon: s.icon, tone: s.tone }));
 }
 
 function Intro(props: {
@@ -31,18 +69,31 @@ function Intro(props: {
   delegate: { name: string; chance: number } | null;
   onStart: () => void;
   onDelegate: () => void;
+  /** Nur in der Vorschau: ohne zu spielen zurück (in der Spielhalle gibt es sonst keinen Weg hinaus). */
+  onBack?: () => void;
 }) {
   const { challenge, delegate } = props;
   const view = minigameView(challenge.kind);
   const start = useRef<HTMLButtonElement>(null);
   useEffect(() => start.current?.focus(), []);
   const mobileFirst = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const situation = situationLevel(challenge.difficulty);
   return (
     <section class="mg-card mg-intro" aria-labelledby="mg-title">
-      <p class="mg-kicker">
-        <Icon name={view.icon ?? 'bolt'} class="mg-kicker__icon" />
-        Minispiel · {MINIGAME_KINDS[challenge.kind].name}
-      </p>
+      <div class="mg-intro__head">
+        <p class="mg-kicker">
+          <Icon name={view.icon ?? 'bolt'} class="mg-kicker__icon" />
+          Minispiel · {MINIGAME_KINDS[challenge.kind].name}
+        </p>
+        <span class={`mg-level is-${situation.level}`} title="Wie schwer es wird">
+          <span class="mg-level__bars" aria-hidden="true">
+            {SITUATION_LEVELS.map((s) => (
+              <span key={s.level} class={s.level <= situation.level ? 'is-on' : ''} />
+            ))}
+          </span>
+          Lage: {situation.label}
+        </span>
+      </div>
       <h2 class="mg-title" id="mg-title">
         {challenge.title}
       </h2>
@@ -69,6 +120,12 @@ function Intro(props: {
             <span class="mg-button__label">
               {delegate.name.split(' ')[0]} übernimmt ({formatPercent(delegate.chance)})
             </span>
+          </button>
+        )}
+        {props.onBack && (
+          <button type="button" class="mg-button mg-button--big" onClick={props.onBack}>
+            <Icon name="back" />
+            Zurück
           </button>
         )}
       </div>
@@ -107,6 +164,80 @@ function Countdown(props: { onDone: () => void }) {
   );
 }
 
+/** Pause, wenn Tab oder App in den Hintergrund gehen: Das Spiel steht (running false), weiter mit 3-2-1. */
+function Paused(props: { onResume: () => void; onQuit?: () => void }) {
+  const resume = useRef<HTMLButtonElement>(null);
+  useEffect(() => resume.current?.focus(), []);
+  return (
+    <section class="mg-card mg-paused" aria-labelledby="mg-title">
+      <p class="mg-kicker">
+        <Icon name="pause" class="mg-kicker__icon" />
+        Pause
+      </p>
+      <h2 class="mg-title" id="mg-title">
+        Kurz angehalten
+      </h2>
+      <p class="mg-situation">Das Spiel wartet auf dich. Nach „Weiter“ geht es mit 3-2-1 los.</p>
+      <div class="mg-actions">
+        <button ref={resume} type="button" class="mg-button is-gold mg-button--big" onClick={props.onResume}>
+          <Icon name="play" />
+          Weiter
+        </button>
+        {props.onQuit && (
+          <button type="button" class="mg-button mg-button--big" onClick={props.onQuit}>
+            <Icon name="close" />
+            Aufhören
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Wertung 0–100 als Balken mit der Schwelle (winAt) als Marke; zählt beim Erscheinen hoch. */
+function ScoreMeter(props: { score: number; goal: number; won: boolean }) {
+  const { score, goal, won } = props;
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [shown, setShown] = useState(reduced ? score : 0);
+  const start = useRef(performance.now());
+  const counting = !reduced && shown < score;
+  useFrameLoop(() => {
+    const t = Math.min(1, (performance.now() - start.current) / 1000 / SCORE_COUNT_SECONDS);
+    // Schnell los, sanft auslaufen (ease-out kubisch).
+    setShown(score * (1 - (1 - t) ** 3));
+  }, counting);
+  const close = Math.abs(score - goal) < CLOSE_MARGIN;
+  return (
+    <div class={`mg-score ${won ? 'is-won' : 'is-lost'}`}>
+      <span class="mg-score__head">
+        <span class="mg-score__label">Wertung</span>
+        {close && <span class="mg-score__close">Knapp!</span>}
+        <span class="mg-score__value">{Math.round(shown * 100)}</span>
+      </span>
+      <span class="mg-score__bar" aria-hidden="true">
+        <span class="mg-score__fill" style={{ transform: `scaleX(${shown})` }} />
+        <span class="mg-score__goal" style={{ left: `${goal * 100}%` }} />
+      </span>
+      <span class="mg-sr">{`Wertung ${Math.round(score * 100)} von 100, geschafft ab ${Math.round(goal * 100)}`}</span>
+    </div>
+  );
+}
+
+/** Bestwert der Spielhalle unter der Wertung: „Neuer Bestwert!“ mit Pokal, sonst der alte zum Schlagen. */
+function BestLine(props: { record: NonNullable<Outcome['record']> }) {
+  const { best, newBest, first } = props.record;
+  useEffect(() => {
+    if (newBest) playSound(MINIGAME_SOUNDS.win, 0.5);
+  }, [newBest]);
+  return (
+    <p class={`mg-best${newBest ? ' is-new' : ''}`}>
+      <Icon name="trophy" class="mg-best__icon" />
+      {newBest ? 'Neuer Bestwert!' : first ? 'Erster Bestwert' : 'Bestwert'}
+      <strong class="mg-best__value">{Math.round(best * 100)}</strong>
+    </p>
+  );
+}
+
 function Result(props: {
   challenge: Challenge;
   outcome: Outcome;
@@ -130,7 +261,28 @@ function Result(props: {
     <section class={`mg-card mg-result ${outcome.won ? 'is-won' : 'is-lost'}`} aria-live="polite">
       <ResultStamp won={outcome.won} {...stamp} />
       <p class="mg-result__text">{text}</p>
-      {props.preview && <p class="mg-result__note">Vorschau: Score {outcome.score.toFixed(2)}, nichts wird gezählt.</p>}
+      <ScoreMeter score={outcome.score} goal={winAt(challenge.kind)} won={outcome.won} />
+      {outcome.stats.length > 0 && (
+        <dl class="mg-stats">
+          {outcome.stats.map((stat) => (
+            <div key={stat.label} class={`mg-stat${stat.tone ? ` is-${stat.tone}` : ''}`}>
+              <dt>
+                {stat.icon && <Icon name={stat.icon} class="mg-stat__icon" />}
+                {stat.label}
+              </dt>
+              <dd>{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {outcome.record && <BestLine record={outcome.record} />}
+      {props.preview && (
+        <p class="mg-result__note">
+          {challenge.origin.module === ARCADE_ORIGIN
+            ? 'Spielhalle: zählt nicht im Spielstand.'
+            : 'Vorschau: nichts wird gezählt.'}
+        </p>
+      )}
       <div class="mg-actions">
         <button ref={next} type="button" class="mg-button is-gold mg-button--big" onClick={props.onNext}>
           Weiter
@@ -156,19 +308,45 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
   const [phase, setPhase] = useState<Phase>('intro');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const finished = useRef(false);
-  const delegate = preview ? { name: 'Kalle', chance: 0.6 } : delegateInfo(state, challenge);
+  const arcade = preview && challenge.origin.module === ARCADE_ORIGIN;
+  // In der Spielhalle gibt es nichts abzugeben; die Vorschau sonst zeigt den Knopf, wie er im Spiel aussähe.
+  const delegate = arcade ? null : preview ? { name: 'Kalle', chance: 0.6 } : delegateInfo(state, challenge);
 
-  const onFinish = (score: number, picks: string[] = []) => {
+  const onFinish = (score: number, picks: string[] = [], stats?: readonly MinigameStat[]) => {
     if (finished.current) return;
     finished.current = true;
     const s = Number.isFinite(score) ? Math.min(1, Math.max(0, score)) : 0;
-    setOutcome({ score: s, picks, won: s >= winAt(challenge.kind) });
+    const won = s >= winAt(challenge.kind);
+    // Vorschau und Spielhalle: Bestwert pro Gerät (nur Anzeige, nie im Spielstand).
+    const entry = preview ? recordResult(challenge.kind, s, won) : null;
+    const record = entry && { best: entry.record.best, newBest: entry.newBest, first: entry.previous === null };
+    setOutcome({ score: s, picks, won, stats: cleanStats(stats), ...(record ? { record } : {}) });
     setPhase('result');
   };
   useEffect(() => {
     if (phase !== 'play') return;
-    setDevFinish((won) => onFinish(won ? 0.9 : 0.1, []));
+    setDevFinish((won, score, stats) => onFinish(score ?? (won ? 0.9 : 0.1), [], stats));
     return () => setDevFinish(null);
+  }, [phase]);
+  // Tab oder App im Hintergrund: anhalten. Die Spiele kennen running = false schon aus Einleitung und Ergebnis.
+  useEffect(() => {
+    if (phase !== 'play') return;
+    const onVisibility = () => {
+      if (document.hidden && !finished.current) setPhase('paused');
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    // Esc hält an (wie in jedem Spiel). Spiele, die Esc selbst brauchen (z.B. Papiere: Auswahl zu), fangen die Taste
+    // vorher ab (useGameKeys in der Capture-Phase), dann kommt sie hier nicht an.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape' || e.defaultPrevented || finished.current) return;
+      e.preventDefault();
+      setPhase('paused');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [phase]);
 
   const leave = (send: () => void) => {
@@ -176,10 +354,19 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
     send();
     restoreDialog(ui);
   };
+  const pauseNow = () => {
+    if (!finished.current) setPhase('paused');
+  };
+  /** Vorschau verlassen, ohne Ergebnis (aus der Spielhalle zurück dorthin). */
+  const quit = () => {
+    ui.closeDialog();
+    if (arcade) backToArcade(ui);
+  };
   const next = () => {
     if (!outcome) return;
     if (preview) {
       ui.closeDialog();
+      if (arcade) backToArcade(ui);
       return;
     }
     leave(() =>
@@ -200,7 +387,10 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
   return (
     <div class={`mg-run is-${phase}`}>
       <div class="mg-stage" aria-hidden={phase !== 'play'} inert={phase !== 'play' ? true : undefined}>
-        <Game challenge={challenge} preview={preview} running={phase === 'play'} onFinish={onFinish} />
+        {/* Pause-Knopf in der HUD-Leiste der Spiele (kit/pause.tsx): nur, solange das Spiel läuft. */}
+        <PauseContext.Provider value={phase === 'play' ? pauseNow : null}>
+          <Game challenge={challenge} preview={preview} running={phase === 'play'} onFinish={onFinish} />
+        </PauseContext.Provider>
       </div>
       {phase === 'intro' && (
         <Intro
@@ -208,9 +398,14 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
           delegate={delegate}
           onStart={() => setPhase('countdown')}
           onDelegate={delegateNow}
+          onBack={preview ? quit : undefined}
         />
       )}
       {phase === 'countdown' && <Countdown onDone={() => setPhase('play')} />}
+      {phase === 'paused' && <Paused onResume={() => setPhase('countdown')} onQuit={preview ? quit : undefined} />}
+      {phase === 'result' && outcome && (
+        <div class={`mg-flash ${outcome.won ? 'is-won' : 'is-lost'}`} aria-hidden="true" />
+      )}
       {phase === 'result' && outcome && (
         <Result challenge={challenge} outcome={outcome} preview={preview} onNext={next} onAgain={props.onAgain} />
       )}
@@ -224,11 +419,15 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
   const ui = useUi();
   const root = useRef<HTMLDivElement>(null);
   const [round, setRound] = useState(0);
+  // „Nochmal“ in der Vorschau bringt eine neue Lage (neuer Seed), nicht dieselbe Runde noch einmal.
+  const [seed, setSeed] = useState<number | null>(null);
   const live = props.preview ?? getChallenge(state, props.challengeId);
   // Die Challenge festhalten: Nach „Weiter“ ist sie aus dem Spielstand weg, der Rahmen zeigt aber noch zu Ende.
   const kept = useRef<Challenge | undefined>(live);
   if (live && live.id !== kept.current?.id) kept.current = live;
-  const challenge = kept.current;
+  // Fest je Seed: Spiele bauen ihr Modell oft per useMemo aus der Challenge, ein neues Objekt je Bild baute es neu.
+  const base = kept.current;
+  const challenge = useMemo(() => (base && seed !== null ? { ...base, seed } : base), [base, seed]);
   const view = challenge ? minigameView(challenge.kind) : null;
   // layout 'map': Die Karte gehört dem Minispiel (keine Bedienung, keine Marker, kein HUD), bis der Rahmen zugeht. Das
   // Spiel startet erst danach (es führt die Kamera ab dem ersten Bild).
@@ -236,6 +435,11 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
   // Fokus in den Rahmen (area 'map' hat keine Fokus-Falle), außer die Einleitung hat ihn schon auf „Los“ gesetzt.
   useEffect(() => {
     if (!root.current?.contains(document.activeElement)) root.current?.focus();
+  }, []);
+  // Solange der Rahmen offen ist, tritt die Musik zurück und die Stadt wird still: Das Spiel hat eigene Klänge.
+  useEffect(() => {
+    audio.setFocus(true);
+    return () => audio.setFocus(false);
   }, []);
   return (
     <div
@@ -251,7 +455,14 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
           key={`${challenge.id}:${round}`}
           challenge={challenge}
           preview={!!props.preview}
-          onAgain={props.preview ? () => setRound((r) => r + 1) : undefined}
+          onAgain={
+            props.preview
+              ? () => {
+                  setSeed(nextArcadeSeed());
+                  setRound((r) => r + 1);
+                }
+              : undefined
+          }
         />
       ) : (
         <section class="mg-card mg-intro">

@@ -1,10 +1,232 @@
-/* Bude durchsuchen (Auftrag 44, Teil 6). Bühne als Canvas, HUD im Look Glas. */
+/* Bude durchsuchen (Auftrag 44, Teil 6; seit Auftrag 48 Ego-Blick in 3D). Bühne als WebGL-Canvas, darüber HUD,
+   Namen und Ergebnisse an den Dingen, Leiste der Räume im Look Glas. Nur Tokens, keine freien Hex-Werte. */
 
 .search {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+  background: var(--hud-glass-solid);
+}
+.search__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 50%, color-mix(in srgb, black 60%, transparent) 100%);
+}
+.search.is-urgent .search__vignette {
+  animation: search-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes search-pulse {
+  to {
+    box-shadow: inset 0 0 90px 10px color-mix(in srgb, var(--cat-danger) 40%, transparent);
+  }
+}
+/* Raumwechsel: kurz schwarz. */
+.search__fade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: black;
+  opacity: 0;
+  animation: search-fade 0.36s ease-in-out;
+}
+@keyframes search-fade {
+  45%,
+  55% {
+    opacity: 1;
+  }
+}
+
+/* An den Dingen: Name (Fokus), Fortschritt (Suche), Ergebnis (durchsucht). Lage setzt die Bildschleife. */
+.search__tag {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.search__tag-text {
+  position: absolute;
+  left: 0;
+  bottom: 18px;
+  translate: -50% 0;
+  padding: 2px 9px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.search__tag.is-found .search__tag-text {
+  color: var(--cat-money);
+  border-color: color-mix(in srgb, var(--cat-money) 55%, transparent);
+}
+.search__tag.is-empty .search__tag-text {
+  color: var(--hud-ink-2);
+  font-weight: 600;
+  opacity: 0.8;
+}
+.search__tag.is-active .search__tag-text {
+  border-color: var(--hud-gold);
+}
+.search__ring {
+  --search-progress: 0%;
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: conic-gradient(var(--hud-gold) var(--search-progress), color-mix(in srgb, black 45%, transparent) 0);
+  mask: radial-gradient(circle, transparent 13px, black 14px);
+  -webkit-mask: radial-gradient(circle, transparent 13px, black 14px);
+}
+.search__float {
+  position: absolute;
+  z-index: 3;
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  translate: -50% -100%;
+  text-shadow: 0 2px 8px color-mix(in srgb, black 70%, transparent);
+  animation: search-rise 1.2s var(--ease-out) forwards;
+}
+.search__float.is-money {
+  color: var(--cat-money);
+}
+.search__float.is-warn {
+  color: var(--cat-warn);
+}
+@keyframes search-rise {
+  from {
+    opacity: 0;
+    scale: 0.7;
+  }
+  15% {
+    opacity: 1;
+    scale: 1.2;
+  }
+  to {
+    opacity: 0;
+    margin-top: -60px;
+    scale: 1;
+  }
+}
+
+/* Gang durch die Wohnung: Türen im Flur (Beschriftung an der Tür, Lage setzt die Bildschleife), sonst „Flur“ unten
+   links. Tasten: 1–5, Q/E, Rücktaste. */
+.search__door,
+.search__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.search__door {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  visibility: hidden;
+  will-change: transform;
+}
+/* Tür außerhalb des Bilds: am Rand, mit Pfeil in ihre Richtung. */
+.search__door[data-edge="left"] {
+  translate: 0 -50%;
+}
+.search__door[data-edge="right"] {
+  translate: -100% -50%;
+}
+.search__door[data-edge="left"]::before,
+.search__door[data-edge="right"]::after {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--hud-gold);
+}
+.search__door[data-edge="left"]::before {
+  content: "‹";
+}
+.search__door[data-edge="right"]::after {
+  content: "›";
+}
+.search__door:hover:not(:disabled),
+.search__back:hover:not(:disabled) {
+  border-color: var(--hud-gold);
+}
+.search__door:disabled,
+.search__back:disabled {
+  cursor: default;
+}
+.search__back {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-4);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+.search__back svg {
+  width: 18px;
+  height: 18px;
+}
+.search__door kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  color: var(--hud-gold);
+}
+/* Wo du gerade bist. */
+.search__here {
+  position: absolute;
+  z-index: 3;
+  right: var(--space-4);
+  bottom: calc(var(--space-4) + 10px + env(safe-area-inset-bottom, 0px));
+  padding: 3px 10px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.search__room-count {
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-fill);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.search__room-count.is-found {
+  color: var(--cat-money);
 }
 .search__canvas {
   position: absolute;
@@ -13,7 +235,7 @@
   height: 100%;
   display: block;
   touch-action: none;
-  cursor: pointer;
+  cursor: crosshair;
 }
 
 .search__stashes {
@@ -64,7 +286,7 @@
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: 14px;
+  bottom: calc(var(--space-4) + 72px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   max-width: calc(100% - 2 * var(--space-4));
   margin: 0;
@@ -119,13 +341,30 @@
     width: 62px;
   }
   .search__message {
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--space-3) + 64px + env(safe-area-inset-bottom, 0px));
     font-size: 14px;
+  }
+  /* Am Handy ohne Tastenhinweis. */
+  .search__door kbd {
+    display: none;
+  }
+  .search__back {
+    left: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+  .search__here {
+    right: var(--space-3);
+    bottom: calc(var(--space-3) + 10px + env(safe-area-inset-bottom, 0px));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .search__message {
+  .search__message,
+  .search__float,
+  .search__fade {
+    animation: none;
+  }
+  .search.is-urgent .search__vignette {
     animation: none;
   }
 }

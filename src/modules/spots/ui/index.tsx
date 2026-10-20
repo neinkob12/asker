@@ -26,9 +26,10 @@ import { activeCity, cityName, isBusinessSold } from '../../city';
 import { getSalesStats, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount, getWarehouses } from '../../goods';
 import { activeRunnerAt } from '../../staff';
-import { tutorialLockText } from '../../tutorial';
+import { tutorialAllows, tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
+  atSpot,
   customSpots,
   getSpot,
   getSpots,
@@ -331,7 +332,10 @@ registerAdvisor({
         priority: 85,
         icon: 'smile',
         title,
-        text: 'Tipp auf den Spot, dann bedienst du den Nächsten. Oder stell einen Läufer hin.',
+        // Feedback 16.10.2026: Läufer gibt es im Tutorial erst nach „Drei Kunden bedienen“.
+        text: tutorialAllows(state, 'staff.runners')
+          ? 'Tipp auf den Spot, dann bedienst du den Nächsten. Oder stell einen Läufer hin.'
+          : 'Tipp auf den Spot, dann bedienst du den Nächsten.',
         actionLabel: 'Zum Spot',
         highlight: '.spot-marker',
         target: { lng: spot.lng, lat: spot.lat },
@@ -343,6 +347,23 @@ registerAdvisor({
     }
     const first = spots[0];
     if (first && getSalesStats(state).customersServed === 0) {
+      // Feedback 16.10.2026: Hinstellen gibt es im Tutorial erst nach „Drei Kunden bedienen“, bis dahin per Tipp.
+      if (!tutorialAllows(state, 'customers.stand')) {
+        return {
+          id: 'spots.firstSale',
+          priority: 70,
+          icon: 'pin',
+          title: 'Erster Verkauf',
+          text: `Wartet jemand ${atSpot(first)}, tipp auf den Spot. Dann verkaufst du selbst.`,
+          actionLabel: 'Zum Spot',
+          highlight: '.spot-marker',
+          target: { lng: first.lng, lat: first.lat },
+          action: (ui) => {
+            if (isMobile()) ui.closePhone();
+            ui.flyTo({ lng: first.lng, lat: first.lat }, 16);
+          },
+        };
+      }
       return {
         id: 'spots.firstSale',
         priority: 70,

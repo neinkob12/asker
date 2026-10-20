@@ -1,10 +1,26 @@
 // Zivi oder Kunde (Auftrag 44, Teil 5): Merkmale als Daten. Zivis tragen mindestens zwei verdächtige Merkmale, echte
 // Kunden höchstens eins (falsche Fährte). Dazu Harmloses, das nur so aussieht, und Zeichen, die für einen echten Kunden
-// sprechen. Jedes Merkmal steht als Text auf der Karte; die mit `show` sieht man auch im Bild.
+// sprechen. Jedes Merkmal steht als Text auf der Karte; die mit `show` sieht man auch im Bild (seit Teil E fast alle).
 
-/** Wo man ein Merkmal im Bild sieht: Ohr und Kragen im Porträt, Gürtel und Schuhe am unteren Kartenrand, das Auto
- * gegenüber auf der Bühne, der Satz in der Sprechblase. */
-export type TellShow = 'ear' | 'collar' | 'belt' | 'shoes' | 'car' | 'speech' | 'headphones' | 'none';
+/** Wo man ein Merkmal im Bild sieht: Ohr, Kragen und Kopfhörer am Kopf, Gürtel, Schuhe, Hände und was jemand dabei
+ * hat an der Figur (Auftrag 49, Teil E: ganze Figur), das Auto gegenüber auf der Bühne, der Satz in der Sprechblase. */
+export type TellShow =
+  | 'ear'
+  | 'collar'
+  | 'belt'
+  | 'shoes'
+  | 'car'
+  | 'speech'
+  | 'headphones'
+  | 'beer'
+  | 'phone'
+  | 'coins'
+  | 'bag'
+  | 'dog'
+  | 'scooter'
+  | 'feet'
+  | 'shaky'
+  | 'none';
 
 export interface TellDef {
   id: string;
@@ -36,12 +52,12 @@ export type TellId = (typeof TELLS)[number]['id'];
 export const NOISE = [
   { id: 'headphones', text: 'Große Kopfhörer um den Hals', show: 'headphones' },
   { id: 'hood', text: 'Kapuze tief im Gesicht', show: 'none' },
-  { id: 'beer', text: 'Bierdose in der Hand', show: 'none' },
-  { id: 'dog', text: 'Hat einen Hund dabei', show: 'none' },
-  { id: 'scooter', text: 'Kommt mit dem E-Roller', show: 'none' },
-  { id: 'gymBag', text: 'Sporttasche über der Schulter', show: 'none' },
-  { id: 'phone', text: 'Tippt dauernd aufs Handy', show: 'none' },
-  { id: 'nervous', text: 'Tritt von einem Fuß auf den anderen', show: 'none' },
+  { id: 'beer', text: 'Bierdose in der Hand', show: 'beer' },
+  { id: 'dog', text: 'Hat einen Hund dabei', show: 'dog' },
+  { id: 'scooter', text: 'Kommt mit dem E-Roller', show: 'scooter' },
+  { id: 'gymBag', text: 'Sporttasche über der Schulter', show: 'bag' },
+  { id: 'phone', text: 'Tippt dauernd aufs Handy', show: 'phone' },
+  { id: 'nervous', text: 'Tritt von einem Fuß auf den anderen', show: 'feet' },
 ] as const satisfies readonly TellDef[];
 
 export type NoiseId = (typeof NOISE)[number]['id'];
@@ -49,8 +65,8 @@ export type NoiseId = (typeof NOISE)[number]['id'];
 /** Zeichen für einen echten Kunden. Ab mittlerer Schwierigkeit hat auch mal ein Zivi seine Hausaufgaben gemacht. */
 export const CUES = [
   { id: 'regular', text: 'War letzte Woche schon da', show: 'none' },
-  { id: 'coins', text: 'Zählt Kleingeld ab', show: 'none' },
-  { id: 'shaky', text: 'Zittrige Hände', show: 'none' },
+  { id: 'coins', text: 'Zählt Kleingeld ab', show: 'coins' },
+  { id: 'shaky', text: 'Zittrige Hände', show: 'shaky' },
   { id: 'local', text: 'Redet wie einer von hier', show: 'none' },
   { id: 'worn', text: 'Ausgelatschte Turnschuhe', show: 'shoes' },
 ] as const satisfies readonly TellDef[];

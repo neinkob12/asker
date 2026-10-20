@@ -212,6 +212,26 @@ describe('tutorial: Missionen', () => {
     expect(thread[0].text).not.toContain('\n');
   });
 
+  it('Mission 1 nur per Tipp: Hinstellen und Läufer anheuern gehen erst ab Stufe 2 (Feedback 16.10.2026)', () => {
+    const sim = start();
+    sim.dispatch({ type: 'tutorial.advance', payload: {} });
+    expect(currentMission(sim.state)?.id).toBe('serve3');
+    const stand = () => sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'neumarkt' } });
+    const hire = () => sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'neumarkt' } });
+    expect(tutorialAllows(sim.state, 'customers.stand')).toBe(false);
+    expect(stand().ok).toBe(false);
+    expect(hire().ok).toBe(false);
+    expect(sim.state.modules.customers.self.spotId).toBeNull();
+    expect(getStaff(sim.state, { role: 'runner' })).toHaveLength(0);
+    // Weggehen geht immer.
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: null } }).ok).toBe(true);
+    for (let i = 0; i < 3; i++) sale(sim);
+    expect(tutorialStage(sim.state)).toBe(2);
+    expect(stand().ok).toBe(true);
+    expect(hire().ok).toBe(true);
+    expect(getStaff(sim.state, { role: 'runner' })).toHaveLength(1);
+  });
+
   it('Mission 2: Zülpicher Platz und Rudolfplatz für je 350 €, danach die Erklär-Stufen 3 und 4', () => {
     const sim = start();
     jump(sim, 2);
@@ -429,9 +449,9 @@ describe('tutorial: Freischalten', () => {
     }
   });
 
-  it('Personal: Läufer immer, Sicherheit und Leutnants 7, Fahrer 8, Spezialisten 9, Buchhalter 10, Rechte Hand 11', () => {
+  it('Personal: Läufer 2, Sicherheit und Leutnants 7, Fahrer 8, Spezialisten 9, Buchhalter 10, Rechte Hand 11', () => {
     const sim = start();
-    expect(tutorialAllowsRole(sim.state, 'runner')).toBe(true);
+    expect(tutorialAllowsRole(sim.state, 'runner')).toBe(false);
     expect(tutorialAllowsRole(sim.state, 'driver')).toBe(false);
     expect(sim.dispatch({ type: 'staff.hireDriver', payload: {} }).ok).toBe(false);
     expect(getStaff(sim.state, { role: 'driver' }).length).toBe(0);

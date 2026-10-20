@@ -205,7 +205,7 @@ export function tutorialLockText(state: GameState, feature: TutorialFeature): st
   return stage ? `Schaltest du frei mit „${stage.title}“` : 'Schaltest du später frei';
 }
 
-/** Darf diese Rolle gerade angeboten werden (Anheuern, Bewerber, Rumfragen)? Läufer immer. */
+/** Darf diese Rolle gerade angeboten werden (Anheuern, Bewerber, Rumfragen)? Läufer ab Stufe 2. */
 export function tutorialAllowsRole(state: GameState, role: string): boolean {
   const feature = ROLE_FEATURE[role];
   return !feature || tutorialAllows(state, feature);

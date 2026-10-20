@@ -9,25 +9,18 @@
   --tabbar-space: calc(var(--tabbar-height) + var(--safe-bottom));
   /* Kartensteuerung und Anzeigen unten rücken über Tab-Leiste und Hinweis */
   --mobile-dock-height: calc(var(--tabbar-height) + 44px);
-  /* Ganz offen ist das Handy Vollbild über der HUD-Reihe (wie ohne Prototyp, die Uhrzeit steht dann oben im Handy) */
-  --sheet-full-top: var(--safe-top, 0px);
+  /* Ganz offen reicht das Handy bis unter die HUD-Reihe: Schwarzgeld, Heat und Uhr bleiben oben sichtbar */
+  --sheet-full-top: calc(var(--top) + 60px);
   --sheet-half-top: 48dvh;
 }
 
-/* ---------------------------------------------------------------- HUD: nur eine Zeile */
-.shell.is-mapfirst .hud-tiles,
-.shell.is-mapfirst .hud__alerts {
-  display: none;
-}
+/* ---------------------------------------------------------------- HUD: Geld und Uhr flach (Kacheln wie Stadt und Events bleiben) */
 .shell.is-mapfirst .hud-capsule--money,
 .shell.is-mapfirst .hud-capsule--clock {
   min-height: 52px;
 }
 .shell.is-mapfirst .hud-money__dirty {
   font-size: 22px;
-}
-.shell.is-mapfirst .hud-money .hud-label {
-  display: none;
 }
 /* Blatt ganz offen: Uhr und Geld bleiben sichtbar, die Kartensteuerung verschwindet hinter dem Blatt */
 .shell.is-mapfirst.has-phone .shell-mapctl {
@@ -51,7 +44,7 @@
   top: var(--sheet-full-top);
 }
 .shell.is-mapfirst .phone--sheet .phone__device {
-  --phone-status-height: 64px;
+  --phone-status-height: 14px;
   --phone-home-inset: 8px;
   border-radius: 24px 24px 0 0;
   box-shadow:
@@ -62,15 +55,9 @@
   border-radius: 24px 24px 0 0;
 }
 /* Halb offen: keine Uhrzeit oben (das HUD darüber zeigt sie), nur der Griff */
-.shell.is-mapfirst .phone--sheet.is-half .phone__device {
-  --phone-status-height: 14px;
-}
-.shell.is-mapfirst .phone--sheet.is-half .phone__status {
+/* Keine Uhrzeit oben im Handy: Das HUD darüber zeigt sie, oben sitzt nur der Griff */
+.shell.is-mapfirst .phone--sheet .phone__status {
   display: none;
-}
-/* Ganz offen: Uhrzeit unter dem Griff */
-.shell.is-mapfirst .phone--sheet.is-full .phone__status {
-  top: 12px;
 }
 /* Großer Titel kleiner: Im halben Blatt zählt jede Zeile */
 .shell.is-mapfirst .phone--sheet.is-half .phone-screen__large {

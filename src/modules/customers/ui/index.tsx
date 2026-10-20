@@ -30,6 +30,7 @@ import { activeCity, citiesUnlocked, cityOfSpot, isBusinessSold } from '../../ci
 import { getGang } from '../../gangs';
 import { formatProductAmount, getProduct, productName } from '../../goods';
 import { activeRunnerAt } from '../../staff';
+import { tutorialLockText } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   customerRevenue,
@@ -63,13 +64,25 @@ function StandHere(props: { spotId: string }) {
   const elsewhere = playerSpot(state);
   const runner = activeRunnerAt(state, props.spotId);
   const away = isPlayerAway(state);
+  // Feedback 16.10.2026: Im Tutorial erst nach „Drei Kunden bedienen“, bis dahin ausgegraut mit Schloss.
+  const locked = tutorialLockText(state, 'customers.stand');
   // Steht jemand an, den du nicht bedienen kannst, läuft auch der Verkauf von allein nicht (Ware fehlt).
   const stuck = here && waitingAt(state, props.spotId).length > servableAt(state, props.spotId).length;
   const stand = (spotId: string | null) => dispatch({ type: 'customers.standAt', payload: { spotId } });
   return (
     <Group title="Selbst verkaufen" icon="runner" color="brand">
       <List>
-        {here ? (
+        {locked && !here ? (
+          <ListItem
+            aside={
+              <Button small icon="lock" disabled>
+                Hier hinstellen
+              </Button>
+            }
+          >
+            <ItemContent icon="runner" color="brand" title="Tipp auf den Spot" meta={locked} />
+          </ListItem>
+        ) : here ? (
           <ListItem
             aside={
               <Button small onClick={() => stand(null)}>

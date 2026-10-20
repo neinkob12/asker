@@ -44,6 +44,11 @@ export interface PackSetup {
   /** Größter erlaubter zusammenhängender Ware-Block (größer leuchtet im Röntgen). */
   clusterMax: number;
   duration: number;
+  /**
+   * Wie scharf der Scanner Lücken und Blöcke sieht (Auftrag 49, Teil E): Faktor auf EXPOSURE.gap und .cluster, leicht
+   * unter 1, schwer darüber. Fehlt er (alte Aufbauten, Tests), gilt 1.
+   */
+  scanner?: number;
 }
 
 export interface Placement {
@@ -101,6 +106,19 @@ export const GRID: Readonly<Record<ContainerSizeId, { cols: number; rows: number
   medium: { cols: 9, rows: 5, goods: 8, seconds: 52 },
   full: { cols: 12, rows: 5, goods: 11, seconds: 60 },
 };
+
+/**
+ * Zeit nach Schwierigkeit (Auftrag 48): leicht etwas mehr als die Grundzeit, schwer deutlich weniger. Gemessen mit dem
+ * Test-Bot (model.test.ts, „machbar“): Wer etwa alle 3 s ein Teil ablegt, kommt bei 0,9 knapp durch.
+ */
+export const TIME_FACTOR = { easy: 1.15, hard: 0.55 } as const;
+/** In den letzten so vielen Sekunden rollt der Scanner auf der Schiene heran (nur Optik und Ton). */
+export const SCANNER_APPROACH = 15;
+
+/** Zeit und Scanner ziehen schon zur Mitte hin an (Exponent auf die Schwierigkeit, unter 1). */
+export const DIFFICULTY_CURVE = 0.5;
+/** Schärfe des Scanners nach Schwierigkeit (Faktor auf Lücken und Blöcke), gemessen in model.balance.test.ts. */
+export const SCANNER_STRENGTH = { easy: 0.8, hard: 2.4 } as const;
 
 /** Gewicht der Auffälligkeit je Grund (gedeckelt auf 1 je Zelle). */
 export const EXPOSURE = { door: 1, xray: 1, gap: 0.3, cluster: 0.5 } as const;
@@ -284,8 +302,8 @@ export const COVER_SETS: Readonly<
         weight: 2,
       },
     ],
-    fill: 0.5,
-    fillHard: 0.35,
+    fill: 0.45,
+    fillHard: 0.25,
   },
 };
 
@@ -325,11 +343,12 @@ export function originFor(shape: Shape, cx: number, cy: number): { x: number; y:
 
 /**
  * Container aus Seed, Schwierigkeit und Bestellung. Mehr Ware, sperrigere Formen, weniger Deckladung und kleinere
- * erlaubte Ware-Blöcke, je schwerer. Zeit 45 s (Kiste) bis 60 s (ganzer Container).
+ * erlaubte Ware-Blöcke, je schwerer. Grundzeit 45 s (Kiste) bis 60 s (ganzer Container), mal TIME_FACTOR.
  */
 export function createPacking(seed: number, difficulty: number, input: PackingInput): PackSetup {
   const random = createRng(seed);
   const d = clamp01(difficulty);
+  const curved = d ** DIFFICULTY_CURVE;
   const grid = GRID[input.size] ?? GRID.medium;
   const cover: CoverKind = input.cover in COVER_SETS ? input.cover : 'none';
   const products = input.products.length > 0 ? input.products : [{ id: 'weed', name: 'Ware' }];
@@ -371,7 +390,8 @@ export function createPacking(seed: number, difficulty: number, input: PackingIn
     pieces,
     goodsCells,
     clusterMax: d < 0.4 ? 6 : d < 0.75 ? 5 : 4,
-    duration: grid.seconds,
+    duration: Math.round(grid.seconds * (TIME_FACTOR.easy + (TIME_FACTOR.hard - TIME_FACTOR.easy) * curved)),
+    scanner: Math.round((SCANNER_STRENGTH.easy + (SCANNER_STRENGTH.hard - SCANNER_STRENGTH.easy) * curved) * 100) / 100,
   };
 }
 
@@ -522,6 +542,7 @@ export function moveCursor(setup: PackSetup, state: PackState, dx: number, dy: n
 /** Wie auffällig jede Zelle Ware ist, verstaute Ware und Tarnung. */
 export function analyze(setup: PackSetup, state: PackState): PackAnalysis {
   const { cols, rows } = setup;
+  const sharp = setup.scanner ?? 1;
   const isGoods = (x: number, y: number) => {
     const id = pieceAt(setup, state, x, y);
     return id >= 0 && setup.pieces[id].kind === 'goods';
@@ -577,13 +598,13 @@ export function analyze(setup: PackSetup, state: PackState): PackAnalysis {
       for (const [nx, ny, side] of sides) {
         if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
         if (pieceAt(setup, state, nx, ny) === -1) {
-          value += EXPOSURE.gap;
+          value += EXPOSURE.gap * sharp;
           gaps.push(side);
         }
       }
       if (gaps.length > 0) reasons.push('gap');
       if (sizes[comp[y * cols + x]] > setup.clusterMax) {
-        value += EXPOSURE.cluster;
+        value += EXPOSURE.cluster * sharp;
         reasons.push('cluster');
       }
       cells.push({ x, y, value: Math.min(1, Math.round(value * 1000) / 1000), reasons, gaps });
@@ -605,6 +626,57 @@ export function analyze(setup: PackSetup, state: PackState): PackAnalysis {
 export function packScore(setup: PackSetup, state: PackState): number {
   const a = analyze(setup, state);
   return Math.round(clamp01(a.stowed * a.cover) * 1000) / 1000;
+}
+
+/** Wie nah der Scanner schon ist: 0 = in der Halle, 1 = am Container (letzte SCANNER_APPROACH Sekunden). */
+export function scannerNear(setup: PackSetup, state: PackState): number {
+  return clamp01(1 - timeLeft(setup, state) / Math.min(SCANNER_APPROACH, setup.duration));
+}
+
+/** Ware-Teile, die ganz versteckt sind (jede Zelle ohne Auffälligkeit). */
+export function hiddenGoods(setup: PackSetup, state: PackState, analysis: PackAnalysis): number[] {
+  const bad = new Set<number>();
+  for (const c of analysis.cells) if (c.value > 0) bad.add(state.grid[c.y * setup.cols + c.x]);
+  return state.placed.map((p) => p.pieceId).filter((id) => setup.pieces[id].kind === 'goods' && !bad.has(id));
+}
+
+/**
+ * Wie dicht ein abgelegtes Teil sitzt (Auftrag 49, Teil E, nur für Lob und Serie): Anteil seiner Außenkanten, die an
+ * einer Wand oder einem anderen Teil liegen (0 bis 1). Ab SNUG_AT heißt es „Passt!“.
+ */
+export function snugness(setup: PackSetup, state: PackState, pieceId: number): number {
+  const cells: [number, number][] = [];
+  for (let y = 0; y < setup.rows; y++)
+    for (let x = 0; x < setup.cols; x++) if (state.grid[y * setup.cols + x] === pieceId) cells.push([x, y]);
+  let edges = 0;
+  let touching = 0;
+  for (const [x, y] of cells) {
+    for (const [nx, ny] of [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1],
+    ]) {
+      const inside = nx >= 0 && ny >= 0 && nx < setup.cols && ny < setup.rows;
+      const id = inside ? state.grid[ny * setup.cols + nx] : -2;
+      if (id === pieceId) continue;
+      edges += 1;
+      if (id !== -1) touching += 1;
+    }
+  }
+  return edges > 0 ? touching / edges : 0;
+}
+export const SNUG_AT = 0.75;
+
+/** Spalten, die von Wand zu Wand voll sind (für „Reihe dicht“). */
+export function fullColumns(setup: PackSetup, state: PackState): number[] {
+  const out: number[] = [];
+  for (let x = 0; x < setup.cols; x++) {
+    let full = true;
+    for (let y = 0; y < setup.rows && full; y++) if (state.grid[y * setup.cols + x] === -1) full = false;
+    if (full) out.push(x);
+  }
+  return out;
 }
 
 /** Restliche Zeit in Sekunden. */
@@ -682,4 +754,36 @@ export function autoPack(setup: PackSetup, state: PackState, steps = Number.POSI
     placed += 1;
   }
   return placed;
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface PackStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Werte fürs Ergebnis: Tarnung, verstaute Ware, versteckte Blöcke, auffällige Stellen im Röntgen. */
+export function containerStats(setup: PackSetup, state: PackState): PackStat[] {
+  const a = analyze(setup, state);
+  const goods = setup.pieces.filter((p) => p.kind === 'goods').length;
+  const hidden = hiddenGoods(setup, state, a).length;
+  const cover = a.placedGoods > 0 ? Math.round(a.cover * 100) : 0;
+  return [
+    { label: 'Tarnung', value: `${cover} %`, icon: 'eye', tone: cover >= 70 ? 'good' : cover < 40 ? 'bad' : undefined },
+    {
+      label: 'Verstaut',
+      value: `${a.placedGoodsPieces}/${goods}`,
+      icon: 'package',
+      tone: a.placedGoodsPieces === goods ? 'good' : 'bad',
+    },
+    {
+      label: 'Ganz versteckt',
+      value: `${hidden}/${goods}`,
+      icon: 'check',
+      tone: hidden === goods ? 'good' : undefined,
+    },
+    { label: 'Im Röntgen', value: String(a.flagged), icon: 'scan', tone: a.flagged === 0 ? 'good' : 'bad' },
+  ];
 }

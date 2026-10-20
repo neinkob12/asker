@@ -1,5 +1,6 @@
-/* Verkehrskontrolle (Auftrag 47): 3D-Blick aus dem Auto im Canvas, darüber HUD, Fakten, Sprechblase, Antworten und
-   Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
+/* Verkehrskontrolle (Auftrag 47, Auftrag 48): 3D-Blick aus dem Auto im Canvas, darüber Blaulicht im Innenraum und die
+   Blendung der Taschenlampe (--traffic-blue, --traffic-red, --traffic-glare setzt die Bildschleife), HUD, Fakten mit
+   deinen Aussagen, Sprechblase mit Geduld, Antworten und Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
 
 .traffic {
   position: absolute;
@@ -44,6 +45,75 @@
   inset: 0;
   width: 100%;
   height: 100%;
+}
+/* Unten (Schultern im Porträt) weich ausblenden: Dort übernimmt der Körper in der Szene. */
+.traffic-officer {
+  mask-image: linear-gradient(180deg, black 66%, transparent 86%);
+  -webkit-mask-image: linear-gradient(180deg, black 66%, transparent 86%);
+}
+/* Blaulicht und Lampe auf dem Gesicht: im Takt, nur auf dem Porträt (Maske wie oben). */
+.traffic__face-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 20% 40%,
+      color-mix(in srgb, var(--cat-law-a) calc(var(--traffic-blue, 0) * 70%), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 70% 60% at 20% 40%,
+      color-mix(in srgb, var(--cat-danger-a) calc(var(--traffic-red, 0) * 45%), transparent),
+      transparent 70%
+    );
+  mask-image: linear-gradient(180deg, black 66%, transparent 86%);
+  -webkit-mask-image: linear-gradient(180deg, black 66%, transparent 86%);
+}
+.traffic--day .traffic__face-light {
+  opacity: 0.45;
+}
+
+/* Blaulicht wandert durch den Innenraum: Schein von hinten links, abwechselnd blau und rot. */
+.traffic__cabin {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(
+      ellipse 55% 80% at 0% 55%,
+      color-mix(in srgb, var(--cat-law-a) calc(var(--traffic-blue, 0) * 32%), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50% 70% at 8% 30%,
+      color-mix(in srgb, var(--cat-danger-a) calc(var(--traffic-red, 0) * 20%), transparent),
+      transparent 70%
+    );
+}
+.traffic--day .traffic__cabin {
+  opacity: 0.4;
+}
+.traffic.is-reduced .traffic__cabin {
+  opacity: 0.25;
+}
+/* Taschenlampe ins Gesicht: weißer Schein von der Lampe aus, Ränder brennen aus. */
+.traffic__glare {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle at 38% 46%,
+    color-mix(in srgb, var(--hud-ink) 95%, transparent) 0%,
+    color-mix(in srgb, var(--hud-ink) 40%, transparent) 18%,
+    transparent 55%
+  );
+  opacity: calc(var(--traffic-glare, 0) * 0.85);
 }
 
 /* Roter Blitz bei einem Widerspruch, Blaulicht-Wash am Ende. */
@@ -123,6 +193,53 @@
 .traffic__fact.is-warn {
   color: var(--cat-warn);
 }
+.traffic__facts-head {
+  margin: 4px 0 0;
+  font-family: var(--font-hud-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-3, var(--hud-ink-2));
+}
+.traffic__facts-head:first-child {
+  margin-top: 0;
+}
+.traffic__fact.is-said {
+  color: var(--hud-ink);
+}
+.traffic__fact-label {
+  min-width: 52px;
+  font-weight: 600;
+  color: var(--hud-ink-2);
+}
+/* Woran der Widerspruch hing: leuchtet rot auf und wackelt kurz. */
+.traffic__fact.is-caught {
+  color: var(--cat-danger);
+  animation: traffic-caught 1.6s var(--ease-out) both;
+}
+.traffic__fact.is-caught svg {
+  color: var(--cat-danger);
+}
+@keyframes traffic-caught {
+  0% {
+    transform: translateX(0);
+    text-shadow: 0 0 0 transparent;
+  }
+  8% {
+    transform: translateX(-3px);
+  }
+  16% {
+    transform: translateX(3px);
+    text-shadow: 0 0 10px var(--cat-danger);
+  }
+  24% {
+    transform: translateX(-2px);
+  }
+  30% {
+    transform: translateX(0);
+  }
+}
 
 /* ---------------------------------------------------------------- Sprechblase */
 .traffic__speech-card {
@@ -152,6 +269,38 @@
   font-size: 12px;
   color: var(--hud-ink-2);
 }
+.traffic__line--pause {
+  letter-spacing: 0.3em;
+  color: var(--hud-ink-2);
+}
+.traffic__speech-card.is-pause {
+  border-color: var(--cat-danger);
+}
+/* Geduld: läuft ab, solange er auf deine Antwort wartet. */
+.traffic__patience {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--hud-glass-fill);
+}
+.traffic__patience span {
+  display: block;
+  height: 100%;
+  background: var(--hud-ink-2);
+  transform-origin: left center;
+  transition: background-color 0.3s;
+}
+.traffic__patience span[data-low="low"] {
+  background: var(--cat-warn);
+}
+.traffic__patience span[data-low="critical"] {
+  background: var(--cat-danger);
+}
+.traffic__patience.is-idle {
+  opacity: 0.3;
+}
 @keyframes traffic-pop {
   from {
     opacity: 0;
@@ -160,21 +309,8 @@
 }
 
 .traffic__message {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  bottom: calc(var(--space-4) + 150px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--hud-glass);
-  border: 1px solid var(--hud-glass-edge);
-  font-size: 13px;
   font-weight: 700;
-  white-space: nowrap;
   animation: traffic-pop var(--duration) var(--ease-out);
-  pointer-events: none;
 }
 .traffic__message.is-good {
   color: var(--cat-money);
@@ -271,10 +407,6 @@
   .traffic__line {
     font-size: 15px;
   }
-  .traffic__message {
-    bottom: calc(var(--space-3) + 300px + env(safe-area-inset-bottom, 0px));
-    font-size: 12px;
-  }
   .traffic__bottom {
     left: var(--space-3);
     right: var(--space-3);
@@ -296,6 +428,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .traffic__fact.is-caught,
   .traffic__line,
   .traffic__message,
   .traffic.is-fail .traffic__wash {

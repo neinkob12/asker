@@ -11,6 +11,8 @@
   font-family: var(--font-hud);
   color: var(--hud-ink);
   background: var(--hud-glass-solid);
+  /* Pfeile am Rand rechnen in cqw/cqh (Größe der Bühne). */
+  container-type: size;
 }
 .chase-canvas {
   position: absolute;
@@ -76,7 +78,7 @@
   white-space: nowrap;
 }
 
-/* Minikarte: Raster, du, Streifen, Tiefgarage. */
+/* Radar: rund, Blick nach vorn, du in der Mitte. */
 .chase-minimap {
   position: absolute;
   z-index: 3;
@@ -84,13 +86,212 @@
   top: calc(var(--space-4) + 70px);
   width: 128px;
   height: 128px;
-  border-radius: var(--hud-radius);
-  border: 1px solid var(--hud-glass-edge);
+  border-radius: 50%;
   box-shadow: var(--hud-shadow);
   pointer-events: none;
 }
-.chase.has-hideout .chase-minimap {
-  border-color: var(--hud-gold);
+
+/* Rückspiegel: nur der Rahmen; das Bild zeichnet die Szene in dieses Rechteck des Canvas (scene.setMirror), solange
+   eine Streife dicht hinter dir ist (data-on). */
+.chase-mirror {
+  position: absolute;
+  z-index: 3;
+  top: 124px;
+  left: calc(50% - 124px);
+  width: 248px;
+  height: 72px;
+  border-radius: 14px / 18px;
+  border: 2px solid var(--hud-glass-edge);
+  box-shadow:
+    0 6px 18px rgb(0 0 0 / 0.45),
+    inset 0 0 0 1px rgb(0 0 0 / 0.6),
+    inset 0 10px 18px rgb(255 255 255 / 0.06);
+  opacity: 0;
+  pointer-events: none;
+  /* Kein transform: Die Szene liest das Rechteck mit getBoundingClientRect. */
+  transition: opacity 0.18s var(--ease-out);
+}
+.chase-mirror[data-on="1"] {
+  opacity: 1;
+}
+.chase.is-charging .chase-mirror[data-on="1"] {
+  border-color: var(--cat-danger);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--cat-danger) 60%, transparent),
+    inset 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+/* Ziel: Tiefgarage mit Pfeil (dreht zur Einfahrt) und Abstand. */
+.chase-goal {
+  position: absolute;
+  z-index: 3;
+  top: 124px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hud-gold) 22%, var(--hud-glass));
+  border: 1px solid var(--hud-gold);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--hud-gold) 45%, transparent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hud-ink);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: chase-goal-in 0.35s var(--ease-out);
+}
+.chase-goal__arrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--hud-gold);
+  color: var(--hud-glass-solid);
+}
+.chase-goal__arrow svg {
+  width: 18px;
+  height: 18px;
+}
+/* Liegt der Spiegel da, rückt das Ziel darunter. */
+.chase:has(.chase-mirror[data-on="1"]) .chase-goal {
+  top: 206px;
+}
+.chase-goal__dist {
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-gold);
+}
+@keyframes chase-goal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.9);
+  }
+}
+
+/* Pfeile am Rand: Streifen außerhalb des Bildes, rot beim Ansetzen zum Rammen. */
+.chase-pins {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.chase-pin {
+  --pin: var(--cat-law);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  will-change: transform;
+}
+.chase-pin[hidden] {
+  display: none;
+}
+.chase-pin__arrow {
+  width: 30px;
+  height: 30px;
+  background: var(--pin);
+  clip-path: polygon(100% 50%, 15% 0%, 35% 50%, 15% 100%);
+  transform: rotate(var(--pin-angle, 0rad));
+  filter: drop-shadow(0 0 6px var(--pin));
+  animation: chase-pin-blink 0.45s steps(2) infinite;
+}
+.chase-pin__label {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--hud-glass);
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+  white-space: nowrap;
+}
+.chase-pin[data-charging="1"] {
+  --pin: var(--cat-danger);
+}
+.chase-pin[data-charging="1"] .chase-pin__arrow {
+  width: 40px;
+  height: 40px;
+  animation-duration: 0.2s;
+}
+.chase-pin[data-charging="1"] .chase-pin__label {
+  background: var(--cat-danger);
+  color: var(--hud-ink);
+}
+@keyframes chase-pin-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Rammt gleich: roter Rand unten. */
+.chase.is-charging .chase-wash {
+  opacity: 1;
+  background: linear-gradient(to top, color-mix(in srgb, var(--cat-danger) 38%, transparent), transparent 28%);
+  animation: chase-blue 0.25s steps(2) infinite;
+}
+
+/* Einblendungen: Knapp vorbei, durch die Sperre, Streife zerlegt, gerammt. */
+.chase-pops {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.chase-pop {
+  font-family: var(--font-hud-display);
+  font-size: 26px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--hud-gold);
+  text-shadow:
+    0 2px 0 rgb(0 0 0 / 0.55),
+    0 0 18px color-mix(in srgb, currentColor 60%, transparent);
+  animation: chase-pop 1.4s var(--ease-out) forwards;
+}
+.chase-pop.is-good {
+  color: var(--cat-money);
+}
+.chase-pop.is-bad {
+  color: var(--cat-danger);
+}
+@keyframes chase-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.7);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.12);
+  }
+  22% {
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(0.96);
+  }
 }
 
 /* ---------------------------------------------------------------- Oben: Zeit, Abhängen, Karre */
@@ -288,10 +489,42 @@
     min-width: 96px;
     bottom: calc(var(--space-4) + 84px + env(safe-area-inset-bottom, 0px));
   }
+  /* Am Handy: Funk unter der Leiste über die ganze Breite, Radar darunter rechts, Ziel daneben. */
+  .chase-radio {
+    left: var(--space-3);
+    right: var(--space-3);
+    transform: none;
+    max-width: none;
+    animation-name: chase-radio-in-mobile;
+  }
   .chase-minimap {
-    width: 96px;
-    height: 96px;
-    top: calc(var(--space-4) + 64px);
+    width: 92px;
+    height: 92px;
+    right: var(--space-3);
+    top: 112px;
+  }
+  .chase-goal {
+    top: 118px;
+    left: var(--space-3);
+    transform: none;
+    font-size: 12px;
+    padding: 4px 10px 4px 5px;
+    animation: none;
+  }
+  .chase-goal__dist {
+    font-size: 15px;
+  }
+  .chase-mirror {
+    top: 160px;
+    left: calc(50% - 88px);
+    width: 176px;
+    height: 54px;
+  }
+  .chase:has(.chase-mirror[data-on="1"]) .chase-goal {
+    top: 118px;
+  }
+  .chase-pop {
+    font-size: 21px;
   }
   .chase-hint {
     display: none;
@@ -304,9 +537,21 @@
     padding: 0 var(--space-3);
   }
 }
+@keyframes chase-radio-in-mobile {
+  from {
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .chase-mirror {
+    transition: none;
+  }
   .chase-radio,
-  .chase.is-caught .chase-wash {
+  .chase.is-caught .chase-wash,
+  .chase.is-charging .chase-wash,
+  .chase-pin__arrow,
+  .chase-pop,
+  .chase-goal {
     animation: none;
   }
 }

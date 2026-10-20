@@ -6,14 +6,18 @@ import { undercoverOutcome } from '../../../../police';
 import {
   cardSeconds,
   createShift,
+  type Decision,
   decide,
   initShift,
   inputFrom,
+  revealMargin,
   shiftOutcome,
   shiftPicks,
   shiftScore,
+  shiftStats,
   step,
   verdictOf,
+  visibleTells,
 } from './model';
 import { isSuspicious, tellDef } from './tells';
 
@@ -80,10 +84,22 @@ describe('Zivi oder Kunde: Modell', () => {
     expect(people.find((p) => p.tells.includes('bigOrder'))?.amount).toBeGreaterThanOrEqual(20);
   });
 
-  it('6 Sekunden pro Karte, schwer 4', () => {
+  it('6 Sekunden pro Karte, schwer 4; im Lauf der Schicht wird es schneller', () => {
     expect(cardSeconds(0.2)).toBe(6);
     expect(cardSeconds(0.9)).toBe(4);
     expect(cardSeconds(0.55)).toBeGreaterThan(4);
+    for (const d of [0.2, 0.9]) {
+      const shift = createShift(3, d, input);
+      expect(shift.perCard).toBe(cardSeconds(d));
+      const times = shift.people.map((p) => p.seconds);
+      // Die erste Karte bleibt länger (FIRST_CARD), danach wird es stetig schneller.
+      expect(times[0]).toBeGreaterThan(times[1]);
+      for (let i = 2; i < times.length; i++) expect(times[i]).toBeLessThanOrEqual(times[i - 1]);
+      expect(times.at(-1)).toBeLessThan(times[0]);
+    }
+    const easy = createShift(3, 0.2, input).people;
+    const hard = createShift(3, 0.9, input).people;
+    expect((hard.at(-1)?.seconds ?? 0) / hard[1].seconds).toBeLessThan((easy.at(-1)?.seconds ?? 0) / easy[1].seconds);
   });
 
   it('alles richtig: Score 1, alle Zivis erkannt', () => {
@@ -92,12 +108,13 @@ describe('Zivi oder Kunde: Modell', () => {
     expect(out).toEqual({ soldZivi: 0, spotted: 2, turnedAway: 0, sold: 6, missed: 0 });
     expect(shiftScore(shift, out)).toBe(1);
     expect(shiftPicks(out)).toEqual(['spotted:2', 'sold:6']);
+    expect(shiftStats(shift, out)[0]).toMatchObject({ value: '2/2', tone: 'good' });
   });
 
   it('zu lange gezögert: der Kunde geht, ein Zivi gilt nicht als erkannt', () => {
     const shift = createShift(5, 0.5, input);
     const state = initShift(shift);
-    const events = step(shift, state, shift.perCard + 0.01);
+    const events = step(shift, state, shift.people[0].seconds + 0.01);
     expect(events[0]).toMatchObject({ type: 'decided', decision: 'timeout', verdict: 'turnedAway' });
     expect(verdictOf({ zivi: true }, 'timeout')).toBe('missed');
     // In der Pause nimmt die nächste Karte noch nichts an.
@@ -126,5 +143,46 @@ describe('Zivi oder Kunde: Modell', () => {
   it('liest fremde params robust', () => {
     expect(inputFrom({})).toMatchObject({ customers: 8, zivis: 1 });
     expect(inputFrom({ customers: 99, zivis: 9 })).toMatchObject({ customers: 12, zivis: 3 });
+  });
+
+  it('Hinschauen: Gesagtes gleich, der Rest nach und nach, immer mit Luft zum Entscheiden', () => {
+    for (const difficulty of [0.2, 0.5, 0.95]) {
+      for (let seed = 1; seed < 60; seed++) {
+        const shift = createShift(seed, difficulty, input);
+        for (const p of shift.people) {
+          for (const id of p.tells) {
+            expect(p.reveal[id]).toBeGreaterThanOrEqual(0);
+            expect(p.reveal[id]).toBeLessThanOrEqual(p.seconds - revealMargin(difficulty) + 1e-9);
+            if (tellDef(id)?.show === 'speech' && id !== 'asksSupplier') expect(p.reveal[id]).toBe(0);
+          }
+          expect(visibleTells(p, p.seconds)).toEqual(p.tells);
+        }
+      }
+    }
+  });
+
+  /** Test-Bot: entscheidet nach `wait` Sekunden mit der Faustregel (zwei verdächtige Merkmale sind ein Zivi). */
+  function accuracy(difficulty: number, wait: (perCard: number) => number) {
+    let right = 0;
+    let all = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const shift = createShift(seed, difficulty, input);
+      for (const p of shift.people) {
+        const seen = visibleTells(p, wait(p.seconds)).filter(isSuspicious).length;
+        const decision: Decision = seen >= 2 ? 'refuse' : 'sell';
+        const verdict = verdictOf(p, decision);
+        if (verdict === 'sold' || verdict === 'spotted') right += 1;
+        all += 1;
+      }
+    }
+    return right / all;
+  }
+
+  it('Test-Bot: wer hinschaut, liegt richtig; wer schwer sofort wischt, verkauft an Zivis', () => {
+    for (const d of [0.2, 0.5, 0.95]) expect(accuracy(d, (t) => t - revealMargin(d))).toBe(1);
+    const hastyHard = accuracy(0.95, () => 0.9);
+    const hastyEasy = accuracy(0.2, () => 0.9);
+    expect(hastyHard).toBeLessThan(0.93);
+    expect(hastyEasy).toBeGreaterThan(hastyHard);
   });
 });

@@ -47,7 +47,7 @@ Die zwölf Stufen aus Auftrag 46, Abschnitt „Der Flow“, mit ihren Missionen:
 
 | Stufe | Mission | Ziel |
 | --- | --- | --- |
-| 1 | `serve3` | drei Kunden selbst bedienen (`sale.completed` mit `sellerId === null`, `channel === 'street'`) |
+| 1 | `serve3` | drei Kunden selbst bedienen (`sale.completed` mit `sellerId === null`, `channel === 'street'`; Läufer und Hinstellen erst ab Stufe 2, Feedback 16.10.2026) |
 | 2 | `buySpots` | Zülpicher Platz und Rudolfplatz freischalten |
 | 5 | `threeProducts` | drei verschiedene Produkte bestellt (`shipment.ordered`, Produkte zählen) |
 | 6 | `earn4k` | 4.000 € schwarz **und** vier weitere Spots **und** drei Läufer (Teilziele, alle erfüllt) |

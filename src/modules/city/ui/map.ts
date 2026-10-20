@@ -28,7 +28,12 @@ const lineKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 /** Abschnitte des Netzes, auf denen gerade eine Fahrt zwischen zwei Städten läuft. */
 export function busyLines(state: GameState): Set<string> {
   const busy = new Set<string>();
+  // Jedes Städtepaar nur einmal nachschlagen, auch bei vielen Lieferungen auf derselben Strecke.
+  const marked = new Set<string>();
   const mark = (from: string, to: string) => {
+    const pair = `${from}>${to}`;
+    if (marked.has(pair)) return;
+    marked.add(pair);
     for (const leg of autobahnPath(from, to)?.legs ?? []) busy.add(lineKey(leg.from, leg.to));
   };
   const travel = cityTravel(state);

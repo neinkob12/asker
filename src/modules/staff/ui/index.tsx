@@ -32,7 +32,7 @@ import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { playerSpot } from '../../customers';
 import { isCapo, isLieutenant, isRightHand } from '../../hierarchy';
 import { getSpots, isSpotOpen } from '../../spots';
-import { tutorialAllows, tutorialAllowsRole } from '../../tutorial';
+import { tutorialAllows, tutorialAllowsRole, tutorialLockText } from '../../tutorial';
 import {
   activeRunnerAt,
   assignmentLabel,
@@ -562,6 +562,8 @@ function SpotStaff(props: { spotId: string }) {
   const absent = runner ? undefined : runnerAt(state, props.spotId);
   const guard = securityAt(state, { spotId: props.spotId })[0];
   const hireCost = runnerHireCost(state, props.spotId);
+  // Feedback 16.10.2026: Im Tutorial erst nach „Drei Kunden bedienen“, bis dahin ausgegraut mit Schloss.
+  const runnerLocked = tutorialLockText(state, 'staff.runners');
   const free = (role: 'runner' | 'security') =>
     getStaff(state, { role, status: 'active', cityId: cityOfSpot(state, props.spotId) }).filter((m) => !m.assignment);
   const assign = (staffId: string) =>
@@ -612,8 +614,9 @@ function SpotStaff(props: { spotId: string }) {
             aside={
               <Button
                 small
-                variant="primary"
-                disabled={state.wallet.dirty < hireCost}
+                variant={runnerLocked ? 'default' : 'primary'}
+                {...(runnerLocked ? { icon: 'lock' } : {})}
+                disabled={!!runnerLocked || state.wallet.dirty < hireCost}
                 onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
               >
                 Anheuern ({formatEuro(hireCost)})
@@ -624,7 +627,7 @@ function SpotStaff(props: { spotId: string }) {
               icon="userPlus"
               color="people"
               title={absent ? 'Bis dahin' : 'Kein Läufer'}
-              meta="Ein Läufer verkauft hier für dich."
+              meta={runnerLocked ?? 'Ein Läufer verkauft hier für dich.'}
             />
           </ListItem>
         )}

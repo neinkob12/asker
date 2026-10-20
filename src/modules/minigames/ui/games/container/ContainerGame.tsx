@@ -7,22 +7,28 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { productColor } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer, type MeterColor } from '../../kit/hud';
+import { readPalette } from '../../kit/palette';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import { useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
-import { readPalette } from '../stash/draw';
 import {
   cellAt,
+  createPackArt,
   drawScene,
+  FALL_TIME,
   ghostOrigin,
+  type PackArt,
   type PackFx,
   type PackLayout,
   packLayout,
-  renderBackground,
+  spawnDust,
+  stepDust,
+  stepGlints,
   toScreen,
+  warmSprites,
 } from './draw';
 import {
   analyze,
@@ -30,10 +36,13 @@ import {
   COVER_SETS,
   type CoverKind,
   canPlace,
+  containerStats,
   createPacking,
   cycle,
   FLAG_AT,
   finishPacking,
+  fullColumns,
+  hiddenGoods,
   initPacking,
   isPlaced,
   lift,
@@ -47,7 +56,10 @@ import {
   pieceAt,
   place,
   rotate,
+  SNUG_AT,
+  scannerNear,
   select,
+  snugness,
   stackCount,
   step,
   timeLeft,
@@ -55,7 +67,7 @@ import {
   turn,
   undo,
 } from './model';
-import { PACK_SOUNDS } from './sounds';
+import { PACK_SOUNDS, snugSound } from './sounds';
 
 const KEYS = [
   'ArrowLeft',
@@ -104,7 +116,7 @@ function swatch(piece: Pick<PackPiece, 'kind' | 'productId'>, cover: CoverKind):
   return cover === 'bananas' ? 'var(--hud-gold)' : cover === 'tiles' ? 'var(--hud-ink-2)' : 'var(--cat-goods)';
 }
 
-/** Kleine Form aus Kästchen (Leiste, Auswahl). */
+/** Kleine Form aus Kästchen (Leiste, Auswahl), mit Material wie im Container (Folie, Karton, Palette; CSS). */
 function MiniShape(props: { piece: PackPiece; rot: number; cover: CoverKind; size?: number }) {
   const cells = rotate(props.piece.shape, props.rot);
   const w = Math.max(...cells.map((c) => c[0])) + 1;
@@ -112,7 +124,7 @@ function MiniShape(props: { piece: PackPiece; rot: number; cover: CoverKind; siz
   const s = props.size ?? 11;
   return (
     <span
-      class="pack__mini"
+      class={`pack__mini is-${props.piece.kind} is-cover-${props.cover}`}
       style={{
         gridTemplateColumns: `repeat(${w}, ${s}px)`,
         gridTemplateRows: `repeat(${h}, ${s}px)`,
@@ -165,9 +177,26 @@ export function ContainerGame(props: MinigameViewProps) {
   const reduced = useMemo(prefersReducedMotion, []);
   const canvas = useRef<HTMLCanvasElement>(null);
   const layoutRef = useRef<PackLayout | null>(null);
-  const bg = useRef<HTMLCanvasElement | null>(null);
+  const art = useRef<PackArt | null>(null);
   const [layout, setLayout] = useState<PackLayout | null>(null);
-  const fx = useRef<PackFx & { lastHud: number; endAt: number; sent: boolean; scanT: number; beeped: number }>({
+  const fx = useRef<
+    PackFx & {
+      lastHud: number;
+      /** Zeit des letzten Bildes (ruhig nur 30 pro Sekunde). */
+      lastDraw: number;
+      sent: boolean;
+      scanT: number;
+      beeped: number;
+      /** Teil im Fallen: wann es aufsetzt (Staub, Ruck, Ton), welche Zellen, wie schwer. */
+      landing: { at: number; id: number; cells: [number, number][]; cells0: number; goods: boolean } | null;
+      /** Serie dicht gesetzter Teile und schon dichte Reihen (für das Lob). */
+      combo: number;
+      rows: Set<number>;
+      /** Ganze Sekunden, zu denen die Rundumleuchte zuletzt gepiept hat. */
+      beacon: number;
+      rolling: boolean;
+    }
+  >({
     t: 0,
     reduced,
     running: false,
@@ -175,11 +204,22 @@ export function ContainerGame(props: MinigameViewProps) {
     dropped: null,
     reject: -10,
     scan: -1,
+    near: 0,
+    kick: { at: -10, power: 0 },
+    dust: [],
+    sealed: new Map(),
+    glints: [],
+    pops: [],
+    combo: 0,
+    rows: new Set(),
     lastHud: -1,
-    endAt: -1,
+    lastDraw: -1,
     sent: false,
     scanT: -1,
     beeped: -1,
+    landing: null,
+    beacon: -1,
+    rolling: false,
   });
   const drag = useRef<{
     pointer: number;
@@ -208,7 +248,13 @@ export function ContainerGame(props: MinigameViewProps) {
   const stage = useStageCanvas(canvas, (st) => {
     const l = packLayout(st.width, st.height, setup.cols, setup.rows);
     layoutRef.current = l;
-    bg.current = renderBackground(l, palette, setup, st.dpr);
+    const made = createPackArt(l, palette, setup, st.dpr);
+    art.current = made;
+    // Teile vorab zeichnen, eins pro Takt (schon während der Einleitung), solange diese Größe gilt.
+    const warm = () => {
+      if (art.current === made && warmSprites(made, palette, l, setup, 1)) window.setTimeout(warm, 20);
+    };
+    window.setTimeout(warm, 20);
     setLayout(l);
     draw();
   });
@@ -216,11 +262,28 @@ export function ContainerGame(props: MinigameViewProps) {
   const say = (message: string | null, tone: Hud['tone'] = null) =>
     setHud((h) => ({ ...h, message, tone, key: h.key + 1 }));
 
-  /** Nach jeder Handlung: Auffälligkeit neu rechnen und die Leiste neu zeichnen. */
-  const changed = () => {
+  /** Nach jeder Handlung: Auffälligkeit neu rechnen, Siegel auf versteckter Ware, Leiste neu zeichnen. */
+  const changed = (sealAt = fx.current.t) => {
     const s = game.current;
     analysis.current = analyze(setup, s);
     const a = analysis.current;
+    const f = fx.current;
+    const hidden = new Set(hiddenGoods(setup, s, a));
+    for (const id of [...f.sealed.keys()]) if (!hidden.has(id)) f.sealed.delete(id);
+    let fresh = 0;
+    for (const id of hidden) {
+      if (f.sealed.has(id)) continue;
+      f.sealed.set(id, sealAt);
+      fresh += 1;
+    }
+    if (fresh > 0) {
+      // Einrasten erst, wenn das Teil aufgesetzt hat.
+      const delay = Math.max(0, sealAt - f.t);
+      window.setTimeout(() => {
+        audio.play(PACK_SOUNDS.seal, { volume: 0.75 });
+        haptic('success');
+      }, delay * 1000);
+    }
     setHud((h) => ({
       ...h,
       left: timeLeft(setup, s),
@@ -255,10 +318,18 @@ export function ContainerGame(props: MinigameViewProps) {
       return;
     }
     place(setup, s, piece.id, s.rot, x, y);
-    fx.current.dropped = { id: piece.id, at: fx.current.t };
-    audio.play(piece.kind === 'goods' ? PACK_SOUNDS.wrap : PACK_SOUNDS.drop, { volume: 0.8 });
-    haptic('light');
-    changed();
+    const f = fx.current;
+    f.dropped = { id: piece.id, at: f.t };
+    // Fällt kurz, setzt dann mit Staub, Ruck und Ton auf (im Bild-Takt, siehe useFrameLoop).
+    f.landing = {
+      at: f.t + (reduced ? 0 : FALL_TIME),
+      id: piece.id,
+      cells: rotate(piece.shape, s.rot).map(([cx, cy]) => [x + cx, y + cy]),
+      cells0: piece.shape.length,
+      goods: piece.kind === 'goods',
+    };
+    audio.playThrottled(MINIGAME_SOUNDS.click, 40, { volume: 0.25 });
+    changed(f.t + (reduced ? 0 : FALL_TIME));
     // Rückmeldung zur Ware: wo sie auffällt.
     if (piece.kind === 'goods') {
       const cells = analysis.current.cells.filter((c) => setup.pieces[s.grid[c.y * setup.cols + c.x]]?.id === piece.id);
@@ -270,6 +341,44 @@ export function ContainerGame(props: MinigameViewProps) {
     }
     const a = analysis.current;
     if (a.placedGoodsPieces === goodsTotal && a.cover >= 0.999) say('Sauber. Nichts zu sehen.', 'good');
+  };
+
+  /** Lob beim Aufsetzen (Teil E): Teil sitzt dicht (Serie mit steigendem Ton), Reihe von Wand zu Wand dicht. */
+  const praise = (land: { id: number; cells: [number, number][] }) => {
+    const s = game.current;
+    const f = fx.current;
+    const l = layoutRef.current;
+    if (!l || !isPlaced(s, land.id)) return;
+    const center = (cells: [number, number][]) => ({
+      mx: l.ox + (cells.reduce((sum, [x]) => sum + x, 0) / cells.length + 0.5) * l.cell,
+      my: l.oy + (cells.reduce((sum, [, y]) => sum + y, 0) / cells.length + 0.5) * l.cell,
+    });
+    if (snugness(setup, s, land.id) >= SNUG_AT) {
+      f.combo += 1;
+      f.glints.push({ cells: land.cells, at: f.t, strong: false });
+      f.pops.push({
+        text: f.combo >= 2 ? `Passt! ×${f.combo}` : 'Passt!',
+        ...center(land.cells),
+        at: f.t,
+        strong: false,
+      });
+      audio.play(snugSound(f.combo), { volume: 0.55 });
+    } else f.combo = 0;
+    const full = fullColumns(setup, s);
+    const fresh = full.filter((x) => !f.rows.has(x));
+    f.rows = new Set(full);
+    if (fresh.length > 0) {
+      const cells = fresh.flatMap((x) => Array.from({ length: setup.rows }, (_, y) => [x, y] as [number, number]));
+      f.glints.push({ cells, at: f.t + 0.08, strong: true });
+      f.pops.push({
+        text: fresh.length > 1 ? `${fresh.length} Reihen dicht!` : 'Reihe dicht!',
+        ...center(cells),
+        at: f.t + 0.08,
+        strong: true,
+      });
+      audio.play(PACK_SOUNDS.row, { volume: 0.6, delay: 0.08 });
+      haptic('success');
+    }
   };
 
   const choose = (pieceId: number) => {
@@ -309,6 +418,7 @@ export function ContainerGame(props: MinigameViewProps) {
     f.scanT = 0;
     f.scan = 0;
     f.ghost = false;
+    f.sealed.clear();
     audio.play(PACK_SOUNDS.scan, { volume: 0.9 });
     haptic('medium');
     say(timeUp ? 'Zeit um. Der Scanner kommt.' : 'Container zu. Der Scanner kommt.', timeUp ? 'bad' : null);
@@ -319,7 +429,7 @@ export function ContainerGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(packScore(setup, game.current), packPicks(setup, game.current));
+    onFinish(packScore(setup, game.current), packPicks(setup, game.current), containerStats(setup, game.current));
   };
 
   useGameKeys(
@@ -359,9 +469,9 @@ export function ContainerGame(props: MinigameViewProps) {
   function draw() {
     const st = stage.current;
     const l = layoutRef.current;
-    if (!st || !l || !bg.current) return;
+    if (!st || !l || !art.current) return;
     fx.current.running = running;
-    drawScene(st.ctx, l, palette, setup, game.current, analysis.current, bg.current, fx.current);
+    drawScene(st.ctx, l, palette, setup, game.current, analysis.current, art.current, fx.current);
   }
 
   useFrameLoop((dt) => {
@@ -369,6 +479,34 @@ export function ContainerGame(props: MinigameViewProps) {
     const f = fx.current;
     f.t += dt;
     if (!s.done && step(setup, s, dt)) startScan(true);
+    stepDust(f, dt);
+    stepGlints(f);
+    // Aufsetzen: Staub, Ruck (schwerer = stärker), Ton und Vibration.
+    const land = f.landing;
+    if (land && f.t >= land.at) {
+      f.landing = null;
+      const l = layoutRef.current;
+      if (l) spawnDust(f, l, land.cells, land.cells0 * 0.6);
+      f.kick = { at: f.t, power: Math.min(3.5, 0.8 + land.cells0 * 0.55) };
+      audio.play(land.goods ? PACK_SOUNDS.wrap : PACK_SOUNDS.drop, { volume: Math.min(1, 0.55 + land.cells0 * 0.1) });
+      haptic(land.cells0 >= 4 ? 'medium' : 'light');
+      praise(land);
+    }
+    // Druck am Ende: Der Scanner rollt heran, die Leuchte piept jede Sekunde.
+    if (!s.done) {
+      f.near = scannerNear(setup, s);
+      if (f.near > 0 && !f.rolling) {
+        f.rolling = true;
+        audio.play(PACK_SOUNDS.roll, { volume: 0.8 });
+        haptic('warning');
+        say('Der Scanner rollt an. Mach zu!', 'warn');
+      }
+      const left = Math.ceil(timeLeft(setup, s));
+      if (left <= 5 && left !== f.beacon) {
+        f.beacon = left;
+        audio.play(PACK_SOUNDS.beacon, { volume: 0.6 });
+      }
+    }
     if (f.scanT >= 0) {
       f.scanT += dt;
       const dur = reduced ? SCAN_TIME * 0.5 : SCAN_TIME;
@@ -386,12 +524,34 @@ export function ContainerGame(props: MinigameViewProps) {
       }
       if (f.scanT >= dur + SCAN_HOLD) finish();
     }
-    draw();
+    // Ruhig (nur Wippen der Vorschau, Pulsen): höchstens 30 Bilder pro Sekunde; sonst jedes Bild (Teil E).
+    const busy =
+      drag.current !== null ||
+      f.landing !== null ||
+      f.dust.length > 0 ||
+      f.glints.length > 0 ||
+      f.pops.length > 0 ||
+      f.scanT >= 0 ||
+      f.t - f.reject < 0.3 ||
+      f.t - f.kick.at < 0.3 ||
+      (f.dropped !== null && f.t - f.dropped.at < 0.5);
+    if (busy || f.t - f.lastDraw >= 1 / 30 - 1e-3) {
+      f.lastDraw = f.t;
+      draw();
+    }
     if (f.t - f.lastHud > 0.1) {
       f.lastHud = f.t;
       setHud((h) => (Math.abs(h.left - timeLeft(setup, s)) >= 0.05 ? { ...h, left: timeLeft(setup, s) } : h));
     }
   }, running);
+
+  // Beim Schließen: Vorab-Zeichnen beenden (warm prüft art.current).
+  useEffect(
+    () => () => {
+      art.current = null;
+    },
+    [],
+  );
 
   // Entwicklung: window.koeln.dev.container.pack(n) packt n Teile gierig (Screenshots, Playwright), .state zeigt den
   // laufenden Container.
@@ -407,6 +567,15 @@ export function ContainerGame(props: MinigameViewProps) {
         pack: (steps?: number) => {
           const n = autoPack(setup, game.current, steps);
           changed();
+          // Lob für das zuletzt gesetzte Teil wie beim Aufsetzen (für Bilder der Serie).
+          const last = game.current.placed.at(-1);
+          if (last && n > 0) {
+            const piece = setup.pieces[last.pieceId];
+            praise({
+              id: last.pieceId,
+              cells: rotate(piece.shape, last.rot).map(([cx, cy]) => [last.x + cx, last.y + cy]),
+            });
+          }
           return n;
         },
       },

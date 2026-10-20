@@ -1,9 +1,11 @@
 // Tresor knacken (Auftrag 44, Teil 0): Nahaufnahme eines alten Stahltresors im Hinterzimmer, Taschenlampe,
 // Glas-HUD oben (Zeit, drei Punkte für die Zahlen, Richtung). Drehen per Ziehen (Maus/Finger, kreisförmig) oder ←/→
 // (Umschalt: fein), Einrasten mit Leertaste bzw. „Einrasten“. Nahe an der Zahl: Klicken lauter, das Rad zittert, das
-// Stethoskop schlägt aus, am Handy vibriert es. Spiellogik in model.ts, Zeichnen in draw.ts.
+// Stethoskop schlägt aus, am Handy vibriert es. Seit Auftrag 49 hakt das Rad beim Ziehen und Halten kurz an der Zahl
+// (hell, Kreidestrich am Rad), Störklicks klingen dumpf; losgelassen läuft das Rad mit Schwung nach. Spiellogik in
+// model.ts, Zeichnen in draw.ts.
 
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudTimer } from '../../kit/hud';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
@@ -13,7 +15,9 @@ import { useGameKeys } from '../../kit/useGameKeys';
 import { type Stage, useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
 import {
+  drawChalk,
   drawLoot,
+  drawStethoscope,
   drawWave,
   readPalette,
   renderDialFace,
@@ -24,27 +28,36 @@ import {
 } from './draw';
 import {
   advance,
+  type Catch,
   type ConfirmResult,
   confirm,
   cracked,
   createSafe,
   crossedTarget,
   dialNumber,
+  HOLD_SPEED,
   initSafe,
   onTarget,
   proximity,
   requiredDir,
   safeScore,
+  safeStats,
   timeLeft,
   turn,
+  turnHeld,
 } from './model';
+import { registerSafeSounds, SAFE_SOUNDS } from './sounds';
 
 const KEYS = ['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'Space', 'Enter', 'NumpadEnter'];
 /** Gehaltene Taste: erst nach dieser Zeit dreht es weiter (sonst ein Strich pro Druck). */
 const HOLD_DELAY = 0.22;
-/** Striche pro Sekunde beim Halten, mit Umschalt fein. */
-const HOLD_SPEED = 22;
+/** Striche pro Sekunde beim Halten mit Umschalt (fein); ohne Umschalt HOLD_SPEED aus dem Modell. */
 const FINE_SPEED = 5;
+/** Schwung nach dem Loslassen beim Ziehen: so schnell klingt er ab (pro Sekunde), darunter steht das Rad. */
+const SPIN_FRICTION = 5;
+const SPIN_MIN = 3;
+/** Höchstens so viele Kreidestriche am Rad (neueste bleiben). */
+const MAX_MARKS = 4;
 
 interface Layers {
   layout: SafeLayout;
@@ -87,10 +100,18 @@ export function SafeGame(props: MinigameViewProps) {
     touchDir: 0 as -1 | 0 | 1,
     lastBeat: -10,
     lastHud: -1,
+    /** Schwung des Rads nach dem Ziehen (Striche pro Sekunde) und Tempo beim Ziehen (geglättet). */
+    spin: 0,
+    dragSpeed: 0,
+    /** Kreidestriche: Stellen, an denen das Rad gehakt hat (seit der letzten eingerasteten Zahl). */
+    marks: [] as number[],
+    /** Woran es gerade hakt (für Glanz und Stethoskop), und ob der Hinweis dazu schon kam. */
+    caught: null as Catch,
+    taught: false,
     /** Etwas hat sich geändert: im nächsten Bild neu zeichnen. */
     dirty: true,
   });
-  const drag = useRef<{ angle: number; cx: number; cy: number; id: number } | null>(null);
+  const drag = useRef<{ angle: number; cx: number; cy: number; id: number; at?: number } | null>(null);
   const [hud, setHud] = useState<Hud>(() => ({
     left: setup.duration,
     step: 0,
@@ -113,24 +134,59 @@ export function SafeGame(props: MinigameViewProps) {
   const stage = useStageCanvas(canvas, rebuild);
   const wave = useStageCanvas(waveCanvas);
 
+  useEffect(registerSafeSounds, []);
+
   const say = (message: string | null, tone: Hud['tone'] = null) => setHud((h) => ({ ...h, message, tone }));
 
-  const turnBy = (delta: number) => {
+  /**
+   * Rad drehen; held (Ziehen, Halten, Schwung): kurz vor der Zahl wird es langsamer, und an der Zahl (oder einem
+   * Störklick) hakt es kurz ein. Ein einzelner Tipp dreht genau einen Strich und hakt nie.
+   */
+  const turnBy = (rawDelta: number, held = false) => {
     const s = game.current;
+    const f = fx.current;
     if (!running || s.done) return;
-    const crossed = turn(s, delta);
-    fx.current.dirty = true;
+    let crossed: number[];
+    let caught: Catch = null;
+    if (held) ({ crossed, caught } = turnHeld(setup, s, rawDelta));
+    else crossed = turn(s, rawDelta);
+    f.dirty = true;
     if (crossed.length === 0) return;
     const p = proximity(setup, s);
     // Klicken im Ton: lauter, je näher. Beim schnellen Drehen höchstens alle 30 ms.
     audio.playThrottled(MINIGAME_SOUNDS.click, 30, { volume: 0.1 + 0.9 * p });
-    fx.current.spike = Math.min(1, fx.current.spike + 0.3 + p);
-    // Die richtige Zahl in der richtigen Richtung überfahren: ein eigener, satter Klick und das Stethoskop schlägt aus.
+    f.spike = Math.min(1, f.spike + 0.3 + p);
+    if (caught) {
+      // Es hakt: Kreidestrich an die Stelle, Schwung ist weg. Echt = hell und satt, Störklick = dumpf.
+      f.spin = 0;
+      f.caught = caught;
+      f.marks = [...f.marks.filter((m) => m !== s.pos), s.pos].slice(-MAX_MARKS);
+      if (caught === 'target') {
+        audio.play(SAFE_SOUNDS.tumbler, { volume: 0.8 });
+        haptic('success');
+        f.spike = 1;
+        f.flash = Math.max(f.flash, 0.5);
+      } else {
+        audio.play(SAFE_SOUNDS.thud, { volume: 0.7 });
+        haptic('light');
+        f.spike = 0.45;
+      }
+      if (!f.taught) {
+        f.taught = true;
+        say(
+          setup.decoys[s.step]?.length
+            ? 'Es hakt. Hell und satt = die Zahl, dumpf = Störklick.'
+            : 'Es hakt. Loslassen und einrasten.',
+        );
+      }
+      return;
+    }
+    // Die richtige Zahl in der richtigen Richtung überfahren (Tippen): ein satter Klick, das Stethoskop schlägt aus.
     if (crossedTarget(setup, s, crossed)) {
-      playSound(MINIGAME_SOUNDS.clunk, 0.5);
+      audio.play(SAFE_SOUNDS.tumbler, { volume: 0.6 });
       haptic('medium');
-      fx.current.spike = 1;
-      fx.current.flash = Math.max(fx.current.flash, 0.5);
+      f.spike = 1;
+      f.flash = Math.max(f.flash, 0.5);
     } else if (onTarget(setup, s)) haptic('selection');
   };
 
@@ -138,13 +194,17 @@ export function SafeGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(safeScore(setup, game.current), [`cracked:${cracked(game.current)}`]);
+    onFinish(safeScore(setup, game.current), [`cracked:${cracked(game.current)}`], safeStats(setup, game.current));
   };
 
   const react = (result: ConfirmResult) => {
     const s = game.current;
     const f = fx.current;
     f.dirty = true;
+    if (result === 'locked' || result === 'opened') {
+      f.marks = [];
+      f.spin = 0;
+    }
     if (result === 'locked') {
       playSound(MINIGAME_SOUNDS.clunk);
       haptic('success');
@@ -251,7 +311,9 @@ export function SafeGame(props: MinigameViewProps) {
     ctx.rotate((-s.pos / 100) * Math.PI * 2);
     const size = ls.face.width / st.dpr;
     ctx.drawImage(ls.face, -size / 2, -size / 2, size, size);
+    for (const m of f.marks) drawChalk(ctx, dial.r, m, m === s.pos && s.caught > 0 ? 1 : 0.7);
     ctx.restore();
+    drawStethoscope(ctx, layout, palette, f.spike, f.caught === 'decoy' ? 0.5 : 1);
     // Marke oben (gold).
     ctx.fillStyle = palette.gold;
     ctx.beginPath();
@@ -283,6 +345,15 @@ export function SafeGame(props: MinigameViewProps) {
     light.addColorStop(1, 'rgba(0, 0, 0, 0.88)');
     ctx.fillStyle = light;
     ctx.fillRect(-20, -20, width + 40, height + 40);
+    // Warmer Kern der Lampe (aufgehellt, nicht nur ausgespart): Stahl und Messing glänzen im Licht.
+    const warm = ctx.createRadialGradient(lx, ly, 0, lx, ly, dial.r * 1.6);
+    warm.addColorStop(0, 'rgba(255, 214, 150, 0.16)');
+    warm.addColorStop(0.6, 'rgba(255, 200, 130, 0.05)');
+    warm.addColorStop(1, 'rgba(255, 200, 130, 0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = warm;
+    ctx.fillRect(lx - dial.r * 1.6, ly - dial.r * 1.6, dial.r * 3.2, dial.r * 3.2);
+    ctx.globalCompositeOperation = 'source-over';
     if (f.alarmT >= 0) {
       ctx.fillStyle = palette.danger;
       ctx.globalAlpha = 0.18 + 0.18 * Math.abs(Math.sin(f.alarmT * (reduced ? 3 : 9)));
@@ -320,10 +391,15 @@ export function SafeGame(props: MinigameViewProps) {
     const heldDir =
       keys.isDown('ArrowLeft') || keys.isDown('KeyA') ? -1 : keys.isDown('ArrowRight') || keys.isDown('KeyD') ? 1 : 0;
     if (heldDir !== 0 && f.hold.dir === heldDir && f.t - f.hold.since > HOLD_DELAY) {
-      turnBy(heldDir * (keys.shift() ? FINE_SPEED : HOLD_SPEED) * rawDt);
+      turnBy(heldDir * (keys.shift() ? FINE_SPEED : HOLD_SPEED) * rawDt, true);
+    } else if (f.spin !== 0 && !drag.current) {
+      // Schwung nach dem Loslassen: läuft aus, hakt an der Zahl wie beim Ziehen.
+      turnBy(f.spin * rawDt, true);
+      f.spin *= Math.exp(-SPIN_FRICTION * rawDt);
+      if (Math.abs(f.spin) < SPIN_MIN) f.spin = 0;
     }
     if (heldDir === 0) f.hold.dir = 0;
-    if (f.touchDir !== 0 && f.t - f.hold.since > HOLD_DELAY) turnBy(f.touchDir * HOLD_SPEED * 0.7 * rawDt);
+    if (f.touchDir !== 0 && f.t - f.hold.since > HOLD_DELAY) turnBy(f.touchDir * HOLD_SPEED * 0.7 * rawDt, true);
     // Herzschlag in den letzten zehn Sekunden.
     const left = timeLeft(setup, s);
     if (!s.done && left <= 10 && f.t - f.lastBeat >= (left <= 5 ? 0.6 : 1)) {
@@ -333,6 +409,7 @@ export function SafeGame(props: MinigameViewProps) {
     f.shake = Math.max(0, f.shake - rawDt * 3);
     f.flash = Math.max(0, f.flash - rawDt * 1.6);
     f.spike = Math.max(0, f.spike - rawDt * 4);
+    if (s.caught <= 0) f.caught = null;
     f.phase += dt;
     if (f.openT >= 0) f.openT += dt / 0.9;
     if (f.alarmT >= 0) f.alarmT += rawDt;
@@ -353,7 +430,12 @@ export function SafeGame(props: MinigameViewProps) {
     }
     // Neu zeichnen nur, wenn sich etwas bewegt (Rad, Licht, Wackeln, Blitz, Tür, Alarm, Zittern nah am Ziel).
     const animating =
-      f.shake > 0 || f.flash > 0 || (f.openT >= 0 && f.openT < 1.2) || f.alarmT >= 0 || proximity(setup, s) > 0.55;
+      f.shake > 0 ||
+      f.flash > 0 ||
+      f.spike > 0 ||
+      (f.openT >= 0 && f.openT < 1.2) ||
+      f.alarmT >= 0 ||
+      proximity(setup, s) > 0.55;
     if (f.dirty || moving || animating) draw();
     drawScope();
     // HUD höchstens zehnmal pro Sekunde neu.
@@ -378,6 +460,8 @@ export function SafeGame(props: MinigameViewProps) {
     if (!running) return;
     const c = center(e);
     capture(e);
+    fx.current.spin = 0;
+    fx.current.dragSpeed = 0;
     drag.current = { angle: Math.atan2(e.clientY - c.y, e.clientX - c.x), cx: c.x, cy: c.y, id: e.pointerId };
     fx.current.pointer = { x: e.clientX - c.rect.left, y: e.clientY - c.rect.top, at: fx.current.t };
   };
@@ -393,12 +477,28 @@ export function SafeGame(props: MinigameViewProps) {
     if (delta > Math.PI) delta -= Math.PI * 2;
     if (delta < -Math.PI) delta += Math.PI * 2;
     d.angle = angle;
-    // Eine volle Umdrehung = 100 Striche, im Uhrzeigersinn = rechts.
-    turnBy((delta / (Math.PI * 2)) * 100);
+    // Eine volle Umdrehung = 100 Striche, im Uhrzeigersinn = rechts. Tempo geglättet für den Schwung beim Loslassen.
+    const strokes = (delta / (Math.PI * 2)) * 100;
+    const f = fx.current;
+    const now = e.timeStamp / 1000;
+    const dt = Math.max(0.008, now - (d.at ?? now - 0.016));
+    d.at = now;
+    f.dragSpeed = f.dragSpeed * 0.6 + (strokes / dt) * 0.4;
+    turnBy(strokes, true);
   };
   const onPointerUp = (e: PointerEvent) => {
-    if (drag.current?.id === e.pointerId) drag.current = null;
+    if (drag.current?.id !== e.pointerId) return;
+    drag.current = null;
+    // Losgelassen im Schwung: Das Rad läuft nach (nicht, wenn es gerade hakt oder kaum bewegt wurde).
+    const f = fx.current;
+    if (e.type === 'pointerup' && game.current.caught <= 0 && Math.abs(f.dragSpeed) > 12)
+      f.spin = Math.max(-60, Math.min(60, f.dragSpeed));
   };
+
+  // Pause mitten im Spiel: gehaltene Knöpfe loslassen; weiter geht es genau dort.
+  useEffect(() => {
+    if (!running) fx.current.touchDir = 0;
+  }, [running]);
 
   const s = game.current;
   const dir = requiredDir(Math.min(2, hud.step));

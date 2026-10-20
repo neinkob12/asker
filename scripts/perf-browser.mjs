@@ -7,11 +7,14 @@
 //
 //   node scripts/perf-browser.mjs [--save=pfad.json] [--days=3] [--seconds=25] [--speed=4] [--width=700 --height=500]
 //     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--city=hamburg]
-//     [--scenes=ui,karte,jagd]
+//     [--scenes=ui,karte,jagd,lieferungen] [--lieferungen=25]
 //
 // Verfolgungsjagd (Auftrag 44, seit Auftrag 46 ein Rennspiel im Canvas): --scenes=jagd öffnet die Jagd (Vorschau im
 // laufenden Spiel), fährt SECONDS Sekunden mit Gas und Spurwechseln und meldet Bilder pro Sekunde, die Rechenzeit der Jagd pro Bild (Modell, Zeichnen,
 // Kamera mit map.jumpTo, HUD), MapLibre zeichnen und Long Tasks. Am Handy: --mobile --throttle=4.
+//
+// Lieferungen (Feedback 16.10.2026): --scenes=lieferungen legt je Stadt (aktive und Köln) --lieferungen Lieferungen und
+// zwölf Auslieferungen an und misst Karte und Handy; am besten mit --save=public/spielstaende/boss-von-hamburg.json.
 //
 // Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende
 // Lieferung, Tempo --speed, Zoom 14,5 an den Ringen) über die Messhilfe aus src/map/perf.ts (?perf=1): Bilder pro
@@ -486,6 +489,8 @@ async function measureMap(label) {
       phone: window.koeln.runtime.ui.phone.open,
       dialog: window.koeln.runtime.ui.dialog?.id ?? null,
       speed: window.koeln.session.loop.speed,
+      markers: document.querySelectorAll('.maplibregl-marker').length,
+      markersShown: [...document.querySelectorAll('.maplibregl-marker')].filter((m) => m.offsetParent !== null).length,
     };
   });
   await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
@@ -509,7 +514,7 @@ async function measureMap(label) {
   console.log(
     [
       `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${'reduced-motion' in args ? ', Bewegung reduziert' : ''}${TRAFFIC ? `, Verkehr ${TRAFFIC}` : ''}) ########`,
-      `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}, Tempo ${info.speed}${info.dialog ? `, Dialog ${info.dialog}` : ''}`,
+      `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}, Tempo ${info.speed}${info.dialog ? `, Dialog ${info.dialog}` : ''}, HTML-Marker ${info.markers} (sichtbar ${info.markersShown})`,
       `Bilder: ${st.fps.toFixed(1)} fps, längster Abstand ${st.maxInterval.toFixed(0)} ms, ${st.slowFrames} Bilder über 50 ms`,
       `Bild-Arbeit Karte (Animationen): ${st.frameMs.toFixed(2)} ms/Bild im Mittel, schlimmstes Bild ${st.maxFrameMs.toFixed(1)} ms`,
       `MapLibre zeichnen: ${st.maplibre ? `${(st.maplibre.ms / Math.max(1, st.maplibre.calls)).toFixed(2)} ms/Bild im Mittel, schlimmstes ${st.maplibre.max.toFixed(1)} ms` : '–'}`,
@@ -601,6 +606,90 @@ if (SCENES.has('karte')) {
   await measureMap('Karte Normalbetrieb, zehn offene Aufträge, eine Lieferung');
 }
 
+// Viele Lieferungen (Feedback 16.10.2026: "laggt total, wenn man viele Bestellungen hat, in Hamburg"): je Stadt
+// LIEFERUNGEN Lieferungen unterwegs (aktive Stadt und Köln), dazu zwölf Auslieferungen der Rechten Hand in der aktiven
+// Stadt. Am besten mit --save=public/spielstaende/boss-von-hamburg.json (Hamburg aktiv, Köln schläft).
+if (SCENES.has('lieferungen')) {
+  const made = await page.evaluate(
+    async (count) => {
+      const k = window.koeln;
+      const sim = k.session.sim;
+      const state = sim.state;
+      const goods = await import('/src/modules/goods/index.ts');
+      const orders = await import('/src/modules/customers/orders.ts');
+      const active = state.modules.city?.active ?? 'koeln';
+      const cities = [...new Set([active, 'koeln'])];
+      const shipments = state.modules.suppliers.shipments;
+      const template = shipments[0] ?? {
+        packageId: 'haze50',
+        productId: 'haze',
+        amount: 50,
+        quality: 0.8,
+        price: 250,
+      };
+      const suppliers = ['koeln', 'hamburg', 'berlin', 'frankfurt'];
+      let id = 9_000_000;
+      for (const cityId of cities) {
+        const warehouse = goods.getWarehouses(state, cityId)[0];
+        if (!warehouse) continue;
+        for (let i = 0; i < count; i++) {
+          shipments.push({
+            ...template,
+            id: id++,
+            supplierId: suppliers[i % suppliers.length],
+            cityId,
+            warehouseId: warehouse.id,
+            orderedAt: state.time - (i % 10) * 10,
+            arrivesAt: state.time + 900 + i * 15,
+            problem: undefined,
+            toPort: undefined,
+          });
+        }
+      }
+      // Auslieferungen der Rechten Hand (Autos mit Ziel-Marker) in der aktiven Stadt.
+      const ctx = sim.ctx('customers');
+      const s = state.modules.customers;
+      const saved = s.orders;
+      const created = [];
+      for (let i = 0; created.length < 12 && i < 60; i++) {
+        s.orders = [];
+        const o = orders.offerDelivery(ctx, true);
+        if (o) created.push(o);
+      }
+      s.orders = [...saved, ...created];
+      const from = goods.getWarehouses(state, active)[0]?.id ?? null;
+      for (const o of created) {
+        Object.assign(o, {
+          status: 'enRoute',
+          deliveredBy: 'rightHand',
+          courierId: null,
+          fromWarehouseId: from,
+          startedAt: state.time,
+          arrivesAt: state.time + 1500,
+          expiresAt: state.time + 3000,
+        });
+      }
+      sim.step();
+      const center = active === 'hamburg' ? [10.0, 53.56] : [6.95, 50.94];
+      k.runtime.map?.map.jumpTo({ center, zoom: 12.5 });
+      k.runtime.requestRender();
+      return { active, lieferungen: shipments.length, auslieferungen: created.length };
+    },
+    Number(args.lieferungen ?? 25),
+  );
+  console.log(`Lieferungen: ${JSON.stringify(made)}`);
+  await closeDialogs();
+  await page.waitForTimeout(3000);
+  await measureMap('Viele Lieferungen und Auslieferungen, Karte');
+  await measure('Viele Lieferungen und Auslieferungen, Handy Startbildschirm');
+  await page.evaluate(() => {
+    window.koeln.runtime.api.openPhone('suppliers.app');
+    window.koeln.runtime.requestRender();
+  });
+  await page.waitForTimeout(1500);
+  await measure('Viele Lieferungen und Auslieferungen, Lieferanten-App offen');
+}
+
 if (SCENES.has('jagd')) {
   await closeDialogs();
   await page.evaluate(() => window.koeln.dev.minigamePreview('chase', { schwer: 0.6 }));
@@ -659,6 +748,91 @@ if (SCENES.has('jagd')) {
   summary.push(
     `Jagd: ${info.fps.toFixed(1)} fps, ${info.perf ? (info.perf.total / Math.max(1, info.perf.frames)).toFixed(2) : '–'} ms/Bild`,
   );
+}
+
+// Razzia und Bude (Auftrag 48, Teil D): --scenes=razzia bzw. --scenes=bude öffnet das Minispiel als Vorschau, spielt
+// mit echten Eingaben (Razzia: laufen, aufheben, verstecken; Bude: Lampe führen, durchsuchen, Raum wechseln) und meldet
+// Bilder pro Sekunde, Zeichnen pro Bild (Szene, Beschriftungen; window.__mgPerf) und Long Tasks. Am Handy:
+// --mobile --throttle=4.
+for (const [scene, kind, title] of [
+  ['razzia', 'stash', 'Razzia-Lauf'],
+  ['bude', 'search', 'Bude durchsuchen'],
+]) {
+  if (!SCENES.has(scene)) continue;
+  await closeDialogs();
+  await page.evaluate((k) => {
+    window.koeln.dev.minigameRealtime?.(true);
+    window.koeln.dev.minigamePreview(k, { schwer: 0.5, seed: 3 });
+  }, kind);
+  await page.waitForSelector('.mg-intro', { timeout: 20000 });
+  await page.waitForTimeout(2500);
+  await page.click('.mg-intro .mg-button.is-gold');
+  await page.waitForSelector('.mg-run.is-play', { timeout: 20000 });
+  await page.evaluate(() => {
+    window.__mgPerf = { frames: 0, total: 0, max: 0 };
+    window.__perf.reset();
+    window.__indoor = { frames: 0, start: performance.now(), worst: 0, last: performance.now() };
+    const tick = (now) => {
+      const j = window.__indoor;
+      if (!j || j.stop) return;
+      j.frames += 1;
+      j.worst = Math.max(j.worst, now - j.last);
+      j.last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const box = await page.locator('.mg-run canvas').first().boundingBox();
+  for (let i = 0; i < SECONDS; i++) {
+    if (kind === 'stash') {
+      const key = i % 4 < 2 ? 'ArrowLeft' : 'ArrowRight';
+      await page.keyboard.down(key);
+      await page.waitForTimeout(600);
+      await page.keyboard.up(key);
+      await page.keyboard.press('Space');
+      await page.keyboard.press(String(1 + (i % 4)));
+      await page.waitForTimeout(400);
+    } else if (box) {
+      for (let k = 0; k < 4; k++) {
+        const x = box.x + box.width * (0.25 + (0.5 * ((i * 4 + k) % 5)) / 4);
+        const y = box.y + box.height * (0.35 + 0.3 * (k % 2));
+        await page.mouse.move(x, y, { steps: 4 });
+        await page.waitForTimeout(200);
+      }
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.55);
+      if (i % 4 === 3) await page.keyboard.press('KeyE');
+    }
+    if (await page.locator('.mg-result').count()) break;
+  }
+  const info = await page.evaluate(() => {
+    const j = window.__indoor;
+    j.stop = true;
+    const seconds = (performance.now() - j.start) / 1000;
+    return {
+      seconds,
+      fps: j.frames / seconds,
+      worst: j.worst,
+      perf: window.__mgPerf,
+      longTasks: window.__perf.longTasks,
+      ended: !!document.querySelector('.mg-result'),
+    };
+  });
+  const lt = info.longTasks;
+  const perFrame = info.perf.frames ? (info.perf.total / info.perf.frames).toFixed(2) : '–';
+  console.log(
+    [
+      `\n######## "${title}" (${info.seconds.toFixed(0)} s, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${info.ended ? ', vorzeitig zu Ende' : ''}) ########`,
+      `Bilder: ${info.fps.toFixed(1)} fps, längster Abstand ${info.worst.toFixed(0)} ms`,
+      `Zeichnen pro Bild (Szene, Beschriftungen): ${perFrame} ms im Mittel, schlimmstes ${info.perf.max.toFixed(1)} ms über ${info.perf.frames} Bilder`,
+      `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
+    ].join('\n'),
+  );
+  summary.push(`${title}: ${info.fps.toFixed(1)} fps, ${perFrame} ms/Bild`);
+  await page.evaluate(() => window.koeln.dev.minigameWin?.());
+  await page.waitForTimeout(1500);
+  const next = page.locator('.mg-result .mg-button.is-gold');
+  if (await next.count()) await next.first().click();
+  await page.waitForTimeout(800);
 }
 
 console.log(`\n######## Zusammenfassung ########\n${summary.join('\n')}`);

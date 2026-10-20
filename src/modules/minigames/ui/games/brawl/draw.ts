@@ -77,6 +77,14 @@ function tint(hex: string, factor: number): string {
   return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
 }
 
+/** Zwei Farben (#rrggbb) mischen: k = 0 a, 1 b. */
+function mix(a: string, b: string, k: number): string {
+  const na = Number.parseInt(a.slice(1, 7), 16);
+  const nb = Number.parseInt(b.slice(1, 7), 16);
+  const c = (shift: number) => Math.round(((na >> shift) & 255) * (1 - k) + ((nb >> shift) & 255) * k);
+  return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Lage
 
@@ -98,10 +106,15 @@ export interface BrawlLayout {
 export function brawlLayout(width: number, height: number, mobile: boolean): BrawlLayout {
   const bottom = mobile ? 236 : 70;
   const groundY = Math.max(height * 0.5, height - bottom);
-  const ppm = Math.max(36, Math.min(height * (mobile ? 0.15 : 0.2), width / (mobile ? 5 : 8)));
-  const laneGap = Math.max(18, ppm * 0.42);
+  const ppm = Math.max(36, Math.min(height * (mobile ? 0.15 : 0.2), width / (mobile ? 4.5 : 8)));
+  // Seit Auftrag 49 deutlich mehr Tiefe zwischen den Ebenen (vorher 0,42 m: alle standen wie in einer Reihe).
+  const laneGap = Math.max(24, ppm * LANE_DEPTH);
   return { width, height, ppm, groundY, laneGap, view: width / ppm, horizon: groundY - laneGap - ppm * 0.55 };
 }
+
+/** Abstand der hinteren Ebene im Bild (Meter nach oben) und wie viel kleiner sie ist. */
+export const LANE_DEPTH = 0.72;
+export const LANE_SCALE = 0.17;
 
 /** Kamera (Mitte in Metern) innerhalb der Bühne halten. */
 export function clampCamera(layout: BrawlLayout, x: number): number {
@@ -111,7 +124,7 @@ export function clampCamera(layout: BrawlLayout, x: number): number {
 }
 
 export function toScreen(layout: BrawlLayout, cam: number, x: number, depth: number) {
-  const scale = 1 - depth * 0.12;
+  const scale = 1 - depth * LANE_SCALE;
   return {
     x: (x - cam) * layout.ppm + layout.width / 2,
     y: layout.groundY - depth * layout.laneGap,
@@ -667,6 +680,10 @@ export interface Pose {
   bl: [number, number];
   /** Drehung der ganzen Figur um die Füße (am Boden: liegt). */
   rot: number;
+  /** Der ganze Körper so weit nach vorn (Meter): Ausfallschritt beim Schlag, zurück beim Ausholen und Getroffenwerden. */
+  shift: number;
+  /** Kopf zusätzlich geneigt (positiv = nach vorn, Kinn runter; negativ = Kopf fliegt nach hinten). */
+  head: number;
 }
 
 const GUARD: Pose = {
@@ -677,29 +694,113 @@ const GUARD: Pose = {
   fl: [0.3, -0.32],
   bl: [-0.26, -0.06],
   rot: 0,
+  shift: 0,
+  head: 0.08,
 };
 
 const POSES: Partial<Record<FighterState, Pose>> = {
   idle: GUARD,
-  block: { lean: -0.02, crouch: 0.1, fa: [1.35, 1.55], ba: [1.15, 1.75], fl: [0.32, -0.36], bl: [-0.3, -0.08], rot: 0 },
-  dodge: { lean: -0.5, crouch: 0.2, fa: [0.6, 2.2], ba: [0.3, 2.4], fl: [0.55, -0.9], bl: [-0.45, -0.2], rot: 0 },
-  hit: { lean: -0.42, crouch: 0.05, fa: [0.4, 0.7], ba: [-0.4, 0.6], fl: [0.35, -0.2], bl: [-0.15, -0.1], rot: 0 },
-  down: { lean: -0.05, crouch: 0, fa: [2.9, 0.2], ba: [2.2, 0.5], fl: [0.12, -0.25], bl: [-0.02, 0], rot: -1.52 },
+  block: {
+    lean: 0.04,
+    crouch: 0.12,
+    fa: [1.35, 1.55],
+    ba: [1.15, 1.75],
+    fl: [0.32, -0.36],
+    bl: [-0.3, -0.08],
+    rot: 0,
+    shift: -0.04,
+    head: 0.3,
+  },
+  dodge: {
+    lean: -0.5,
+    crouch: 0.2,
+    fa: [0.6, 2.2],
+    ba: [0.3, 2.4],
+    fl: [0.55, -0.9],
+    bl: [-0.45, -0.2],
+    rot: 0,
+    shift: -0.1,
+    head: 0.2,
+  },
+  hit: {
+    lean: -0.42,
+    crouch: 0.05,
+    fa: [0.4, 0.7],
+    ba: [-0.4, 0.6],
+    fl: [0.35, -0.2],
+    bl: [-0.15, -0.1],
+    rot: 0,
+    shift: -0.2,
+    head: -0.55,
+  },
+  down: {
+    lean: -0.05,
+    crouch: 0,
+    fa: [2.9, 0.2],
+    ba: [2.2, 0.5],
+    fl: [0.12, -0.25],
+    bl: [-0.02, 0],
+    rot: -1.52,
+    shift: 0,
+    head: -0.3,
+  },
 };
 
-function windupPose(attack: AttackId | null, heavyKick: boolean): Pose {
-  if (attack === 'heavy' && heavyKick) return { ...GUARD, lean: -0.15, crouch: 0.05, fl: [0.9, -1.6], bl: [-0.1, 0] };
-  if (attack === 'heavy') return { ...GUARD, lean: -0.16, crouch: 0.12, ba: [-0.75, 1.9] };
-  if (attack === 'knife') return { ...GUARD, lean: -0.12, fa: [2.5, 0.55] };
-  return { ...GUARD, lean: 0, fa: [0.3, 2.45] };
+/**
+ * Ausholen: deutlich zurück (Gewicht nach hinten, Arm bzw. Bein weit weg), damit man die Ansage auch ohne Zeichen
+ * liest. k (0–1) = wie weit das Ausholen ist; gegen Ende zieht es noch etwas weiter zurück (Spannung).
+ */
+function windupPose(attack: AttackId | null, heavyKick: boolean, k: number): Pose {
+  const pull = 0.6 + 0.4 * k;
+  if (attack === 'heavy' && heavyKick)
+    return { ...GUARD, lean: -0.2 * pull, crouch: 0.05, fl: [0.95 * pull, -1.7], bl: [-0.1, 0], shift: -0.1 * pull };
+  if (attack === 'heavy')
+    return {
+      ...GUARD,
+      lean: -0.24 * pull,
+      crouch: 0.15,
+      ba: [-0.95 * pull, 1.95],
+      fa: [0.9, 1.8],
+      shift: -0.16 * pull,
+      head: 0.25,
+    };
+  if (attack === 'knife') return { ...GUARD, lean: -0.16 * pull, fa: [2.6, 0.5], shift: -0.12 * pull, head: 0.2 };
+  return { ...GUARD, lean: -0.04, fa: [0.25, 2.5], shift: -0.05, head: 0.15 };
 }
 
+/** Schlag: Ausfallschritt nach vorn, Arm gestreckt, Kopf hinterher. */
 function strikePose(attack: AttackId | null, heavyKick: boolean): Pose {
-  if (attack === 'heavy' && heavyKick) return { ...GUARD, lean: -0.25, crouch: 0, fl: [1.55, -0.05], bl: [-0.12, 0] };
+  if (attack === 'heavy' && heavyKick)
+    return { ...GUARD, lean: -0.3, crouch: 0, fl: [1.6, -0.05], bl: [-0.12, 0], shift: 0.12, head: 0.2 };
   if (attack === 'heavy')
-    return { ...GUARD, lean: 0.34, crouch: 0.1, ba: [1.62, 0.04], fa: [0.5, 2.2], fl: [0.5, -0.45], bl: [-0.5, 0] };
-  if (attack === 'knife') return { ...GUARD, lean: 0.28, fa: [1.35, 0.15] };
-  return { ...GUARD, lean: 0.16, fa: [1.58, 0.04] };
+    return {
+      ...GUARD,
+      lean: 0.42,
+      crouch: 0.12,
+      ba: [1.62, 0.04],
+      fa: [0.5, 2.2],
+      fl: [0.6, -0.5],
+      bl: [-0.55, 0],
+      shift: 0.34,
+      head: 0.15,
+    };
+  if (attack === 'knife') return { ...GUARD, lean: 0.34, fa: [1.38, 0.12], fl: [0.5, -0.4], shift: 0.3, head: 0.1 };
+  return { ...GUARD, lean: 0.2, fa: [1.6, 0.03], shift: 0.16, head: 0.12 };
+}
+
+/** Wie jemand im Stand federt: Tempo, Federn, Pendeln, Hände tief (Anführer lässig), Blick zur Seite (Nervöser). */
+const STANCE: Record<Fighter['kind'], { freq: number; bounce: number; sway: number; hands: number; glance: number }> = {
+  player: { freq: 4.2, bounce: 0.03, sway: 0.04, hands: 0, glance: 0 },
+  crew: { freq: 3.6, bounce: 0.025, sway: 0.035, hands: 0, glance: 0 },
+  leader: { freq: 2.4, bounce: 0.012, sway: 0.05, hands: 0.35, glance: 0 },
+  nervous: { freq: 7.2, bounce: 0.03, sway: 0.03, hands: -0.1, glance: 0.35 },
+  bruiser: { freq: 1.9, bounce: 0.02, sway: 0.08, hands: 0.1, glance: 0 },
+};
+
+function phaseOf(id: string): number {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + (ch.codePointAt(0) ?? 0)) % 997;
+  return h * 0.37;
 }
 
 /** Zielhaltung für einen Kämpfer (die Oberfläche blendet weich dorthin). walk = Schrittphase. */
@@ -707,11 +808,11 @@ export function targetPose(f: Fighter, walk: number, t: number): Pose {
   const kick = f.kind === 'leader';
   switch (f.state) {
     case 'windup':
-      return windupPose(f.attack, kick);
+      return windupPose(f.attack, kick, f.dur > 0 ? Math.min(1, f.t / f.dur) : 1);
     case 'strike':
       return strikePose(f.attack, kick);
     case 'recover':
-      return f.t < f.dur * 0.4 ? strikePose(f.attack, kick) : GUARD;
+      return f.t < f.dur * 0.35 ? strikePose(f.attack, kick) : { ...GUARD, shift: 0.04, head: 0.12 };
     case 'walk':
     case 'run': {
       const s = Math.sin(walk);
@@ -728,10 +829,57 @@ export function targetPose(f: Fighter, walk: number, t: number): Pose {
       };
     }
     case 'idle': {
-      const breathe = Math.sin(t * 3.2 + f.x) * 0.012;
-      if (f.hesitate > 0) return { ...GUARD, lean: -0.08, crouch: 0.02, fa: [0.4, 0.6], ba: [0.2, 0.6] };
-      if (f.grab > 0) return { ...GUARD, lean: 0.6, crouch: 0.25, fa: [0.9, 0.2], ba: [0.7, 0.3] };
-      return { ...GUARD, crouch: GUARD.crouch + breathe };
+      const st = STANCE[f.kind];
+      const ph = t * st.freq + phaseOf(f.id);
+      if (f.hesitate > 0)
+        return {
+          ...GUARD,
+          lean: -0.08,
+          crouch: 0.02 + Math.sin(t * 2) * 0.01,
+          fa: [0.4 + Math.sin(t * 3) * 0.15, 0.6],
+          ba: [0.2, 0.6],
+          head: -0.1 + Math.sin(t * 1.3) * 0.1,
+        };
+      if (f.grab > 0)
+        return {
+          ...GUARD,
+          lean: 0.6,
+          crouch: 0.25,
+          fa: [0.9 + Math.sin(t * 9) * 0.2, 0.2],
+          ba: [0.7 + Math.cos(t * 9) * 0.2, 0.3],
+          head: 0.3,
+        };
+      // Angeschlagen (unter 60 % Leben): krumm, Deckung sinkt, schwankt mehr.
+      const hurt = Math.max(0, Math.min(1, (0.6 - f.hp / f.maxHp) / 0.6));
+      if (hurt > 0) {
+        const wob = Math.sin(t * 1.7 + phaseOf(f.id)) * hurt;
+        return {
+          ...GUARD,
+          lean: GUARD.lean + 0.16 * hurt + wob * 0.06,
+          crouch: GUARD.crouch + 0.06 * hurt,
+          fa: [GUARD.fa[0] - 0.3 * hurt, GUARD.fa[1] - 0.2 * hurt],
+          ba: [GUARD.ba[0] - 0.25 * hurt, GUARD.ba[1] - 0.3 * hurt],
+          fl: [GUARD.fl[0] + wob * 0.05, GUARD.fl[1]],
+          bl: [GUARD.bl[0] - wob * 0.05, GUARD.bl[1]],
+          shift: wob * 0.08,
+          head: GUARD.head + 0.18 * hurt + wob * 0.08,
+        };
+      }
+      // Federn auf den Fußballen (zweimal pro Pendel), Hände pumpen leicht, Oberkörper pendelt.
+      const bob = 0.5 + 0.5 * Math.sin(ph * 2);
+      const pump = Math.sin(ph + 1.2);
+      const glance = st.glance > 0 && Math.sin(t * 0.9 + phaseOf(f.id)) > 0.75 ? -st.glance : 0;
+      return {
+        ...GUARD,
+        lean: GUARD.lean + Math.sin(ph) * st.sway * 0.8,
+        crouch: GUARD.crouch + bob * st.bounce,
+        fa: [GUARD.fa[0] - st.hands + pump * 0.09, GUARD.fa[1] + st.hands * 0.5 - pump * 0.08],
+        ba: [GUARD.ba[0] - st.hands + Math.sin(ph + 2.4) * 0.07, GUARD.ba[1] + st.hands * 0.4],
+        fl: [GUARD.fl[0] + Math.sin(ph) * 0.03, GUARD.fl[1] - bob * 0.06],
+        bl: [GUARD.bl[0] - Math.sin(ph) * 0.03, GUARD.bl[1] - bob * 0.05],
+        shift: Math.sin(ph) * st.sway,
+        head: GUARD.head + Math.sin(ph * 0.5) * 0.04 + glance,
+      };
     }
     default:
       return POSES[f.state] ?? GUARD;
@@ -752,11 +900,81 @@ export function blendPose(from: Pose, to: Pose, k: number): Pose {
     fl: lerpPair(from.fl, to.fl, k),
     bl: lerpPair(from.bl, to.bl, k),
     rot: from.rot + (to.rot - from.rot) * k,
+    shift: from.shift + (to.shift - from.shift) * k,
+    head: from.head + (to.head - from.head) * k,
   };
 }
 
 export function idlePose(): Pose {
   return { ...GUARD, fa: [...GUARD.fa], ba: [...GUARD.ba], fl: [...GUARD.fl], bl: [...GUARD.bl] };
+}
+
+/** Haltung mit Schwung: Feder pro Gelenk (Geschwindigkeit in vel, gleiche Reihenfolge wie poseValues). */
+export interface PoseSpring {
+  pose: Pose;
+  vel: number[];
+}
+
+const POSE_KEYS = 13;
+
+function poseValues(p: Pose): number[] {
+  return [p.lean, p.crouch, ...p.fa, ...p.ba, ...p.fl, ...p.bl, p.rot, p.shift, p.head];
+}
+
+function setPose(p: Pose, v: readonly number[]): void {
+  p.lean = v[0];
+  p.crouch = v[1];
+  p.fa = [v[2], v[3]];
+  p.ba = [v[4], v[5]];
+  p.fl = [v[6], v[7]];
+  p.bl = [v[8], v[9]];
+  p.rot = v[10];
+  p.shift = v[11];
+  p.head = v[12];
+}
+
+export function poseSpring(): PoseSpring {
+  return { pose: idlePose(), vel: new Array(POSE_KEYS).fill(0) };
+}
+
+/**
+ * Feder zur Zielhaltung: freq in rad/s (wie schnell), damping < 1 schwingt über (Nachschwingen beim Schlag, Wackeln
+ * beim Treffer), 1 kommt ohne Überschwingen an. In kleinen Schritten gerechnet, damit es bei 30 fps stabil bleibt.
+ */
+export function springPose(s: PoseSpring, target: Pose, dt: number, freq: number, damping: number): void {
+  const x = poseValues(s.pose);
+  const goal = poseValues(target);
+  const steps = Math.max(1, Math.ceil(dt * 240));
+  const h = dt / steps;
+  for (let n = 0; n < steps; n++) {
+    for (let i = 0; i < POSE_KEYS; i++) {
+      const a = freq * freq * (goal[i] - x[i]) - 2 * damping * freq * s.vel[i];
+      s.vel[i] += a * h;
+      x[i] += s.vel[i] * h;
+    }
+  }
+  setPose(s.pose, x);
+}
+
+/** Wie federnd ein Zustand ist: [freq, damping]. Schlag und Treffer schwingen nach, Ausholen kommt weich. */
+export function springFor(state: Fighter['state']): [number, number] {
+  switch (state) {
+    case 'strike':
+      return [48, 0.42];
+    case 'hit':
+      return [44, 0.32];
+    case 'windup':
+      return [20, 0.75];
+    case 'down':
+      return [13, 0.6];
+    case 'dodge':
+      return [32, 0.6];
+    case 'run':
+    case 'walk':
+      return [26, 0.8];
+    default:
+      return [18, 0.62];
+  }
 }
 
 /** Maße einer Figur in Metern (1,80 m groß, die Schläger breiter). */
@@ -769,22 +987,30 @@ function pt(x: number, y: number, angle: number, len: number): [number, number] 
 /** Farben einer Figur aus ihrem Look (fertig für das Zeichnen). */
 export interface Colors {
   skin: string;
+  skinDark: string;
   hair: string;
   top: string;
   topDark: string;
+  topLight: string;
   pants: string;
+  pantsDark: string;
   shoes: string;
   sleeves: 'long' | 'short' | 'none';
 }
 
 export function colorsFor(look: Look, seed: number): Colors {
   const top = TOP[look.topColor] ?? TOP[0];
+  const skin = SKIN[look.skin] ?? SKIN[1];
+  const pants = PANTS[Math.abs(seed) % PANTS.length];
   return {
-    skin: SKIN[look.skin] ?? SKIN[1],
+    skin,
+    skinDark: mix(skin, '#2a1410', 0.38),
     hair: HAIR[look.hairColor] ?? HAIR[0],
     top,
     topDark: tint(top, 0.72),
-    pants: PANTS[Math.abs(seed) % PANTS.length],
+    topLight: mix(top, '#fff6e6', 0.22),
+    pants,
+    pantsDark: mix(pants, '#050508', 0.5),
     shoes: seed % 3 === 0 ? '#e4e0d8' : '#141416',
     sleeves: look.top === 'tank' ? 'none' : look.top === 'tee' || look.top === 'openshirt' ? 'short' : 'long',
   };
@@ -805,26 +1031,294 @@ export interface FigureOptions {
   bulk: number;
   /** Ring unter den Füßen (Seite). */
   ring: string | null;
+  /** Licht auf der Figur (Laterne, Leuchtschild), null = flach. */
+  light?: FigureLight | null;
+  /** Atmen (−1 bis 1): Brust und Schultern heben sich. */
+  breath?: number;
+  /** Nur Umriss und Grundfarben (Spiegelung, Nachbild): spart die Licht-Schichten. */
+  simple?: boolean;
 }
 
-function limb(
+/**
+ * Licht auf einer Figur: Hauptlicht von oben (Laterne bzw. Himmel), leicht seitlich (keyX −1 links bis 1 rechts auf
+ * dem Bildschirm), und ein farbiges Randlicht von der Seite (Leuchtschild), rimSide −1 links, 1 rechts.
+ */
+export interface FigureLight {
+  keyX: number;
+  keyColor: string;
+  keyAmt: number;
+  rimSide: -1 | 1;
+  rimColor: string;
+  rimAmt: number;
+}
+
+/** Licht in den Koordinaten der Figur (x gespiegelt, wenn sie nach links schaut). */
+interface Shade {
+  lx: number;
+  ly: number;
+  key: string;
+  shadow: string;
+  rimX: number;
+  rim: string | null;
+}
+
+function shadeFor(light: FigureLight, facing: 1 | -1): Shade {
+  const lx = light.keyX * facing * 0.6;
+  const ly = -1;
+  const n = Math.hypot(lx, ly);
+  return {
+    lx: lx / n,
+    ly: ly / n,
+    key: alpha(light.keyColor, 0.1 + 0.2 * light.keyAmt),
+    shadow: 'rgba(6, 4, 10, 0.24)',
+    rimX: light.rimSide * facing,
+    rim: light.rimAmt > 0.04 ? alpha(light.rimColor, Math.min(0.85, light.rimAmt)) : null,
+  };
+}
+
+/** Licht ohne Laterne (Tag, Spiegelung): von schräg oben vorn, Glanz und Schatten blass. */
+const FLAT_SHADE: Shade = {
+  lx: 0.32,
+  ly: -0.95,
+  key: 'rgba(255, 255, 255, 0.12)',
+  shadow: 'rgba(6, 4, 10, 0.24)',
+  rimX: 1,
+  rim: null,
+};
+
+let shadowSprite: HTMLCanvasElement | null = null;
+
+/** Weicher Kontaktschatten (radialer Verlauf, einmal gebacken, gestaucht gezeichnet). */
+function contactShadow(): HTMLCanvasElement {
+  if (shadowSprite) return shadowSprite;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.62)');
+  g.addColorStop(0.45, 'rgba(0, 0, 0, 0.36)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  shadowSprite = canvas;
+  return canvas;
+}
+
+/** Kapsel von a nach b mit Radius ra bzw. rb (Glied mit Verjüngung), als Pfad. */
+function capsule(ctx: CanvasRenderingContext2D, a: [number, number], b: [number, number], ra: number, rb: number) {
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  ctx.beginPath();
+  ctx.arc(a[0], a[1], ra, ang + Math.PI / 2, ang + (Math.PI * 3) / 2);
+  ctx.arc(b[0], b[1], rb, ang - Math.PI / 2, ang + Math.PI / 2);
+  ctx.closePath();
+}
+
+/** Dunkle Lasur über eine Form (hinterer Arm bzw. hinteres Bein im Schatten des Körpers). */
+function dimOver(ctx: CanvasRenderingContext2D, path: () => void, dim: number): void {
+  ctx.fillStyle = `rgba(4, 3, 8, ${1 - dim})`;
+  ctx.beginPath();
+  path();
+  ctx.fill();
+}
+
+/**
+ * Glied mit Volumen: Umriss, dann je Abschnitt Schattenfarbe, darüber die Grundfarbe etwas kleiner und zum Licht
+ * versetzt (bleibt als Schattenkante auf der Gegenseite), Glanz zum Licht hin und Randlicht vom Leuchtschild. Alles
+ * liegt innerhalb der Kapsel, ohne Clip. radii hat einen Wert je Punkt, colors [Grund, Schatten] je Abschnitt.
+ */
+function volumeLimb(
   ctx: CanvasRenderingContext2D,
   pts: [number, number][],
-  width: number,
-  color: string,
-  outline: number,
+  radii: number[],
+  colors: [string, string][],
+  ol: number,
+  sh: Shade | null,
+  dim = 1,
 ): void {
+  ctx.fillStyle = INK;
+  for (let i = 1; i < pts.length; i++) {
+    capsule(ctx, pts[i - 1], pts[i], radii[i - 1] + ol, radii[i] + ol);
+    ctx.fill();
+  }
+  if (!sh) {
+    // Einfach: nur die Grundfarbe.
+    for (let i = 1; i < pts.length; i++) {
+      ctx.fillStyle = (colors[i - 1] ?? colors[0])[0];
+      capsule(ctx, pts[i - 1], pts[i], radii[i - 1], radii[i]);
+      ctx.fill();
+    }
+    return;
+  }
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const ra = radii[i - 1];
+    const rb = radii[i];
+    const [base, dark] = colors[i - 1] ?? colors[0];
+    ctx.fillStyle = dark;
+    capsule(ctx, a, b, ra, rb);
+    ctx.fill();
+    const k = 0.24;
+    ctx.fillStyle = base;
+    capsule(
+      ctx,
+      [a[0] + sh.lx * ra * k, a[1] + sh.ly * ra * k],
+      [b[0] + sh.lx * rb * k, b[1] + sh.ly * rb * k],
+      ra * (1 - k),
+      rb * (1 - k),
+    );
+    ctx.fill();
+    // Glanz: breit und halb durchsichtig, damit er weich wirkt (kein Streifen wie an der Trainingshose).
+    ctx.fillStyle = sh.key;
+    const ga = ctx.globalAlpha;
+    ctx.globalAlpha = ga * 0.55;
+    capsule(
+      ctx,
+      [a[0] + sh.lx * ra * 0.4, a[1] + sh.ly * ra * 0.4],
+      [b[0] + sh.lx * rb * 0.4, b[1] + sh.ly * rb * 0.4],
+      ra * 0.52,
+      rb * 0.52,
+    );
+    ctx.fill();
+    ctx.globalAlpha = ga;
+    if (sh.rim) {
+      ctx.fillStyle = sh.rim;
+      capsule(ctx, [a[0] + sh.rimX * ra * 0.72, a[1]], [b[0] + sh.rimX * rb * 0.72, b[1]], ra * 0.24, rb * 0.24);
+      ctx.fill();
+    }
+    if (dim < 1) dimOver(ctx, () => capsule(ctx, a, b, ra, rb), dim);
+  }
+}
+
+/**
+ * Rumpf mit Form: Hüfte, Taille, Brust, Schultern (vorn etwas mehr Brust), weich verbunden; Verlauf quer zum Körper
+ * vom Licht (hell) zur Schattenseite (dunkel), dazu Randlicht. breath (−1 bis 1) hebt Brust und Schultern.
+ */
+function drawTorso(
+  ctx: CanvasRenderingContext2D,
+  hip: [number, number],
+  neck: [number, number],
+  width: number,
+  breath: number,
+  c: Colors,
+  ol: number,
+  sh: Shade,
+  simple = false,
+): void {
+  const top: [number, number] = [neck[0], neck[1] + 0.03 - breath * 0.008];
+  const dx = top[0] - hip[0];
+  const dy = top[1] - hip[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // Normale nach vorn (Blickrichtung +x).
+  let nx = -uy;
+  let ny = ux;
+  if (nx < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const at = (k: number, side: number, half: number): [number, number] => [
+    hip[0] + dx * k + nx * side * half,
+    hip[1] + dy * k + ny * side * half,
+  ];
+  const chest = width * (0.56 + breath * 0.02);
+  const pts = {
+    hipB: at(0, -1, width * 0.44),
+    hipF: at(0, 1, width * 0.44),
+    waistB: at(0.38, -1, width * 0.4),
+    waistF: at(0.38, 1, width * 0.42),
+    chestB: at(0.72, -1, chest * 0.95),
+    chestF: at(0.72, 1, chest),
+    shB: at(1, -1, width * 0.5),
+    shF: at(1, 1, width * 0.44),
+  };
+  const path = (grow: number) => {
+    const g = (p: [number, number], side: number): [number, number] => [
+      p[0] + nx * side * grow,
+      p[1] + ny * side * grow,
+    ];
+    const hB = g(pts.hipB, -1);
+    const hF = g(pts.hipF, 1);
+    const wB = g(pts.waistB, -1);
+    const wF = g(pts.waistF, 1);
+    const cB = g(pts.chestB, -1);
+    const cF = g(pts.chestF, 1);
+    const sB = g(pts.shB, -1);
+    const sF = g(pts.shF, 1);
+    ctx.beginPath();
+    ctx.moveTo(hB[0], hB[1] + grow);
+    ctx.quadraticCurveTo(wB[0], wB[1], cB[0], cB[1]);
+    ctx.quadraticCurveTo(
+      sB[0] - ux * grow,
+      sB[1] - uy * grow,
+      (sB[0] + sF[0]) / 2 - ux * grow,
+      (sB[1] + sF[1]) / 2 - uy * grow,
+    );
+    ctx.quadraticCurveTo(sF[0] - ux * grow, sF[1] - uy * grow, cF[0], cF[1]);
+    ctx.quadraticCurveTo(wF[0], wF[1], hF[0], hF[1] + grow);
+    ctx.quadraticCurveTo((hF[0] + hB[0]) / 2, (hF[1] + hB[1]) / 2 + width * 0.12 + grow, hB[0], hB[1] + grow);
+    ctx.closePath();
+  };
+  ctx.fillStyle = INK;
+  path(ol);
+  ctx.fill();
+  if (simple) {
+    ctx.fillStyle = c.top;
+    path(0);
+    ctx.fill();
+    return;
+  }
+  // Licht quer zum Körper: Seite zum Licht hell, Gegenseite dunkel.
+  const side = nx * sh.lx + ny * sh.ly >= 0 ? 1 : -1;
+  const mx = hip[0] + dx * 0.55;
+  const my = hip[1] + dy * 0.55;
+  const g = ctx.createLinearGradient(
+    mx + nx * side * width * 0.6,
+    my + ny * side * width * 0.6,
+    mx - nx * side * width * 0.6,
+    my - ny * side * width * 0.6,
+  );
+  g.addColorStop(0, c.topLight);
+  g.addColorStop(0.35, c.top);
+  g.addColorStop(0.8, c.topDark);
+  g.addColorStop(1, mix(c.topDark, '#000000', 0.35));
+  ctx.fillStyle = g;
+  path(0);
+  ctx.fill();
+  // Glanz oben auf der Schulter zum Licht hin, Falte an der Taille.
+  ctx.fillStyle = sh.key;
   ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  if (outline > 0) {
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = width + outline * 2;
+  ctx.ellipse(
+    top[0] + nx * side * width * 0.15 - ux * 0.02,
+    top[1] + ny * side * width * 0.15 - uy * 0.02,
+    width * 0.3,
+    width * 0.12,
+    Math.atan2(ny, nx),
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.lineWidth = ol;
+  ctx.beginPath();
+  const wf = at(0.38, side, width * 0.1);
+  ctx.moveTo(wf[0], wf[1]);
+  ctx.lineTo(wf[0] - nx * side * width * 0.3, wf[1] - ny * side * width * 0.3 + 0.01);
+  ctx.stroke();
+  if (sh.rim) {
+    const r = sh.rimX > 0 ? 1 : -1;
+    const a1 = at(0.15, r, width * 0.38);
+    const a2 = at(0.72, r, chest * 0.9);
+    const a3 = at(0.98, r, width * 0.42);
+    ctx.strokeStyle = sh.rim;
+    ctx.lineWidth = width * 0.09;
+    ctx.beginPath();
+    ctx.moveTo(a1[0], a1[1]);
+    ctx.quadraticCurveTo(a2[0], a2[1], a3[0], a3[1]);
     ctx.stroke();
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.stroke();
 }
 
 /**
@@ -844,21 +1338,24 @@ export function drawFigure(
     ? {
         ...colors,
         skin: '#ffffff',
+        skinDark: '#e9e9e9',
         hair: '#ffffff',
         top: '#ffffff',
         topDark: '#f1f1f1',
+        topLight: '#ffffff',
         pants: '#ffffff',
+        pantsDark: '#e9e9e9',
         shoes: '#fff',
       }
     : colors;
   const outline = Math.max(1.2, s * 0.018);
+  const shade = o.light && !white ? shadeFor(o.light, o.facing) : null;
   ctx.save();
   ctx.globalAlpha = o.opacity;
-  // Schatten unter den Füßen (und Ring der Seite).
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-  ctx.beginPath();
-  ctx.ellipse(o.x, o.y, s * 0.42, s * 0.08, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Weicher Schatten unter den Füßen (Verlauf, fertig gebacken), liegend breiter; Ring der Seite.
+  const lying = Math.abs(Math.sin(pose.rot));
+  const sw = s * (0.55 + lying * 0.7);
+  ctx.drawImage(contactShadow(), o.x - sw + pose.shift * o.facing * s, o.y - s * 0.11, sw * 2, s * 0.22);
   if (o.ring) {
     ctx.strokeStyle = o.ring;
     ctx.lineWidth = Math.max(1.5, s * 0.03);
@@ -867,7 +1364,7 @@ export function drawFigure(
     ctx.stroke();
   }
   // Liegt er, dann auf dem Boden (nicht halb darin): um die halbe Körperdicke anheben.
-  ctx.translate(o.x, o.y - Math.abs(Math.sin(pose.rot)) * s * 0.13);
+  ctx.translate(o.x + pose.shift * o.facing * s, o.y - Math.abs(Math.sin(pose.rot)) * s * 0.13);
   ctx.rotate(pose.rot * o.facing);
   ctx.scale(o.facing * s, s);
   const w = 1 / s;
@@ -891,54 +1388,84 @@ export function drawFigure(
     const foot = pt(knee[0], knee[1], a[0] + a[1], BODY.shin);
     return [hip, knee, foot] as [number, number][];
   };
-  const armW = 0.1 * bulk;
-  const legW = 0.13 * bulk;
   const ol = outline * w;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const drawArm = (pts: [number, number][]) => {
-    const sleeve = c.sleeves === 'long' ? c.top : c.skin;
-    const upper = c.sleeves === 'none' ? c.skin : c.top;
-    limb(ctx, [pts[0], pts[1]], armW, upper, ol);
-    limb(ctx, [pts[1], pts[2]], armW * 0.92, sleeve, ol);
-    // Faust.
+  // Licht in Figurkoordinaten: ohne Laterne von schräg oben vorn (flach, aber mit Rundung).
+  const vol: Shade = shade ?? FLAT_SHADE;
+  const lit: Shade | null = o.simple ? null : vol;
+  const puffy = look.top === 'puffer' ? 1.18 : 1;
+  const drawArm = (pts: [number, number][], back: boolean) => {
+    const sleeve = c.sleeves === 'long';
+    const upper = c.sleeves === 'none' ? [c.skin, c.skinDark] : [c.top, c.topDark];
+    const fore = sleeve ? [c.top, c.topDark] : [c.skin, c.skinDark];
+    // Hinterer Arm etwas dunkler (liegt im Schatten des Körpers).
+    const dim = back ? 0.82 : 1;
+    volumeLimb(
+      ctx,
+      pts,
+      [0.066 * bulk * (sleeve ? puffy : 1), 0.05 * bulk, 0.042 * bulk],
+      [upper as [string, string], fore as [string, string]],
+      ol,
+      lit,
+      dim,
+    );
+    // Faust: Kugel mit Glanz, Knöchel zur Schlagrichtung.
+    const [hx, hy] = pts[2];
+    const fr = 0.058 * bulk;
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(hx, hy, fr + ol, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.skinDark;
+    ctx.beginPath();
+    ctx.arc(hx, hy, fr, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = c.skin;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = ol;
     ctx.beginPath();
-    ctx.arc(pts[2][0], pts[2][1], 0.055 * bulk, 0, Math.PI * 2);
+    ctx.arc(hx + vol.lx * fr * 0.22, hy + vol.ly * fr * 0.22, fr * 0.76, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    if (dim < 1) dimOver(ctx, () => ctx.arc(hx, hy, fr, 0, Math.PI * 2), dim);
   };
-  const drawLeg = (pts: [number, number][]) => {
-    limb(ctx, pts, legW, c.pants, ol);
-    // Schuh nach vorn.
+  const drawLeg = (pts: [number, number][], back: boolean) => {
+    volumeLimb(
+      ctx,
+      pts,
+      [0.09 * bulk, 0.062 * bulk, 0.045 * bulk],
+      [
+        [c.pants, c.pantsDark],
+        [c.pants, c.pantsDark],
+      ],
+      ol,
+      lit,
+      back ? 0.82 : 1,
+    );
+    // Schuh nach vorn: Sohle hell, Kappe rund.
     const [fx, fy] = pts[2];
-    ctx.fillStyle = c.shoes;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = ol;
+    ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.ellipse(fx + 0.06, fy, 0.11, 0.045, 0, 0, Math.PI * 2);
+    ctx.ellipse(fx + 0.06, fy - 0.005, 0.12 + ol, 0.05 + ol, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = c.shoes;
+    ctx.beginPath();
+    ctx.ellipse(fx + 0.06, fy - 0.005, 0.12, 0.05, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(fx + 0.09, fy - 0.025, 0.06, 0.015, 0, 0, Math.PI * 2);
+    ctx.fill();
   };
   const backArm = arm(pose.ba, true);
   const frontArm = arm(pose.fa, false);
-  drawArm(backArm);
-  drawLeg(leg(pose.bl));
-  // Rumpf: Oberteil als breiter Strich, Daunenjacke dicker, mit dunklerer Seite.
+  drawArm(backArm, true);
+  drawLeg(leg(pose.bl), true);
+  // Rumpf: Körper mit Schultern, Brust und Taille (Daunenjacke dicker), Verlauf vom Licht zur Schattenseite; atmet.
   const torsoW = (look.top === 'puffer' ? 0.33 : 0.27) * bulk;
-  limb(ctx, [hip, [neck[0], neck[1] + 0.04]], torsoW, c.top, ol);
-  ctx.strokeStyle = c.topDark;
-  ctx.lineWidth = torsoW * 0.35;
-  ctx.beginPath();
-  ctx.moveTo(hip[0] - torsoW * 0.3, hip[1]);
-  ctx.lineTo(neck[0] - torsoW * 0.3, neck[1] + 0.08);
-  ctx.stroke();
+  drawTorso(ctx, hip, neck, torsoW, o.breath ?? 0, c, ol, vol, o.simple === true);
   if (!white) torsoDetail(ctx, look, c, hip, neck, torsoW);
-  drawLeg(leg(pose.fl));
-  drawHead(ctx, look, c, neck, pose.lean, ol, white);
-  drawArm(frontArm);
+  drawLeg(leg(pose.fl), false);
+  drawHead(ctx, look, c, neck, pose.lean, pose.head, ol, white, shade);
+  drawArm(frontArm, false);
   if (o.knife) {
     const [hx, hy] = frontArm[2];
     const ang = pose.fa[0] + pose.fa[1];
@@ -1004,15 +1531,17 @@ function drawHead(
   c: Colors,
   neck: [number, number],
   lean: number,
+  tilt: number,
   ol: number,
   white: boolean,
+  shade: Shade | null,
 ): void {
   const r = BODY.head;
   const hx = neck[0] + 0.02 + Math.sin(lean) * 0.05;
   const hy = neck[1] - r * 0.95;
   ctx.save();
   ctx.translate(hx, hy);
-  ctx.rotate(lean * 0.4);
+  ctx.rotate(lean * 0.4 + tilt * 0.6);
   // Hals.
   ctx.fillStyle = c.skin;
   ctx.fillRect(-0.04, r * 0.5, 0.08, r * 0.7);
@@ -1170,7 +1699,28 @@ function drawHead(
       }
     }
   }
+  if (shade) shadeHead(ctx, r, shade);
   ctx.restore();
+}
+
+/** Licht auf dem Kopf: Verlauf vom Licht weg (Schatten), Glanz oben, Randlicht als Sichel von der Seite. */
+function shadeHead(ctx: CanvasRenderingContext2D, r: number, sh: Shade): void {
+  const g = ctx.createLinearGradient(sh.lx * r, sh.ly * r, -sh.lx * r, -sh.ly * r);
+  g.addColorStop(0, sh.key);
+  g.addColorStop(0.45, 'rgba(0, 0, 0, 0)');
+  g.addColorStop(1, sh.shadow);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  if (sh.rim) {
+    const mid = sh.rimX > 0 ? 0 : Math.PI;
+    ctx.strokeStyle = sh.rim;
+    ctx.lineWidth = r * 0.16;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.94, mid - 0.9, mid + 0.9);
+    ctx.stroke();
+  }
 }
 
 function drawHat(ctx: CanvasRenderingContext2D, look: Look, c: Colors, r: number, white: boolean): void {
@@ -1299,6 +1849,28 @@ export interface Spark {
   life: number;
   max: number;
   color: string;
+}
+
+/** Druckwelle eines Treffers: Ring, der sich flach am Ort des Treffers ausbreitet. */
+export interface Ring {
+  x: number;
+  y: number;
+  r: number;
+  grow: number;
+  life: number;
+  max: number;
+  color: string;
+}
+
+export function drawRings(ctx: CanvasRenderingContext2D, rings: readonly Ring[]): void {
+  for (const ring of rings) {
+    const a = Math.max(0, ring.life / ring.max);
+    ctx.strokeStyle = alpha(ring.color, a * 0.85);
+    ctx.lineWidth = 1 + 5 * a;
+    ctx.beginPath();
+    ctx.ellipse(ring.x, ring.y, ring.r, ring.r * 0.62, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
 
 /** Schwebende Zahl bzw. Wort (Schaden, „Konter“, „Block“). */

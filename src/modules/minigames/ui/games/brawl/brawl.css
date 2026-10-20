@@ -203,6 +203,17 @@
 .brawl__chip.is-people {
   color: var(--cat-people);
 }
+.brawl__chip.is-combo {
+  color: var(--hud-gold);
+  font-family: var(--font-hud-display);
+  font-variant-numeric: tabular-nums;
+  animation: brawl-pop 0.22s ease-out both;
+}
+@keyframes brawl-pop {
+  from {
+    transform: scale(1.35);
+  }
+}
 
 /* ---------------------------------------------------------------- Spezialzüge der Crew */
 .brawl__specials {
@@ -387,13 +398,32 @@
       "own foe";
     gap: var(--space-2);
   }
+  /* Uhr und Kräfteverhältnis in einer Zeile: Die Leiste oben bleibt flach, die Bühne bekommt den Platz. */
   .brawl__center {
     grid-area: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+    gap: var(--space-3);
     min-width: 0;
-    padding: var(--space-2) var(--space-3);
+    padding: 6px var(--space-3);
   }
   .brawl__center .mg-hud-timer__value {
-    font-size: 24px;
+    font-size: 22px;
+  }
+  .brawl__center .mg-hud-timer__unit,
+  .brawl__center .mg-hud-timer__icon {
+    display: none;
+  }
+  .brawl__siren {
+    width: 16px;
+    height: 16px;
+  }
+  .brawl__center .ui-duel {
+    gap: 4px;
+  }
+  .brawl__center .ui-duel__labels {
+    font-size: 12px;
   }
   .brawl__team.is-own {
     grid-area: own;
@@ -422,11 +452,11 @@
     display: none;
   }
   .brawl__callout {
-    top: calc(196px + env(safe-area-inset-top, 0px));
+    top: calc(150px + env(safe-area-inset-top, 0px));
     font-size: 15px;
   }
   .brawl__status {
-    top: calc(244px + env(safe-area-inset-top, 0px));
+    top: calc(196px + env(safe-area-inset-top, 0px));
   }
   .brawl__specials {
     left: var(--space-3);
