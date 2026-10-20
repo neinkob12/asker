@@ -1,6 +1,6 @@
 // Zivi oder Kunde (Auftrag 48, Teil E): Schwierigkeit als Simulation. Ein Mensch braucht Zeit zum Hinsehen (jedes neue
-// Merkmal erst nach `notice` Sekunden bemerkt) und macht unter Zeitdruck Fehler (je weniger Luft bis zum Ablaufen der
-// Karte, desto öfter daneben). Geschafft ist eine Schicht ab Score 0,5 (winAt der Art).
+// Merkmal erst nach `notice` Sekunden bemerkt, was im Satz steckt, erst wenn er nach `read` Sekunden gelesen ist) und
+// macht unter Zeitdruck Fehler (je weniger Luft bis zum Ablaufen der Karte, desto öfter daneben). Geschafft ist eine Schicht ab Score 0,5 (winAt der Art).
 // BALANCE_REPORT=1 npx vitest run src/modules/minigames/ui/games/undercover/model.balance.test.ts druckt die Tabelle.
 
 import { describe, expect, it } from 'vitest';
@@ -17,7 +17,7 @@ import {
   step,
   visibleTells,
 } from './model';
-import { isSuspicious } from './tells';
+import { isSuspicious, tellDef } from './tells';
 
 const input = inputFrom({
   customers: 8,
@@ -29,18 +29,19 @@ const input = inputFrom({
 });
 
 interface Player {
-  /** So lange, bis ein neues Merkmal bemerkt ist (Sekunden). */
+  /** So lange, bis ein neues Merkmal bemerkt ist (Sekunden), und bis der Satz gelesen ist (Merkmale im Gesagten). */
   notice: number;
+  read: number;
   /** Grundfehler und Fehler bei voller Hast (Anteil der Entscheidungen, die kippen). */
   slip: number;
   rush: number;
-  /** Entscheidet spätestens nach so vielen Sekunden, auch wenn noch etwas kommt (ungeduldig). */
+  /** Entscheidet spätestens nach diesem Anteil der Kartenzeit, auch wenn noch etwas kommt (ungeduldig). */
   patience: number;
 }
 
 const PLAYERS: Record<'good' | 'weak', Player> = {
-  good: { notice: 0.5, slip: 0.02, rush: 0.25, patience: 99 },
-  weak: { notice: 0.9, slip: 0.1, rush: 0.4, patience: 2.2 },
+  good: { notice: 0.5, read: 1.1, slip: 0.02, rush: 0.25, patience: 1 },
+  weak: { notice: 0.9, read: 1.7, slip: 0.1, rush: 0.4, patience: 0.5 },
 };
 
 const DT = 0.05;
@@ -61,19 +62,21 @@ function playShift(seed: number, difficulty: number, player: Player | null) {
     const seen = visibleTells(person, elapsed);
     for (const id of seen) {
       const key = `${person.index}:${id}`;
-      if (!noticed.has(key)) noticed.set(key, elapsed + player.notice);
+      const said = tellDef(id)?.show === 'speech';
+      if (!noticed.has(key)) noticed.set(key, said ? Math.max(elapsed, player.read) : elapsed + player.notice);
     }
     const known = seen.filter((id) => (noticed.get(`${person.index}:${id}`) ?? 99) <= elapsed);
     const suspicious = known.filter(isSuspicious).length;
     const complete = known.length === person.tells.length;
-    if (suspicious < 2 && !complete && elapsed < player.patience) continue;
+    if (suspicious < 2 && !complete && elapsed < player.patience * person.seconds) continue;
     let decision: Decision = suspicious >= 2 ? 'refuse' : 'sell';
     const slack = Math.max(0, state.cardLeft);
     const p = player.slip + player.rush * Math.max(0, 1 - slack / 1.5);
     if (rng() < p) decision = decision === 'sell' ? 'refuse' : 'sell';
     decide(shift, state, decision);
   }
-  const score = shiftScore(shift, shiftOutcome(shift, state));
+  const out = shiftOutcome(shift, state);
+  const score = shiftScore(shift, out);
   return { score, won: score >= 0.5, time };
 }
 
@@ -97,6 +100,16 @@ describe('Zivi oder Kunde: Schwierigkeit (Simulation)', () => {
       return { d, good: good.rate, weak: weak.rate, none: none.rate, seconds: Math.round(good.time) };
     });
     if (process.env.BALANCE_REPORT) console.table(rows);
+    // Gemessen (Auftrag 48, Teil E; vorher gut 94 / 98 / 95 %, schwach 28 / 34 / 39 %):
+    // gut 94 / 98 / 86 %, schwach 63 / 33 / 7 %, ohne Eingabe nie, 19 bis 21 s (6 bis 10 Leute, police).
+    const [easy, mid, hard] = rows;
     expect(rows.every((r) => r.none === 0)).toBe(true);
+    expect(mid.good).toBeGreaterThanOrEqual(0.85);
+    expect(hard.good).toBeGreaterThanOrEqual(0.6);
+    expect(hard.good).toBeLessThan(mid.good);
+    expect(mid.weak).toBeGreaterThanOrEqual(0.25);
+    expect(mid.weak).toBeLessThanOrEqual(0.6);
+    expect(easy.weak).toBeGreaterThan(mid.weak);
+    expect(hard.weak).toBeLessThan(mid.weak);
   });
 });

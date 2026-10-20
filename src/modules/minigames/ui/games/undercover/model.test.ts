@@ -10,7 +10,7 @@ import {
   decide,
   initShift,
   inputFrom,
-  REVEAL_MARGIN,
+  revealMargin,
   shiftOutcome,
   shiftPicks,
   shiftScore,
@@ -84,10 +84,20 @@ describe('Zivi oder Kunde: Modell', () => {
     expect(people.find((p) => p.tells.includes('bigOrder'))?.amount).toBeGreaterThanOrEqual(20);
   });
 
-  it('6 Sekunden pro Karte, schwer 4', () => {
+  it('6 Sekunden pro Karte, schwer 4; im Lauf der Schicht wird es schneller', () => {
     expect(cardSeconds(0.2)).toBe(6);
     expect(cardSeconds(0.9)).toBe(4);
     expect(cardSeconds(0.55)).toBeGreaterThan(4);
+    for (const d of [0.2, 0.9]) {
+      const shift = createShift(3, d, input);
+      expect(shift.perCard).toBe(cardSeconds(d));
+      const times = shift.people.map((p) => p.seconds);
+      for (let i = 1; i < times.length; i++) expect(times[i]).toBeLessThanOrEqual(times[i - 1]);
+      expect(times.at(-1)).toBeLessThan(times[0]);
+    }
+    const easy = createShift(3, 0.2, input).people;
+    const hard = createShift(3, 0.9, input).people;
+    expect((hard.at(-1)?.seconds ?? 0) / hard[0].seconds).toBeLessThan((easy.at(-1)?.seconds ?? 0) / easy[0].seconds);
   });
 
   it('alles richtig: Score 1, alle Zivis erkannt', () => {
@@ -140,10 +150,10 @@ describe('Zivi oder Kunde: Modell', () => {
         for (const p of shift.people) {
           for (const id of p.tells) {
             expect(p.reveal[id]).toBeGreaterThanOrEqual(0);
-            expect(p.reveal[id]).toBeLessThanOrEqual(shift.perCard - REVEAL_MARGIN + 1e-9);
+            expect(p.reveal[id]).toBeLessThanOrEqual(p.seconds - revealMargin(difficulty) + 1e-9);
             if (tellDef(id)?.show === 'speech' && id !== 'asksSupplier') expect(p.reveal[id]).toBe(0);
           }
-          expect(visibleTells(p, shift.perCard)).toEqual(p.tells);
+          expect(visibleTells(p, p.seconds)).toEqual(p.tells);
         }
       }
     }
@@ -156,7 +166,7 @@ describe('Zivi oder Kunde: Modell', () => {
     for (let seed = 1; seed <= 60; seed++) {
       const shift = createShift(seed, difficulty, input);
       for (const p of shift.people) {
-        const seen = visibleTells(p, wait(shift.perCard)).filter(isSuspicious).length;
+        const seen = visibleTells(p, wait(p.seconds)).filter(isSuspicious).length;
         const decision: Decision = seen >= 2 ? 'refuse' : 'sell';
         const verdict = verdictOf(p, decision);
         if (verdict === 'sold' || verdict === 'spotted') right += 1;
@@ -167,7 +177,7 @@ describe('Zivi oder Kunde: Modell', () => {
   }
 
   it('Test-Bot: wer hinschaut, liegt richtig; wer schwer sofort wischt, verkauft an Zivis', () => {
-    for (const d of [0.2, 0.5, 0.95]) expect(accuracy(d, (t) => t - REVEAL_MARGIN)).toBe(1);
+    for (const d of [0.2, 0.5, 0.95]) expect(accuracy(d, (t) => t - revealMargin(d))).toBe(1);
     const hastyHard = accuracy(0.95, () => 0.9);
     const hastyEasy = accuracy(0.2, () => 0.9);
     expect(hastyHard).toBeLessThan(0.93);

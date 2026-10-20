@@ -479,14 +479,14 @@
 .iv-hands[data-cue="lean"] .iv-arm {
   transform: translate(0, 6px) rotate(4deg) scale(1.08);
 }
+.iv-cup {
+  transition: opacity 0.15s;
+}
 /* Kratzen am Hals: die rechte Hand ist oben am Hals; Schluck: die linke hebt den Becher. */
 .iv-hands[data-cue="scratch"] .iv-arm.is-r,
 .iv-hands[data-cue="sip"] .iv-arm.is-l,
 .iv-hands[data-cue="sip"] .iv-cup {
   opacity: 0;
-}
-.iv-cup {
-  transition: opacity 0.15s;
 }
 /* Zappeln: die Finger der rechten Hand trommeln. */
 .iv-finger {

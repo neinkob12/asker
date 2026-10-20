@@ -14,11 +14,12 @@ import { capture } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
-import { LowerBody, PortraitMarks } from './figure';
+import { Body, PortraitMarks } from './figure';
 import {
   canDecide,
   cardElapsed,
   createShift,
+  currentSeconds,
   type Decision,
   decide,
   initShift,
@@ -120,6 +121,8 @@ const PersonCard = memo(function PersonCard(props: {
   total: number;
   seen: readonly string[];
   lineRef?: { current: HTMLParagraphElement | null };
+  /** Karte hinten im Stapel: steht still. */
+  still?: boolean;
 }) {
   const { total, seen } = props;
   const person = useMemo(() => seenPerson(props.person, seen), [props.person, seen]);
@@ -127,11 +130,13 @@ const PersonCard = memo(function PersonCard(props: {
   const more = seen.length < props.person.tells.length;
   const has = (id: string) => seen.includes(id);
   const life = [
-    'uc-card__portrait',
+    'uc-figure',
     has('watchesCar') ? 'is-glance' : '',
     has('earpiece') ? 'is-ear' : '',
     has('nervous') || has('shaky') ? 'is-jitter' : '',
+    has('shaky') ? 'is-shaky' : '',
     has('phone') ? 'is-down' : '',
+    props.still ? 'is-still' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -146,10 +151,20 @@ const PersonCard = memo(function PersonCard(props: {
           {amount}
         </span>
       </header>
-      <div class={life} style={{ '--uc-delay': `${-(person.index * 0.77) % 3}s` }}>
-        <div class="uc-card__figure">
-          <Face look={person.look} />
-          <PortraitMarks person={person} />
+      {/* Ganze Figur im Licht der Laterne: Kopf (Face mit Merkmalen) über dem Körper. */}
+      <div class="uc-card__person">
+        <div
+          class={life}
+          style={{
+            '--uc-delay': `${-(person.index * 0.77) % 3}s`,
+            '--uc-sway': `${3.6 + (person.index % 3) * 0.7}s`,
+          }}
+        >
+          <div class="uc-figure__head">
+            <Face look={person.look} />
+            <PortraitMarks person={person} />
+          </div>
+          <Body person={person} />
         </div>
       </div>
       {/* Der Satz steht ganz da (gleicher Umbruch), der noch nicht gesagte Rest ist durchsichtig. */}
@@ -175,31 +190,39 @@ const PersonCard = memo(function PersonCard(props: {
           </li>
         )}
       </ul>
-      <div class={`uc-card__below${has('nervous') ? ' is-jitter' : ''}`}>
-        <LowerBody person={person} />
-      </div>
     </>
   );
 });
 
-/** Fenster der Häuserfront (x, y im 400er-Raster); jedes dritte ist dunkel. */
-const WINDOWS: [number, number][] = [
-  [10, 60],
-  [44, 60],
-  [10, 100],
-  [44, 140],
-  [100, 90],
-  [126, 130],
-  [172, 50],
-  [206, 50],
-  [172, 96],
-  [206, 140],
-  [258, 80],
-  [290, 120],
-  [336, 64],
-  [372, 104],
-  [336, 144],
+/** Häuser der Straße (400er-Raster): links, oben, Breite, Ton (0 bis 2) und Fassade (Putz oder Backstein). */
+const HOUSES: { x: number; y: number; w: number; tone: 0 | 1 | 2; brick: boolean }[] = [
+  { x: -10, y: 40, w: 96, tone: 0, brick: false },
+  { x: 86, y: 70, w: 70, tone: 1, brick: true },
+  { x: 156, y: 30, w: 88, tone: 2, brick: false },
+  { x: 244, y: 60, w: 76, tone: 0, brick: true },
+  { x: 320, y: 44, w: 96, tone: 1, brick: false },
 ];
+
+interface Win {
+  x: number;
+  y: number;
+  lit: boolean;
+  curtain: boolean;
+}
+
+/** Fenster je Haus im festen Raster, ein paar hell (fest, nicht gewürfelt), unten bleibt das Erdgeschoss. */
+const WINDOWS: Win[] = HOUSES.flatMap((h, i) => {
+  const cols = Math.max(1, Math.floor((h.w - 14) / 26));
+  const left = h.x + (h.w - cols * 26 + 8) / 2;
+  const out: Win[] = [];
+  for (let row = 0; h.y + 16 + row * 36 + 22 < 160; row++) {
+    for (let col = 0; col < cols; col++) {
+      const k = i * 7 + row * 3 + col * 5;
+      out.push({ x: left + col * 26, y: h.y + 16 + row * 36, lit: k % 5 < 2, curtain: k % 3 === 0 });
+    }
+  }
+  return out;
+});
 
 /** Leute, die hinten über die Straße gehen (Silhouetten, x-Start, Tempo in s, Größe). */
 const PASSERS: { from: number; dur: number; scale: number; delay: number }[] = [
@@ -209,9 +232,11 @@ const PASSERS: { from: number; dur: number; scale: number; delay: number }[] = [
 ];
 
 /**
- * Straße hinter dem Stapel (Auftrag 48 mit Licht): Himmel mit Verlauf, ferne Dächer, Häuser mit leuchtenden Fenstern,
- * Laterne mit Lichtkegel und Lichtfleck, nasser Gehweg mit Spiegelungen, Leute im Hintergrund, das Auto gegenüber.
- * Tag oder Nacht nach der Stunde. Alles SVG mit Verläufen, Farben aus den Tokens (CSS).
+ * Straße hinter dem Stapel (Auftrag 48 mit Licht; Teil E gemalt): Himmel mit Verlauf, ferne Dächer, Häuser aus Putz
+ * und Backstein mit Gesims und Sockel, Fenster mit Rahmen, Sprossen, Bank und Vorhang (hell mit warmem Verlauf, dunkel
+ * mit Spiegelung), ein Kiosk mit Markise, Laterne mit Lichtkegel und Lichtfleck, nasser Gehweg mit Spiegelungen, Körnung.
+ * Alles Stehende ist eine Ebene, die nie neu malt; Leute im Hintergrund und das Auto liegen in einer eigenen Ebene
+ * darüber (dort bewegt sich etwas). Tag oder Nacht nach der Stunde, Farben aus den Tokens (CSS).
  */
 const Scene = memo(function Scene(props: { night: boolean; spot: string; watched: boolean; flash: number }) {
   return (
@@ -244,8 +269,36 @@ const Scene = memo(function Scene(props: { night: boolean; spot: string; watched
             <stop offset="0" class="uc-stop-light" stop-opacity="0.55" />
             <stop offset="1" class="uc-stop-light" stop-opacity="0" />
           </radialGradient>
+          {/* Helles Fenster: oben wärmer und heller, unten dunkler (Raum dahinter). */}
+          <linearGradient id="uc-win-lit" x1="0" y1="0" x2="0.3" y2="1">
+            <stop offset="0" class="uc-stop-light" stop-opacity="1" />
+            <stop offset="1" class="uc-stop-light-deep" stop-opacity="0.85" />
+          </linearGradient>
+          {/* Dunkles Fenster: spiegelt den Himmel schräg. */}
+          <linearGradient id="uc-win-dark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" class="uc-stop-sky-top" />
+            <stop offset="0.5" class="uc-stop-sky-low" />
+            <stop offset="0.52" class="uc-stop-sky-top" />
+            <stop offset="1" class="uc-stop-sky-top" />
+          </linearGradient>
+          {/* Licht von links: Fassaden rechts dunkler. */}
+          <linearGradient id="uc-side" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.06" />
+            <stop offset="1" stop-color="#000000" stop-opacity="0.22" />
+          </linearGradient>
+          <pattern id="uc-brick" width="12" height="6" patternUnits="userSpaceOnUse">
+            <path d="M0 0.5 H12 M0 3.5 H12 M3 0.5 V3.5 M9 3.5 V6" class="uc-scene__mortar" />
+          </pattern>
+          <pattern id="uc-plaster" width="40" height="14" patternUnits="userSpaceOnUse">
+            <path d="M0 7 Q10 6 20 7.4 T40 7" class="uc-scene__plaster" />
+          </pattern>
           <filter id="uc-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" />
+          </filter>
+          {/* Körnung wie gemalt: Rauschen, kaum sichtbar. */}
+          <filter id="uc-grain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
+            <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.9 -0.35" />
           </filter>
         </defs>
         <rect x="0" y="0" width="400" height="240" fill="url(#uc-sky)" />
@@ -253,37 +306,89 @@ const Scene = memo(function Scene(props: { night: boolean; spot: string; watched
           class="uc-scene__far"
           d="M0 120 L30 120 L30 96 L58 96 L58 110 L92 110 L92 70 L104 58 L116 70 L116 108 L150 108 L150 90 L190 90 L190 112 L232 112 L232 80 L262 80 L262 100 L300 100 L300 66 L312 50 L324 66 L324 104 L360 104 L360 88 L400 88 L400 200 L0 200 Z"
         />
-        <g fill="url(#uc-house)">
-          <rect x="-10" y="40" width="96" height="160" />
-          <rect x="86" y="70" width="70" height="130" />
-          <rect x="156" y="30" width="88" height="170" />
-          <rect x="244" y="60" width="76" height="140" />
-          <rect x="320" y="44" width="96" height="156" />
-        </g>
+        {HOUSES.map((h) => (
+          <g key={h.x} class={`uc-scene__house is-tone-${h.tone}`}>
+            <rect x={h.x} y={h.y} width={h.w} height={200 - h.y} fill="url(#uc-house)" />
+            <rect
+              x={h.x}
+              y={h.y}
+              width={h.w}
+              height={200 - h.y}
+              fill={h.brick ? 'url(#uc-brick)' : 'url(#uc-plaster)'}
+            />
+            <rect class="uc-scene__tint" x={h.x} y={h.y} width={h.w} height={200 - h.y} />
+            <rect x={h.x} y={h.y} width={h.w} height={200 - h.y} fill="url(#uc-side)" />
+            {/* Gesims oben, Band über dem Erdgeschoss, Sockel unten. */}
+            <rect class="uc-scene__cornice" x={h.x - 2} y={h.y - 3} width={h.w + 4} height="5" />
+            <rect class="uc-scene__band" x={h.x} y="160" width={h.w} height="3" />
+            <rect class="uc-scene__plinth" x={h.x} y="190" width={h.w} height="10" />
+          </g>
+        ))}
         <g class="uc-scene__edges">
-          <rect x="84" y="70" width="2" height="130" />
-          <rect x="154" y="30" width="2" height="170" />
-          <rect x="242" y="60" width="2" height="140" />
-          <rect x="318" y="44" width="2" height="156" />
+          {HOUSES.slice(1).map((h) => (
+            <rect key={h.x} x={h.x - 2} y={h.y} width="2" height={200 - h.y} />
+          ))}
         </g>
         <g class="uc-scene__glow" filter="url(#uc-glow)">
-          {WINDOWS.filter((_, i) => i % 3 !== 1).map(([x, y]) => (
-            <rect key={`g${x}-${y}`} x={x - 2} y={y - 2} width="22" height="26" />
+          {WINDOWS.filter((w) => w.lit).map((w) => (
+            <rect key={`g${w.x}-${w.y}`} x={w.x - 3} y={w.y - 3} width="24" height="28" />
           ))}
         </g>
         <g class="uc-scene__windows">
-          {WINDOWS.map(([x, y], i) => (
-            <rect
-              key={`w${x}-${y}`}
-              x={x}
-              y={y}
-              width="18"
-              height="22"
-              rx="1"
-              class={i % 3 === 1 ? 'uc-scene__window-dark' : undefined}
-            />
+          {WINDOWS.map((w) => (
+            <g key={`w${w.x}-${w.y}`}>
+              <rect class="uc-scene__frame" x={w.x - 1.5} y={w.y - 1.5} width="21" height="25" rx="1" />
+              <rect
+                class={w.lit ? 'uc-scene__pane is-lit' : 'uc-scene__pane'}
+                x={w.x}
+                y={w.y}
+                width="18"
+                height="22"
+                fill={w.lit ? 'url(#uc-win-lit)' : 'url(#uc-win-dark)'}
+              />
+              {w.lit && w.curtain && <path class="uc-scene__curtain" d={`M${w.x} ${w.y} h6 q-2 11 1 22 h-7 Z`} />}
+              <path class="uc-scene__mullion" d={`M${w.x + 9} ${w.y} v22 M${w.x} ${w.y + 8} h18`} />
+              <rect class="uc-scene__sill" x={w.x - 2.5} y={w.y + 22.5} width="23" height="2.2" />
+            </g>
           ))}
         </g>
+        {/* Kiosk im Erdgeschoss: Schaufenster mit Licht, Markise. */}
+        <g class="uc-scene__kiosk">
+          <rect class="uc-scene__shop" x="170" y="166" width="60" height="24" fill="url(#uc-win-lit)" />
+          <path class="uc-scene__mullion" d="M190 166 v24 M210 166 v24" />
+          <path class="uc-scene__awning" d="M166 160 L234 160 L238 168 L162 168 Z" />
+          <path class="uc-scene__awning-stripe" d="M174 160 l-2 8 M190 160 l0 8 M206 160 l0 8 M222 160 l2 8" />
+          <rect class="uc-scene__shelf" x="172" y="178" width="56" height="1.4" />
+        </g>
+        <rect x="0" y="200" width="400" height="40" fill="url(#uc-walk)" />
+        <path
+          class="uc-scene__joints"
+          d="M0 214 H400 M0 228 H400 M40 200 L30 240 M120 200 L116 240 M200 200 V240 M280 200 L284 240 M360 200 L370 240"
+        />
+        <g class="uc-scene__wet">
+          {WINDOWS.filter((w, i) => w.lit && i % 2 === 0).map((w, i) => (
+            <rect key={`r${w.x}-${w.y}`} x={w.x + 4} y={204} width="10" height={14 + (i % 3) * 6} rx="3" />
+          ))}
+          <rect x="176" y="203" width="48" height="16" rx="5" />
+        </g>
+        <rect class="uc-scene__curb" x="0" y="198" width="400" height="3" />
+        <g class="uc-scene__lamp">
+          <path class="uc-scene__cone" d="M322 98 L342 98 L392 200 L272 200 Z" fill="url(#uc-cone)" />
+          <ellipse class="uc-scene__pool" cx="332" cy="206" rx="70" ry="12" fill="url(#uc-pool)" />
+          <rect class="uc-scene__pole" x="330" y="96" width="4" height="104" />
+          <path class="uc-scene__pole" d="M318 96 L346 96 L340 90 L324 90 Z" />
+          <rect class="uc-scene__bulb" x="322" y="96" width="20" height="3" rx="1.5" />
+        </g>
+        <rect class="uc-scene__grain" x="0" y="0" width="400" height="240" filter="url(#uc-grain)" />
+      </svg>
+      {/* Was sich bewegt: eigene Ebene, damit die Straße darunter nicht mit neu malt. */}
+      <svg
+        class="uc-scene__live"
+        viewBox="0 0 400 240"
+        preserveAspectRatio="xMidYMax slice"
+        aria-hidden="true"
+        focusable="false"
+      >
         <g class="uc-scene__passers">
           {PASSERS.map((p, i) => (
             <g
@@ -300,34 +405,24 @@ const Scene = memo(function Scene(props: { night: boolean; spot: string; watched
             </g>
           ))}
         </g>
-        <rect x="0" y="200" width="400" height="40" fill="url(#uc-walk)" />
-        <g class="uc-scene__wet">
-          {WINDOWS.filter((_, i) => i % 3 !== 1 && i % 2 === 0).map(([x], i) => (
-            <rect key={`r${x}-${i}`} x={x + 4} y={204} width="10" height={14 + (i % 3) * 6} rx="3" />
-          ))}
-        </g>
-        <rect class="uc-scene__curb" x="0" y="198" width="400" height="3" />
         <g class={`uc-scene__car${props.watched ? ' is-watched' : ''}`}>
           <ellipse class="uc-scene__shadow" cx="70" cy="205" rx="58" ry="4" />
           <path
             class="uc-scene__body"
             d="M18 196 L24 178 Q28 170 40 169 L86 169 Q96 170 102 178 L112 186 L120 188 Q124 190 124 196 Z"
           />
+          <path class="uc-scene__sill-line" d="M22 190 L122 190" />
           <path class="uc-scene__shine" d="M30 180 Q60 175 100 179" />
           <path class="uc-scene__glass" d="M32 181 L38 173 L62 173 L62 181 Z M66 173 L86 173 L94 181 L66 181 Z" />
+          <path class="uc-scene__glass-shine" d="M40 180 L45 174 M70 180 L74 174" />
           <circle class="uc-scene__wheel" cx="40" cy="197" r="8" />
           <circle class="uc-scene__wheel" cx="102" cy="197" r="8" />
+          <circle class="uc-scene__hub" cx="40" cy="197" r="3" />
+          <circle class="uc-scene__hub" cx="102" cy="197" r="3" />
           <circle class="uc-scene__head" cx="54" cy="177" r="3.4" />
           <circle class="uc-scene__head" cx="78" cy="177" r="3.4" />
           <rect key={props.flash} class="uc-scene__lights" x="116" y="184" width="8" height="5" rx="2" />
           <ellipse class="uc-scene__lights-pool" cx="132" cy="206" rx="16" ry="3" />
-        </g>
-        <g class="uc-scene__lamp">
-          <path class="uc-scene__cone" d="M322 98 L342 98 L392 200 L272 200 Z" fill="url(#uc-cone)" />
-          <ellipse class="uc-scene__pool" cx="332" cy="206" rx="70" ry="12" fill="url(#uc-pool)" />
-          <rect class="uc-scene__pole" x="330" y="96" width="4" height="104" />
-          <path class="uc-scene__pole" d="M318 96 L346 96 L340 90 L324 90 Z" />
-          <rect class="uc-scene__bulb" x="322" y="96" width="20" height="3" rx="1.5" />
         </g>
       </svg>
       <span class="uc-scene__sign">
@@ -551,7 +646,7 @@ export function UndercoverGame(props: MinigameViewProps) {
       el.style.setProperty('--uc-refuse', Math.max(0, -lean).toFixed(2));
     }
     if (timer.current) {
-      const share = g.gapLeft > 0 ? 1 : g.cardLeft / shift.perCard;
+      const share = g.gapLeft > 0 ? 1 : g.cardLeft / currentSeconds(shift, g);
       timer.current.style.transform = `scaleX(${share.toFixed(3)})`;
     }
     // Wegfliegende Karten.
@@ -585,7 +680,7 @@ export function UndercoverGame(props: MinigameViewProps) {
     }
     if (t - m.lastHud >= 0.1) {
       m.lastHud = t;
-      setLeft(g.gapLeft > 0 ? shift.perCard : g.cardLeft);
+      setLeft(g.gapLeft > 0 ? currentSeconds(shift, g) : g.cardLeft);
     }
     if (g.done && m.endAt < 0) m.endAt = t + END_DELAY;
     if (m.endAt >= 0 && t >= m.endAt && !m.sent) {
@@ -604,7 +699,7 @@ export function UndercoverGame(props: MinigameViewProps) {
       <Scene night={night} spot={spotName} watched={live && seen.includes('watchesCar')} flash={flash} />
       {bust > 0 && <div key={bust} class="uc-bust" aria-hidden="true" />}
       <HudBar class="uc-hud">
-        <HudTimer seconds={left} total={shift.perCard} urgentAt={2} />
+        <HudTimer seconds={left} total={current?.seconds ?? shift.perCard} urgentAt={2} />
         <span class="uc-hud__stat">
           <span class="uc-hud__label">Kunde</span>
           <span class="uc-hud__value">
@@ -621,6 +716,13 @@ export function UndercoverGame(props: MinigameViewProps) {
           <span class="uc-hud__label">Verkauft</span>
           <span class="uc-hud__value">{tally.sold}</span>
         </span>
+        {/* Tempo steigt: Sobald die Karten merklich kürzer sind, sagt es das HUD (einmal mit Puls). */}
+        {current && current.seconds <= shift.perCard * 0.9 && (
+          <span class="uc-hud__rush" role="img" aria-label="Es wird voller, die Leute warten nicht mehr so lange">
+            <Icon name="bolt" />
+            <span class="uc-hud__rush-text">Voller</span>
+          </span>
+        )}
       </HudBar>
       <div ref={stage} class="uc-stage">
         <div class="uc-deck">
@@ -649,6 +751,7 @@ export function UndercoverGame(props: MinigameViewProps) {
                   total={total}
                   seen={i === 0 ? seen : NONE}
                   lineRef={i === 0 ? line : undefined}
+                  still={i > 0}
                 />
                 {i === 0 && (
                   <>
