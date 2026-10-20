@@ -57,11 +57,14 @@ export const CATCH_SECONDS = 3;
 /** Ware aus dem Fenster: so lange zögern die Streifen (Sekunden). */
 export const DUMP_HESITATE = 3.5;
 /** Schaden: Rammen, Sperre; Aufprall nach Geschwindigkeit (ab IMPACT_FREE m/s, voll bei IMPACT_FULL). */
-export const RAM_DAMAGE = 0.07;
+export const RAM_DAMAGE = { easy: 0.045, hard: 0.07 };
 export const BLOCK_DAMAGE = 0.3;
 export const IMPACT_FREE = 5;
 export const IMPACT_FULL = 42;
 export const IMPACT_MAX_DAMAGE = 0.4;
+/** Unfälle (Wände, Sperren, Verkehr) kosten so viel des Schadens oben (leicht bis schwer): Fahrfehler verzeiht die
+ * leichte Stufe eher, die Streifen bleiben gleich gefährlich. */
+export const CRASH_FACTOR = { easy: 0.45, hard: 0.8 };
 /** Halber Durchmesser der Wagen für Zusammenstöße (Meter). */
 export const CAR_RADIUS = 1.35;
 export const TRUCK_RADIUS = 2.4;
@@ -108,7 +111,7 @@ const STEER_SMOOTH = 9;
 /** Rutschen nach Zusammenstößen: so lange kein Gas (Sekunden). */
 const SKID_SECONDS = 0.6;
 /** Streifen: Tempo relativ zum Höchsttempo (leicht bis schwer), Gummiband weit hinten, Rammen. */
-const COP_SPEED = { easy: 0.86, hard: 1.0 };
+const COP_SPEED = { easy: 0.86, hard: 0.95 };
 const COP_RUBBER_GAP = 160;
 const COP_RUBBER = 1.2;
 const COP_YAW = 2.4;
@@ -342,6 +345,8 @@ export interface ChaseSetup {
   blockEvery: number;
   /** Füllrate des Balkens „Abhängen“ (pro Sekunde). */
   shakeRate: number;
+  /** Anteil des Schadens bei Unfällen (CRASH_FACTOR). */
+  crashFactor: number;
   /** Start: mitten auf einer Straße nach Norden. */
   start: { x: number; z: number; heading: number };
 }
@@ -636,6 +641,7 @@ export function createChase(options: ChaseOptions): ChaseSetup {
     traffic: Math.round(lerp(TRAFFIC.min, TRAFFIC.max, difficulty) * (options.mobile ? 0.75 : 1)),
     blockEvery: lerp(BLOCK_EVERY.easy, BLOCK_EVERY.hard, difficulty),
     shakeRate: lerp(SHAKE_RATE.easy, SHAKE_RATE.hard, difficulty),
+    crashFactor: lerp(CRASH_FACTOR.easy, CRASH_FACTOR.hard, difficulty),
     start: { x: col * PITCH + LANE_OFF, z: row * PITCH + PITCH / 2, heading: 0 },
   };
 }
@@ -965,7 +971,11 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
         const power = clamp((into - IMPACT_FREE) / (IMPACT_FULL - IMPACT_FREE), 0, 1);
         const blockWall = w.kind === 'block';
         const soft = w.kind === 'parked' ? PARKED_DAMAGE : w.kind === 'post' ? POST_DAMAGE : 1;
-        p.damage = clamp(p.damage + (blockWall ? BLOCK_DAMAGE : power * IMPACT_MAX_DAMAGE * soft), 0, 1);
+        p.damage = clamp(
+          p.damage + (blockWall ? BLOCK_DAMAGE : power * IMPACT_MAX_DAMAGE * soft) * setup.crashFactor,
+          0,
+          1,
+        );
         state.events.push({
           kind: w.kind === 'water' ? 'splash' : blockWall ? 'blockHit' : 'crash',
           power,
@@ -995,7 +1005,7 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
   }
 }
 
-function collideTraffic(state: ChaseState): void {
+function collideTraffic(setup: ChaseSetup, state: ChaseState): void {
   const p = state.player;
   const c = forward(p.course);
   for (const v of state.traffic) {
@@ -1042,7 +1052,7 @@ function collideTraffic(state: ChaseState): void {
     }
     v.hitCooldown = 0.8;
     if (frontal) {
-      p.damage = clamp(p.damage + 0.03 + power * 0.22, 0, 1);
+      p.damage = clamp(p.damage + (0.03 + power * 0.22) * setup.crashFactor, 0, 1);
       p.v = Math.max(0, p.v * 0.4);
       p.skid = Math.max(p.skid, SKID_SECONDS * 0.6);
       state.events.push({ kind: 'crash', power, x: v.x, z: v.z });
@@ -1187,7 +1197,7 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
     const rel = cop.v - Math.abs(p.v);
     if (rel > 1 || gap < CAR_RADIUS * 2) {
       cop.ramCooldown = RAM_COOLDOWN;
-      p.damage = clamp(p.damage + RAM_DAMAGE, 0, 1);
+      p.damage = clamp(p.damage + lerp(RAM_DAMAGE.easy, RAM_DAMAGE.hard, setup.difficulty), 0, 1);
       const side = state.random() < 0.5 ? -1 : 1;
       // Anschieben: Tempo rauf, Kurs seitlich verdreht.
       p.v += RAM_PUSH;
@@ -1428,7 +1438,7 @@ export function stepChase(setup: ChaseSetup, state: ChaseState, input: ChaseInpu
   collideWalls(setup, state, dt);
   stepTraffic(setup, state, dt);
   stepBlocks(setup, state);
-  if (!state.end) collideTraffic(state);
+  if (!state.end) collideTraffic(setup, state);
   stepCops(setup, state, dt);
   if (state.end) return;
   stepShake(setup, state, dt);

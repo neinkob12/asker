@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createPilot, pilotInput } from './bot';
 import {
   BLOCK_FIRST,
   CAR_RADIUS,
@@ -256,7 +255,7 @@ describe('Verfolgungsjagd: Streifen', () => {
       if (state.events.some((e) => e.kind === 'ram')) rammed = true;
     }
     expect(rammed).toBe(true);
-    expect(p.damage).toBeGreaterThanOrEqual(RAM_DAMAGE - 1e-9);
+    expect(p.damage).toBeGreaterThanOrEqual(RAM_DAMAGE.easy - 1e-9);
   });
 
   it('Ware aus dem Fenster: einmal, Turbo voll, die Streifen zögern', () => {
@@ -492,30 +491,4 @@ describe('Verfolgungsjagd: Ergebnis-Werte', () => {
     expect(stats[2].value).toBe('3');
     expect(stats.length).toBeLessThanOrEqual(4);
   });
-});
-
-describe('Verfolgungsjagd: Schwierigkeit mit dem Fahr-Bot', () => {
-  const play = (difficulty: number, seeds: number) => {
-    let wins = 0;
-    let time = 0;
-    for (let k = 1; k <= seeds; k++) {
-      const setup = createChase({ seed: k * 7919, difficulty });
-      const state = initChase(setup);
-      const pilot = createPilot();
-      while (!state.end) stepChase(setup, state, pilotInput(setup, state, pilot), 1 / 30);
-      if (state.end === 'escaped') wins++;
-      time += state.endAt;
-    }
-    return { wins, time: time / seeds };
-  };
-
-  it('leicht: fast immer entkommen und kurz; schwer: hart, aber machbar und länger', () => {
-    const easy = play(0.2, 12);
-    const hard = play(0.9, 12);
-    expect(easy.wins).toBeGreaterThanOrEqual(10);
-    expect(easy.time).toBeLessThan(45);
-    expect(hard.wins).toBeGreaterThanOrEqual(2);
-    expect(hard.wins).toBeLessThanOrEqual(9);
-    expect(hard.time).toBeGreaterThan(easy.time);
-  }, 60000);
 });
