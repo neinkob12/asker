@@ -36,6 +36,15 @@ import {
   Vector3,
 } from 'three';
 import { drawGoodsGlyph, type GoodsPalette, packageLook } from '../../kit/goods';
+import {
+  type CrackLight,
+  createCrackLight,
+  ParticlePool,
+  POLICE_BLUE,
+  POLICE_RED,
+  policeBlink,
+  softDotTexture,
+} from '../../kit/indoor3d';
 import { buildCar, type CarParts, type DayPhase, disposeObject, setBlueLight } from '../../kit/scene3d';
 import type { Stage3d } from '../../kit/stage3d';
 import { buildFigure, type Figure, poseFigure } from './figure';
@@ -57,7 +66,6 @@ import {
   labelTexture,
   shutterTexture,
   skyTexture,
-  softDot,
   streetTexture,
   wallTexture,
   woodTexture,
@@ -169,74 +177,6 @@ function box(
   mesh.receiveShadow = shadow === 'receive' || shadow === 'both';
   parent.add(mesh);
   return mesh;
-}
-
-// ---------------------------------------------------------------------------------------------- Partikel
-
-const PARTICLES = 220;
-
-class Particles {
-  readonly points: Points;
-  private readonly pos = new Float32Array(PARTICLES * 3);
-  private readonly col = new Float32Array(PARTICLES * 3);
-  private readonly vel = new Float32Array(PARTICLES * 3);
-  private readonly life = new Float32Array(PARTICLES);
-  private readonly max = new Float32Array(PARTICLES);
-  private readonly gravity = new Float32Array(PARTICLES);
-  private next = 0;
-  constructor(texture: CanvasTexture) {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(this.pos, 3));
-    geometry.setAttribute('color', new BufferAttribute(this.col, 3));
-    this.points = new Points(
-      geometry,
-      new PointsMaterial({
-        size: 0.14,
-        map: texture,
-        vertexColors: true,
-        transparent: true,
-        depthWrite: false,
-        blending: AdditiveBlending,
-      }),
-    );
-    this.points.frustumCulled = false;
-    for (let i = 0; i < PARTICLES; i++) this.pos[i * 3 + 1] = -99;
-  }
-  emit(x: number, y: number, z: number, n: number, color: Color, speed: number, gravity: number, life: number): void {
-    for (let k = 0; k < n; k++) {
-      const i = this.next;
-      this.next = (this.next + 1) % PARTICLES;
-      this.pos.set([x + (Math.random() - 0.5) * 0.2, y, z + (Math.random() - 0.5) * 0.2], i * 3);
-      const a = Math.random() * Math.PI * 2;
-      const up = 0.4 + Math.random() * 0.8;
-      this.vel.set([Math.cos(a) * speed * 0.7, up * speed, Math.sin(a) * speed * 0.4], i * 3);
-      this.col.set([color.r, color.g, color.b], i * 3);
-      this.life[i] = life * (0.6 + Math.random() * 0.6);
-      this.max[i] = this.life[i];
-      this.gravity[i] = gravity;
-    }
-  }
-  update(dt: number): void {
-    for (let i = 0; i < PARTICLES; i++) {
-      if (this.life[i] <= 0) continue;
-      this.life[i] -= dt;
-      const j = i * 3;
-      if (this.life[i] <= 0) {
-        this.pos[j + 1] = -99;
-        continue;
-      }
-      this.vel[j + 1] -= this.gravity[i] * dt;
-      this.pos[j] += this.vel[j] * dt;
-      this.pos[j + 1] = Math.max(0.02, this.pos[j + 1] + this.vel[j + 1] * dt);
-      this.pos[j + 2] += this.vel[j + 2] * dt;
-      const fade = this.life[i] / this.max[i];
-      this.col[j] *= 0.985 + 0.015 * fade;
-      this.col[j + 1] *= 0.985 + 0.015 * fade;
-      this.col[j + 2] *= 0.985 + 0.015 * fade;
-    }
-    this.points.geometry.attributes.position.needsUpdate = true;
-    this.points.geometry.attributes.color.needsUpdate = true;
-  }
 }
 
 // ---------------------------------------------------------------------------------------------- Verstecke
@@ -396,7 +336,7 @@ export function createStashScene(
     textures.push(t);
     return t;
   };
-  const dot = keep(softDot());
+  const dot = keep(softDotTexture());
   const L = setup.length;
   const gate = setup.gate;
   const inside = gate ?? L;
@@ -685,7 +625,7 @@ export function createStashScene(
 
   // ------------------------------------------------------------ Tor und Straße
   let shutter: Mesh | null = null;
-  let gapGlow: Mesh | null = null;
+  let gapGlow: CrackLight | null = null;
   let ourCar: CarParts | null = null;
   let trunkLid: Group | null = null;
   const copCar = buildCar('police', 0xe8ecef);
@@ -718,20 +658,11 @@ export function createStashScene(
     shutter.scale.y = 0.02;
     shutter.castShadow = true;
     scene.add(shutter);
-    gapGlow = new Mesh(
-      new PlaneGeometry(2.6, FRONT - BACK),
-      new MeshBasicMaterial({
-        map: dot,
-        color: 0x3a7bff,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: AdditiveBlending,
-      }),
-    );
-    gapGlow.rotation.x = -Math.PI / 2;
-    gapGlow.position.set(g - 0.9, 0.01, (FRONT + BACK) / 2);
-    scene.add(gapGlow);
+    // Licht von draußen unter dem Tor (Blaulicht, sobald es zu ist).
+    gapGlow = createCrackLight(FRONT - BACK, 2.2);
+    gapGlow.mesh.rotation.z = -Math.PI / 2;
+    gapGlow.mesh.position.set(g - 1.1, 0.012, (FRONT + BACK) / 2);
+    scene.add(gapGlow.mesh);
     // Draußen: Asphalt, Gehweg, Hauswand gegenüber, Laterne.
     const outside = L - g + 10;
     const asphalt = keep(streetTexture('asphalt'));
@@ -913,7 +844,7 @@ export function createStashScene(
     copLights.push(torch);
   }
 
-  const particles = new Particles(dot);
+  const particles = new ParticlePool(dot, { count: 220, size: 0.14, floor: 0.02 });
   scene.add(particles.points);
   const stowLight = new PointLight(0xffc94a, 0, 4, 1.5);
   scene.add(stowLight);
@@ -1080,7 +1011,7 @@ export function createStashScene(
     }
 
     // --- Tor, Streife, Blaulicht, Klopfen, Reinstürmen.
-    const blink = (t * 2.2) % 1 < 0.5;
+    const blink = policeBlink(t);
     const copOn = fx.closedT >= 0 || fx.breachT >= 0 ? 1 : Math.max(0, (fx.alarm - 0.55) / 0.45) * 0.5;
     if (shutter && gate !== null) {
       const down =
@@ -1089,19 +1020,17 @@ export function createStashScene(
       shutter.position.x = gate + (fx.knock > 0 ? Math.sin(t * 90) * 0.03 * fx.knock : 0);
     }
     if (gapGlow) {
-      const mat = gapGlow.material as MeshBasicMaterial;
-      mat.opacity = fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.55 : 0.18) : 0;
-      mat.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+      gapGlow.set(fx.closedT >= 0 && fx.breachT < 0 ? (blink ? 0.75 : 0.3) : 0, blink ? POLICE_BLUE : POLICE_RED);
     }
     police.intensity = copOn * (blink ? 26 : 18) * (fx.closedT >= 0 ? 1 : 0.6);
-    police.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+    police.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
     // Das Blaulicht fällt durch die Fenster dort, wo du gerade bist.
     policeIn.position.x = camX + (blink ? 2 : -2);
     policeIn.intensity = copOn * (blink ? 34 : 18) * (fx.breachT >= 0 ? 0.5 : 1);
-    policeIn.color.setHex(blink ? 0x3a7bff : 0xff4a3a);
+    policeIn.color.setHex(blink ? POLICE_BLUE : POLICE_RED);
     for (const w of windows) {
       if (copOn > 0) {
-        w.emissive.setHex(blink ? 0x3a7bff : 0xff4a3a);
+        w.emissive.setHex(blink ? POLICE_BLUE : POLICE_RED);
         w.emissiveIntensity = 0.6 + 1.6 * copOn * (blink ? 1 : 0.6);
       } else {
         w.emissive.setHex(light.sun);
@@ -1152,7 +1081,7 @@ export function createStashScene(
       }
       pos.needsUpdate = true;
     }
-    if (speed > 3.5 && Math.random() < dt * 8) particles.emit(state.x, 0.05, 0, 1, new Color(0x5a5248), 0.5, 1.2, 0.5);
+    if (speed > 3.5 && Math.random() < dt * 8) particles.emit(state.x, 0.05, 0, 1, 0x5a5248, 0.5, 1.2, 0.5);
 
     // --- Kamera: folgt dir mit Vorlauf in Blickrichtung, bleibt in der Szene; wackelt bei Stößen.
     const lead = state.facing * Math.min(1.6, viewW * 0.12);
@@ -1242,15 +1171,15 @@ export function createStashScene(
     if (kind === 'stow') {
       stowGlow = 1;
       stowLight.position.set(x, y + 0.6, z + 0.6);
-      particles.emit(x, y + 0.2, z + 0.3, n, new Color(0xffd36a), 1.8, 3, 0.7);
+      particles.emit(x, y + 0.2, z + 0.3, n, 0xffd36a, 1.8, 3, 0.7);
     } else if (kind === 'splash') {
-      particles.emit(x, 0.05, z, n + 10, new Color(0x7fb8ff), 2.4, 7, 0.8);
+      particles.emit(x, 0.05, z, n + 10, 0x7fb8ff, 2.4, 7, 0.8);
     } else if (kind === 'refuse') {
-      particles.emit(x, y + 0.3, z + 0.3, Math.round(n / 2), new Color(0xff4a3a), 1.2, 1, 0.45);
+      particles.emit(x, y + 0.3, z + 0.3, Math.round(n / 2), 0xff4a3a, 1.2, 1, 0.45);
     } else if (kind === 'pick') {
-      particles.emit(x, y, z, Math.round(n / 3), new Color(0xbfae94), 0.9, 2, 0.5);
+      particles.emit(x, y, z, Math.round(n / 3), 0xbfae94, 0.9, 2, 0.5);
     } else {
-      particles.emit(x, 0.05, z, n, new Color(0x8a7f70), 1.4, 1.5, 0.9);
+      particles.emit(x, 0.05, z, n, 0x8a7f70, 1.4, 1.5, 0.9);
     }
   };
 
@@ -1269,6 +1198,7 @@ export function createStashScene(
       proxyMat.dispose();
       for (const t of textures) t.dispose();
       particles.points.geometry.dispose();
+      gapGlow?.dispose();
     },
   };
 }

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatEuro } from '../../../../../core';
 import { audio, haptic, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
+import { HitStop } from '../../kit/indoor3d';
 import { phaseOf } from '../../kit/scene3d';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useStage3d } from '../../kit/stage3d';
@@ -24,6 +25,7 @@ import {
   ROOM_NAMES,
   type RoomId,
   type SearchEvent,
+  STEPS_AT,
   searchPicks,
   searchScore,
   searchStats,
@@ -107,6 +109,7 @@ export function SearchGame(props: MinigameViewProps) {
   const game = useRef(initSearch(setup));
   const phase = phaseOf(challenge.params.phase);
   const reduced = useMemo(prefersReducedMotion, []);
+  const stop = useMemo(() => new HitStop(reduced), [reduced]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const tags = useRef(new Map<number, HTMLElement>());
   const floatEls = useRef(new Map<number, HTMLElement>());
@@ -122,9 +125,13 @@ export function SearchGame(props: MinigameViewProps) {
     sent: false,
     selected: -1,
     hover: -1,
-    lastHover: 0,
     lastRustle: -1,
     press: null as { x: number; y: number; id: number; moved: boolean } | null,
+    /** Letzte Lage des Zeigers (Maus immer, Finger beim Ziehen): Was dort liegt, wird jedes Bild neu bestimmt. */
+    pointer: null as { x: number; y: number } | null,
+    lastSteps: -10,
+    lastBeat: -10,
+    lastMiss: -10,
     pendingDt: 0,
     drawQueued: false,
     floats: 0,
@@ -191,6 +198,13 @@ export function SearchGame(props: MinigameViewProps) {
     const scene = sceneFor();
     scene.update(game.current, fx.current, dt);
     scene.render(st);
+    // Die Kamera schaut mit: Was unter dem Zeiger liegt, ändert sich auch ohne Mausbewegung. Jedes Bild neu
+    // bestimmen, damit Name und Klick zu dem passen, was gerade im Licht ist.
+    const f = fx.current;
+    if (f.pointer && running) {
+      const hover = scene.pick(f.pointer.x, f.pointer.y);
+      if (hover !== f.hover) f.hover = hover;
+    }
     // Namen, Fortschritt und Ergebnis über den Dingen des Raums (Lage aus der Projektion, ohne Layout-Lesen).
     for (const [index, el] of tags.current) {
       const p = scene.itemScreen(index);
@@ -231,6 +245,8 @@ export function SearchGame(props: MinigameViewProps) {
         haptic('success');
         scene?.burst('found', e.index);
         float(`+${formatEuro(e.amount)}`, 'money', e.index);
+        // Kurz anhalten: Der Fund hat Gewicht.
+        stop.hold(0.085);
         say(`${item.name}: ${formatEuro(e.amount)}!`, 'good');
       } else if (e.type === 'empty') {
         audio.play(SEARCH_SOUNDS.empty, { volume: 0.7 });
@@ -240,6 +256,7 @@ export function SearchGame(props: MinigameViewProps) {
         audio.play(SEARCH_SOUNDS.clatter, { volume: 0.9 });
         haptic('warning');
         f.shake = Math.max(f.shake, 0.7);
+        stop.hold(0.05);
         scene?.burst('noise', e.index);
         float('KLIRR!', 'warn', e.index);
         if (e.level < 1) say(e.level > 0.6 ? 'Klirr! Nebenan wird es still.' : 'Klirr! Leise …', 'warn');
@@ -347,6 +364,8 @@ export function SearchGame(props: MinigameViewProps) {
           if (bestScore === Number.POSITIVE_INFINITY) best = f.selected;
         }
         f.selected = best;
+        f.pointer = null;
+        f.hover = -1;
         scene.aimItem(best);
         playSound(MINIGAME_SOUNDS.click, 0.25);
         refresh();
@@ -361,9 +380,22 @@ export function SearchGame(props: MinigameViewProps) {
     const s = game.current;
     const f = fx.current;
     // Zeitlupe am Ende (der Schlüssel dreht sich langsam).
-    const dt = f.keyT >= 0 && !reduced ? rawDt * 0.7 : rawDt;
-    f.t += rawDt;
-    if (!s.done) react(advance(setup, s, rawDt));
+    // Hit-Stop: Die Welt steht kurz (Uhr, Suche, Licht), nur das Bild wird weiter gezeichnet.
+    const live = stop.filter(rawDt);
+    const dt = f.keyT >= 0 && !reduced ? live * 0.7 : live;
+    f.t += live;
+    if (!s.done && live > 0) react(advance(setup, s, live));
+    // Schritte im Treppenhaus: erst leise, dann immer näher und schneller.
+    const left = timeLeft(s);
+    if (!s.done && s.stepsHeard && f.t - f.lastSteps >= 0.6 + 0.12 * left) {
+      f.lastSteps = f.t;
+      audio.play(SEARCH_SOUNDS.steps, { volume: Math.min(1, 0.35 + (STEPS_AT - left) * 0.1) });
+      f.stepsT = 0;
+    }
+    if (!s.done && left <= 5 && f.t - f.lastBeat >= 0.55) {
+      f.lastBeat = f.t;
+      playSound(MINIGAME_SOUNDS.heartbeat, 0.55);
+    }
     if (s.current && f.t - f.lastRustle > 0.42) {
       f.lastRustle = f.t;
       audio.play(SEARCH_SOUNDS.rustle, { volume: 0.55 });
@@ -403,33 +435,41 @@ export function SearchGame(props: MinigameViewProps) {
     capture(e);
     const f = fx.current;
     f.press = { x: p.x, y: p.y, id: e.pointerId, moved: false };
+    f.pointer = p;
     f.scene?.aimAt(p.x, p.y);
   };
   const onPointerMove = (e: PointerEvent) => {
     if (!running) return;
     const f = fx.current;
     const p = local(e);
-    if (e.pointerType === 'mouse' || f.press?.id === e.pointerId) f.scene?.aimAt(p.x, p.y);
+    if (e.pointerType === 'mouse' || f.press?.id === e.pointerId) {
+      f.scene?.aimAt(p.x, p.y);
+      f.pointer = p;
+    }
     if (f.press && f.press.id === e.pointerId && Math.hypot(p.x - f.press.x, p.y - f.press.y) > 12)
       f.press.moved = true;
-    // Maus: was unter dem Zeiger liegt; Finger: was im Lichtkegel liegt (Name zeigen).
-    if ((e.pointerType === 'mouse' || f.press?.id === e.pointerId) && f.t - f.lastHover > 0.05) {
-      f.lastHover = f.t;
-      const hover = f.scene?.pick(p.x, p.y) ?? -1;
-      if (hover !== f.hover) {
-        f.hover = hover;
-        refresh();
-      }
-    }
   };
   const onPointerUp = (e: PointerEvent) => {
     const f = fx.current;
     const press = f.press;
     if (!press || press.id !== e.pointerId) return;
     f.press = null;
+    if (e.pointerType !== 'mouse') f.pointer = null;
     if (press.moved) return;
     const p = local(e);
-    searchAt(f.scene?.pick(p.x, p.y) ?? -1);
+    // Unter dem Finger bzw. Zeiger, sonst das, worauf das Licht gerade zeigt.
+    const at = f.scene?.pick(p.x, p.y) ?? -1;
+    const index = at >= 0 ? at : f.hover;
+    if (index < 0) {
+      // Daneben: kurz und leise, damit man merkt, dass der Klick ankam.
+      playSound(MINIGAME_SOUNDS.click, 0.25);
+      if (f.t - f.lastMiss > 4) {
+        f.lastMiss = f.t;
+        say('Da ist nichts. Leuchte auf ein Möbelstück.');
+      }
+      return;
+    }
+    searchAt(index);
   };
 
   const urgent = hud.left <= 7;

@@ -202,20 +202,6 @@ export function streetTexture(kind: 'asphalt' | 'paving'): CanvasTexture {
   return texture(c);
 }
 
-/** Weicher Fleck (Partikel, Lichtschein): weiß, nach außen durchsichtig. */
-export function softDot(): CanvasTexture {
-  const { c, g } = canvas(64, 64);
-  if (g) {
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-  }
-  return texture(c, false);
-}
-
 /** Lichtkegel aus einem Fenster: oben hell, nach unten auslaufend, an den Rändern weich. */
 export function beamTexture(): CanvasTexture {
   const { c, g } = canvas(64, 256);
