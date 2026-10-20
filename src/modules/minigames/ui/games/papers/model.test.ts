@@ -23,6 +23,7 @@ import {
   type PapersState,
   papersPicks,
   papersScore,
+  papersStats,
   type Signal,
 } from './model';
 
@@ -240,5 +241,42 @@ describe('Papiere fälschen: spielbar', () => {
     }
     expect(quick).toBeGreaterThanOrEqual(34);
     expect(slowHard).toBeLessThan(quick);
+  });
+
+  it('Schwierigkeit gemessen: wer pro Feld 1,6 s braucht, schafft auch schwer; mit 2 s nur leicht und mittel', () => {
+    // Gemessen (Auftrag 48), 40 Seeds × Autobahn und Kai, Fälscher prüft Feld für Feld in Lesereihenfolge:
+    //            0,8 s  1,2 s  1,6 s  2,0 s  2,6 s je Feld
+    // leicht 0,2  100 %  100 %  100 %  100 %    6 %
+    // mittel 0,5  100 %  100 %  100 %   75 %    0 %
+    // schwer 0,9  100 %  100 %  100 %    1 %    0 %
+    // Ein Mensch prüft nicht jedes Feld gleich schnell; die Lupe (gleiches Feld überall markiert, Vergleich im
+    // Wertewähler) macht das Finden zur Sache des Blicks, nicht des Ratens.
+    const rate = (d: number, pace: number) => {
+      let pass = 0;
+      for (let seed = 1; seed <= 20; seed++)
+        for (const setting of ['autobahn', 'port'] as const)
+          if (forger(createPapers(seed, d, { setting }), pace).outcome === 'pass') pass += 1;
+      return pass / 40;
+    };
+    expect(rate(0.9, 1.6)).toBeGreaterThan(0.9);
+    expect(rate(0.2, 2)).toBeGreaterThan(0.9);
+    expect(rate(0.9, 2)).toBeLessThan(0.2);
+  });
+});
+
+describe('Papiere fälschen: Werte fürs Ergebnis', () => {
+  it('behoben, beanstandet, gelesen', () => {
+    const setup = createPapers(3, 0.5);
+    const s = initPapers(setup);
+    fixAll(setup, s);
+    run(setup, s, 200);
+    const stats = papersStats(setup, s);
+    expect(stats[0]).toMatchObject({
+      label: 'Behoben',
+      value: `${setup.wrong.length}/${setup.wrong.length}`,
+      tone: 'good',
+    });
+    expect(stats[1]).toMatchObject({ value: `0/${MAX_HITS}`, tone: 'good' });
+    expect(stats[2].value).toBe(`${setup.slots.length}/${setup.slots.length}`);
   });
 });

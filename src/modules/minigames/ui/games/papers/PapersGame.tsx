@@ -3,6 +3,8 @@
 // sein Finger wandert Zeile für Zeile. Felder antippen (bzw. Pfeile und Eingabe), richtigen Wert wählen, fehlende
 // Stempel setzen, bevor der Finger ankommt. Jederzeit: Schein ins Papier (B), Ladung aufgeben (G). Am Handy liegen die
 // Papiere als Stapel mit Reitern. Spiellogik in model.ts, Daten in data.ts, Tisch in draw.ts.
+// Auftrag 48: Lupe (dasselbe Feld auf allen Papieren und der Vorlage wird markiert, der Wertewähler zeigt den Vergleich),
+// Stempel mit Wumms (Holzstempel kommt herunter, Tisch ruckt), Kuli schreibt sichtbar, großer Stempel am Schluss.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { formatEuro, type MouthStyle, wallet } from '../../../../../core';
@@ -13,7 +15,7 @@ import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import { useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
-import { fieldLabel, type Setting } from './data';
+import { type FieldKey, fieldLabel, type Setting } from './data';
 import { deskVars, drawDesk } from './draw';
 import {
   advance,
@@ -29,6 +31,7 @@ import {
   isEditable,
   MAX_HITS,
   NO_STAMP,
+  openCount,
   type PapersState,
   papersPicks,
   papersScore,
@@ -110,7 +113,18 @@ export function PapersGame(props: MinigameViewProps) {
   const reduced = useMemo(prefersReducedMotion, []);
   const deskCanvas = useRef<HTMLCanvasElement>(null);
   const readBar = useRef<HTMLSpanElement>(null);
-  const fx = useRef({ sent: false, shake: 0, flash: '' as string, stampAt: '' as string, keyboard: false });
+  const fx = useRef({
+    sent: false,
+    shake: 0,
+    flash: '' as string,
+    stampAt: '' as string,
+    /** Zähler der Stempel (jeder startet die Animation neu) und der Rucke am Tisch. */
+    stampN: 0,
+    thump: 0,
+    keyboard: false,
+  });
+  /** Feld unter der Maus (Lupe: dasselbe Feld auf den anderen Papieren leuchtet). */
+  const [hoverKey, setHoverKey] = useState<FieldKey | null>(null);
   const [, setVersion] = useState(0);
   const [narrow, setNarrow] = useState(false);
   const [tab, setTab] = useState(0);
@@ -158,9 +172,12 @@ export function PapersGame(props: MinigameViewProps) {
           haptic('light');
           break;
         case 'stamp':
-          audio.play(PAPERS_SOUNDS.stamp);
-          haptic('medium');
+          // Der Stempel braucht 0,15 s nach unten: Ton und Ruck beim Aufschlag.
+          audio.play(PAPERS_SOUNDS.stamp, { delay: 0.15 });
+          window.setTimeout(() => haptic('medium'), 150);
           f.stampAt = slotId ?? '';
+          f.stampN += 1;
+          f.thump += 1;
           break;
         case 'bribeAccepted':
           audio.play(PAPERS_SOUNDS.slide);
@@ -175,11 +192,15 @@ export function PapersGame(props: MinigameViewProps) {
           audio.play(PAPERS_SOUNDS.rustle);
           break;
         case 'pass':
-          audio.play(PAPERS_SOUNDS.stamp);
-          haptic('success');
+          audio.play(PAPERS_SOUNDS.slam, { delay: 0.12 });
+          window.setTimeout(() => haptic('success'), 120);
+          f.thump += 1;
           break;
         case 'fail':
           audio.play(PAPERS_SOUNDS.knock);
+          audio.play(PAPERS_SOUNDS.slam, { delay: 0.35, volume: 0.8 });
+          window.setTimeout(() => haptic('error'), 350);
+          f.thump += 1;
           break;
         case 'done':
           finish();
@@ -257,6 +278,34 @@ export function PapersGame(props: MinigameViewProps) {
     running,
   );
 
+  // Entwicklung: window.koeln.dev.papers.setup/.state zeigen den Tisch, .fix(n) stellt n falsche Zeilen richtig
+  // (Screenshots, Playwright).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const holder = window as unknown as { koeln?: { dev?: Record<string, unknown> } };
+    if (!holder.koeln) return;
+    holder.koeln.dev = {
+      ...holder.koeln.dev,
+      papers: {
+        setup,
+        state: game.current,
+        fix: (n = Number.POSITIVE_INFINITY) => {
+          let done = 0;
+          for (const slot of setup.slots) {
+            if (done >= n) break;
+            if (!isEditable(game.current, slot.id) || game.current.values[slot.id] === slot.truth) continue;
+            react(choose(setup, game.current, slot.id, slot.truth), slot.id);
+            done += 1;
+          }
+          return done;
+        },
+      },
+    };
+    return () => {
+      if (holder.koeln?.dev) delete holder.koeln.dev.papers;
+    };
+  }, [setup]);
+
   // Beginn: Er nimmt die Papiere.
   const started = useRef(false);
   useEffect(() => {
@@ -288,6 +337,37 @@ export function PapersGame(props: MinigameViewProps) {
   const open = bribeOpen(s);
   const f = fx.current;
   const declaration = setup.papers.length - 1;
+  // Lupe: welches Feld gerade verglichen wird (Wertewähler, Tastatur-Auswahl oder Maus). Stempel und Herkunft gehören
+  // zusammen (der Ausfuhrstempel muss zur Herkunft passen).
+  const focusSlot = pickerSlot ?? (f.keyboard && running && !done ? setup.slots[sel] : undefined);
+  const compareKey: FieldKey | null = done ? null : (focusSlot?.key ?? hoverKey);
+  const compares = (key: FieldKey) =>
+    compareKey !== null &&
+    (key === compareKey ||
+      (compareKey === 'stamp' && key === 'origin') ||
+      (compareKey === 'origin' && key === 'stamp'));
+  const refCompare = (key: FieldKey) => (compareKey === key ? ' is-compare' : '');
+  // Vergleich im Wertewähler: dasselbe Feld auf den anderen Papieren (beim Stempel die Herkunft), dazu die Vorlage.
+  const comparison: { id: string; label: string; value: string; ref?: boolean }[] = [];
+  if (pickerSlot) {
+    const key = pickerSlot.key === 'stamp' ? 'origin' : pickerSlot.key;
+    for (const other of setup.slots) {
+      if (other.id === pickerSlot.id || other.key !== key) continue;
+      const title = setup.papers[other.paper].def.title;
+      comparison.push({
+        id: other.id,
+        label: key === pickerSlot.key ? title : `${title}, ${fieldLabel(key, setup.setting)}`,
+        value: s.values[other.id],
+      });
+    }
+    const refs: Partial<Record<FieldKey, string>> = {
+      weight: 'Waage',
+      date: 'Kalender',
+      plate: setting === 'port' ? 'Kamera am Kai' : 'Kamera',
+    };
+    const refLabel = refs[pickerSlot.key];
+    if (refLabel) comparison.push({ id: 'ref', label: refLabel, value: setup.truth[pickerSlot.key], ref: true });
+  }
 
   const sheet = (paper: number) => {
     const p = setup.papers[paper];
@@ -324,6 +404,7 @@ export function PapersGame(props: MinigameViewProps) {
               f.keyboard && sel === index && running ? 'is-selected' : '',
               picker === slot.id ? 'is-picking' : '',
               f.stampAt === slot.id ? 'is-stamped' : '',
+              compares(slot.key) ? 'is-compare' : '',
             ]
               .filter(Boolean)
               .join(' ');
@@ -338,12 +419,22 @@ export function PapersGame(props: MinigameViewProps) {
                     fx.current.keyboard = false;
                     openPicker(index);
                   }}
+                  onPointerEnter={(e) => {
+                    if (e.pointerType === 'mouse') setHoverKey(slot.key);
+                  }}
+                  onPointerLeave={() => setHoverKey((k) => (k === slot.key ? null : k))}
                 >
                   <span class="pp-field__label">{fieldLabel(slot.key, setup.setting)}</span>
                   <span class="pp-field__value">
-                    <FieldValue slot={slot} value={value} />
+                    <FieldValue key={value} slot={slot} value={value} />
                   </span>
                   {seen && <Icon name={seen === 'ok' ? 'check' : 'xCircle'} class={`pp-field__mark is-${seen}`} />}
+                  {f.stampAt === slot.id && !reduced && (
+                    <span key={f.stampN} class="pp-press" aria-hidden="true">
+                      <span class="pp-press__knob" />
+                      <span class="pp-press__block" />
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -359,7 +450,12 @@ export function PapersGame(props: MinigameViewProps) {
             </li>
           )}
         </ol>
-        {paper === declaration && s.outcome === 'pass' && (
+        {paper === reading && s.outcome === 'fail' && (
+          <span class="pp-sheet__cleared is-fail" aria-hidden="true">
+            Beanstandet
+          </span>
+        )}
+        {paper === declaration && (s.outcome === 'pass' || s.outcome === 'bribe') && (
           <span class="pp-sheet__cleared" aria-hidden="true">
             Abgefertigt
           </span>
@@ -368,7 +464,9 @@ export function PapersGame(props: MinigameViewProps) {
     );
   };
 
-  const remaining = setup.wrong.length;
+  // Offen sind die Widersprüche, die er noch nicht gesehen hat (auch selbst eingebaute): Was du richtig behebst, zählt
+  // herunter.
+  const remaining = openCount(setup, s);
   const bubbleTone = s.outcome === 'fail' || (s.say?.key ?? '').startsWith('hit') || s.say?.key === 'bribeNo';
 
   return (
@@ -379,10 +477,10 @@ export function PapersGame(props: MinigameViewProps) {
       <canvas ref={deskCanvas} class="papers__desk" role="img" aria-label="Schreibtisch des Zolls" />
 
       <HudBar class="papers__hud">
-        <span class="papers__count" role="img" aria-label={`${remaining} Widersprüche in den Papieren`}>
+        <span class="papers__count" role="img" aria-label={`${remaining} Widersprüche offen`}>
           <Icon name="clipboard" />
           {remaining}
-          <small>Widersprüche</small>
+          <small>{remaining === 1 ? 'Widerspruch offen' : 'Widersprüche offen'}</small>
         </span>
         <span class="papers__hits" role="img" aria-label={`Beanstandet: ${s.hits} von ${MAX_HITS}`}>
           <small>Beanstandet</small>
@@ -404,21 +502,21 @@ export function PapersGame(props: MinigameViewProps) {
       </section>
 
       <section class="papers__refs" aria-label="Was wirklich stimmt">
-        <div class="pp-ref">
+        <div class={`pp-ref${refCompare('weight')}`}>
           <span class="pp-ref__label">
             <Icon name="scale" />
             Waage
           </span>
           <span class="pp-ref__lcd">{setup.truth.weight}</span>
         </div>
-        <div class="pp-ref">
+        <div class={`pp-ref${refCompare('date')}`}>
           <span class="pp-ref__label">
             <Icon name="calendar" />
             Heute
           </span>
           <span class="pp-ref__value">{setup.truth.date}</span>
         </div>
-        <div class="pp-ref">
+        <div class={`pp-ref${refCompare('plate')}`}>
           <span class="pp-ref__label">
             <Icon name="camera" />
             {setting === 'port' ? 'Container' : 'Kennzeichen'}
@@ -445,7 +543,7 @@ export function PapersGame(props: MinigameViewProps) {
         </nav>
       )}
 
-      <section class="papers__docs">
+      <section class={`papers__docs${f.thump ? (f.thump % 2 ? ' is-thump-a' : ' is-thump-b') : ''}`}>
         {narrow ? sheet(Math.min(tab, setup.papers.length - 1)) : setup.papers.map((_, i) => sheet(i))}
       </section>
 
@@ -477,6 +575,16 @@ export function PapersGame(props: MinigameViewProps) {
             {pickerSlot.key === 'stamp' ? 'Stempel setzen' : `${fieldLabel(pickerSlot.key, setup.setting)} umschreiben`}
             <small>{setup.papers[pickerSlot.paper].def.title}</small>
           </p>
+          {comparison.length > 0 && (
+            <dl class="papers__compare" aria-label="Vergleich">
+              {comparison.map((c) => (
+                <div key={c.id} class={`papers__compare-row${c.ref ? ' is-ref' : ''}`}>
+                  <dt>{c.label}</dt>
+                  <dd>{c.value === NO_STAMP ? 'fehlt' : c.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
           <ol class="papers__options">
             {pickerSlot.options.map((value, i) => (
               <li key={value}>

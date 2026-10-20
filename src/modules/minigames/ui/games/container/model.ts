@@ -102,6 +102,14 @@ export const GRID: Readonly<Record<ContainerSizeId, { cols: number; rows: number
   full: { cols: 12, rows: 5, goods: 11, seconds: 60 },
 };
 
+/**
+ * Zeit nach Schwierigkeit (Auftrag 48): leicht etwas mehr als die Grundzeit, schwer deutlich weniger. Gemessen mit dem
+ * Test-Bot (model.test.ts, „machbar“): Wer etwa alle 3 s ein Teil ablegt, kommt bei 0,9 knapp durch.
+ */
+export const TIME_FACTOR = { easy: 1.15, hard: 0.75 } as const;
+/** In den letzten so vielen Sekunden rollt der Scanner auf der Schiene heran (nur Optik und Ton). */
+export const SCANNER_APPROACH = 15;
+
 /** Gewicht der Auffälligkeit je Grund (gedeckelt auf 1 je Zelle). */
 export const EXPOSURE = { door: 1, xray: 1, gap: 0.3, cluster: 0.5 } as const;
 /** Ab diesem Wert leuchtet eine Zelle beim Röntgen deutlich. */
@@ -284,8 +292,8 @@ export const COVER_SETS: Readonly<
         weight: 2,
       },
     ],
-    fill: 0.5,
-    fillHard: 0.35,
+    fill: 0.45,
+    fillHard: 0.25,
   },
 };
 
@@ -325,7 +333,7 @@ export function originFor(shape: Shape, cx: number, cy: number): { x: number; y:
 
 /**
  * Container aus Seed, Schwierigkeit und Bestellung. Mehr Ware, sperrigere Formen, weniger Deckladung und kleinere
- * erlaubte Ware-Blöcke, je schwerer. Zeit 45 s (Kiste) bis 60 s (ganzer Container).
+ * erlaubte Ware-Blöcke, je schwerer. Grundzeit 45 s (Kiste) bis 60 s (ganzer Container), mal TIME_FACTOR.
  */
 export function createPacking(seed: number, difficulty: number, input: PackingInput): PackSetup {
   const random = createRng(seed);
@@ -371,7 +379,7 @@ export function createPacking(seed: number, difficulty: number, input: PackingIn
     pieces,
     goodsCells,
     clusterMax: d < 0.4 ? 6 : d < 0.75 ? 5 : 4,
-    duration: grid.seconds,
+    duration: Math.round(grid.seconds * (TIME_FACTOR.easy + (TIME_FACTOR.hard - TIME_FACTOR.easy) * d)),
   };
 }
 
@@ -607,6 +615,18 @@ export function packScore(setup: PackSetup, state: PackState): number {
   return Math.round(clamp01(a.stowed * a.cover) * 1000) / 1000;
 }
 
+/** Wie nah der Scanner schon ist: 0 = in der Halle, 1 = am Container (letzte SCANNER_APPROACH Sekunden). */
+export function scannerNear(setup: PackSetup, state: PackState): number {
+  return clamp01(1 - timeLeft(setup, state) / Math.min(SCANNER_APPROACH, setup.duration));
+}
+
+/** Ware-Teile, die ganz versteckt sind (jede Zelle ohne Auffälligkeit). */
+export function hiddenGoods(setup: PackSetup, state: PackState, analysis: PackAnalysis): number[] {
+  const bad = new Set<number>();
+  for (const c of analysis.cells) if (c.value > 0) bad.add(state.grid[c.y * setup.cols + c.x]);
+  return state.placed.map((p) => p.pieceId).filter((id) => setup.pieces[id].kind === 'goods' && !bad.has(id));
+}
+
 /** Restliche Zeit in Sekunden. */
 export function timeLeft(setup: PackSetup, state: PackState): number {
   return Math.max(0, setup.duration - state.time);
@@ -682,4 +702,36 @@ export function autoPack(setup: PackSetup, state: PackState, steps = Number.POSI
     placed += 1;
   }
   return placed;
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface PackStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Werte fürs Ergebnis: Tarnung, verstaute Ware, versteckte Blöcke, auffällige Stellen im Röntgen. */
+export function containerStats(setup: PackSetup, state: PackState): PackStat[] {
+  const a = analyze(setup, state);
+  const goods = setup.pieces.filter((p) => p.kind === 'goods').length;
+  const hidden = hiddenGoods(setup, state, a).length;
+  const cover = a.placedGoods > 0 ? Math.round(a.cover * 100) : 0;
+  return [
+    { label: 'Tarnung', value: `${cover} %`, icon: 'eye', tone: cover >= 70 ? 'good' : cover < 40 ? 'bad' : undefined },
+    {
+      label: 'Verstaut',
+      value: `${a.placedGoodsPieces}/${goods}`,
+      icon: 'package',
+      tone: a.placedGoodsPieces === goods ? 'good' : 'bad',
+    },
+    {
+      label: 'Ganz versteckt',
+      value: `${hidden}/${goods}`,
+      icon: 'check',
+      tone: hidden === goods ? 'good' : undefined,
+    },
+    { label: 'Im Röntgen', value: String(a.flagged), icon: 'scan', tone: a.flagged === 0 ? 'good' : 'bad' },
+  ];
 }

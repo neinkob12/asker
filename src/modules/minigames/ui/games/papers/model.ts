@@ -499,3 +499,28 @@ export function papersPicks(setup: PapersSetup, s: PapersState): string[] {
   picks.push(`fixed:${fixedCount(setup, s)}`, `hits:${s.hits}`);
   return picks;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface PapersStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Werte fürs Ergebnis: behobene Widersprüche, Beanstandungen, geprüfte Zeilen. */
+export function papersStats(setup: PapersSetup, s: PapersState): PapersStat[] {
+  const fixed = fixedCount(setup, s);
+  const total = setup.wrong.length;
+  const read = Object.keys(s.seen).length;
+  return [
+    { label: 'Behoben', value: `${fixed}/${total}`, icon: 'edit', tone: fixed === total ? 'good' : undefined },
+    {
+      label: 'Beanstandet',
+      value: `${s.hits}/${MAX_HITS}`,
+      icon: 'xCircle',
+      tone: s.hits === 0 ? 'good' : s.hits >= MAX_HITS ? 'bad' : undefined,
+    },
+    { label: 'Gelesen', value: `${read}/${setup.slots.length}`, icon: 'eye' },
+  ];
+}
