@@ -408,8 +408,19 @@ describe('Straßenkampf: Schwierigkeit (Test-Bot)', () => {
   it('leicht ist leicht, und ein Kampf dauert eine Weile (nicht nach zehn Sekunden vorbei)', () => {
     const easy = measure(BOT_CASUAL, 0.2);
     expect(easy.won).toBeGreaterThanOrEqual(0.95);
-    expect(easy.seconds).toBeGreaterThan(18);
-    expect(measure(BOT_MASHER, 0.2).won).toBeGreaterThanOrEqual(0.6);
+    expect(easy.seconds).toBeGreaterThan(24);
+    expect(measure(BOT_MASHER, 0.2).won).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('ohne Eingabe gewinnt man nie, auch nicht auf leicht (die Crew schafft es nicht allein)', () => {
+    for (const d of [0.2, 0.5, 0.9]) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const s = createBrawl(seed, d, FIGHT);
+        const state = initBrawl(s);
+        for (let t = 0; t < 120 && !state.end; t += 1 / 60) stepBrawl(s, state, 1 / 60, { dx: 0 });
+        expect(state.end).not.toBe('won');
+      }
+    }
   });
 
   it('Ergebnis-Werte: Gegner am Boden, Serie, Konter, Zeit', () => {

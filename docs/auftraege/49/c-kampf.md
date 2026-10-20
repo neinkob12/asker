@@ -54,3 +54,59 @@ merken, nicht überdrehen), und das kann ein Bot nicht messen.
 - **Material und Licht:** Messingring mit Abrieb, Kratzer im Stahl (fest aus einem Startwert), Lackglanz auf dem
   Zifferblatt, Stethoskop als Bruststück mit Schlauch an der Tür (zuckt beim Klick), warmer Kern der Taschenlampe.
 - **Bot** `safe/bot.ts` mit Test in `model.test.ts`.
+
+### Straßenkampf
+
+- **Figuren mit Volumen** (`draw.ts`): Glieder sind verjüngte Kapseln (Oberschenkel 9 cm bis Knöchel 4,5 cm,
+  Oberarm bis Handgelenk) statt gleich dicker Striche: Schattenfarbe, darüber die Grundfarbe zum Licht versetzt, weicher
+  Glanz und Randlicht vom Leuchtschild (`volumeLimb`, `capsule`), alles ohne Clip. Rumpf mit Hüfte, Taille, Brust und
+  Schultern und Verlauf quer zum Körper (`drawTorso`), Fäuste als Kugeln mit Glanz, Schuhe mit Sohle. Hinterer Arm und
+  hinteres Bein liegen im Schatten des Körpers (`dimOver`). Spiegelung und Nachbild zeichnen nur Umriss und Grundfarben
+  (`FigureOptions.simple`).
+- **Leben:** Die Figuren atmen (`FigureOptions.breath`: Brust hebt sich, mit wenig Leben schneller), unter 60 % Leben
+  stehen sie krumm, die Deckung sinkt, sie schwanken (`targetPose`, Zweig „Angeschlagen“).
+- **Tiefe:** Die hintere Ebene liegt 0,72 m (statt 0,42) im Bild weiter oben und ist 17 % (statt 12) kleiner
+  (`LANE_DEPTH`, `LANE_SCALE`). Weicher Kontaktschatten als gebackener Verlauf (`contactShadow`), liegend breiter.
+- **Zuschauer** (`crowd.ts`): sieben Leute in zwei Grüppchen auf dem Gehweg hinter der hinteren Ebene, kleiner und im
+  Dunst, mit Randlicht der Laterne; nachts filmt einer mit leuchtendem Handy. Harte Treffer, Konter und jeder, der zu
+  Boden geht, bringen sie hoch (Arme hoch, Springen, Zurückweichen von der Stelle, mit Verzögerung je Person). Nur Optik.
+- **Schwierigkeit:** `FOE_HP` 140 statt 120 (Kämpfe dauern länger, wer nur draufhaut, verliert auf mittel öfter). Die
+  Crew zieht nur mit, wenn du selbst kämpfst: Nach `CREW_IDLE_AFTER` (3 s) ohne Angriff, Block oder Ausweichen macht
+  sie `CREW_IDLE_PAUSE`-mal so lange Pausen (`BrawlState.activeAt`). Ohne Eingabe gewinnt man jetzt nie (Test).
+
+## Messwerte nachher
+
+Straßenkampf (gleiche Messung wie oben):
+
+| Schwierigkeit | geübt | locker | wild | keine Eingabe |
+| --- | --- | --- | --- | --- |
+| 0,2 | 100 % · 26 s | 100 % · 27 s | 60 % · 26 s | 0 % |
+| 0,5 | 93 % · 28 s | 98 % · 30 s | 45 % · 26 s | 0 % |
+| 0,9 | 80 % · 29 s | 68 % · 31 s | 15 % · 25 s | 0 % |
+
+Tresor (60 Seeds; geübt: Reaktion 0,25 s, Ohr 90 %; schwach: 0,5 s, liegt 2 Striche daneben, Ohr 60 %):
+
+| Schwierigkeit | geübt | schwach | keine Eingabe |
+| --- | --- | --- | --- |
+| 0,2 | 100 % · 11 s | 97 % · 22 s | 0 % |
+| 0,5 | 100 % · 12 s | 70 % · 27 s | 0 % |
+| 0,9 | 100 % · 12 s | 33 % · 30 s | 0 % |
+
+Der geübte Bot hört besser als ein Mensch (er weiß, dass hell die Zahl ist); bewusst über dem Richtwert für 0,9,
+weil der Tresor dem Spieler zu schwer war. Die Spanne steckt beim schwachen Spieler.
+
+Leistung (headless, Software-Rendering, ganze Seite, `requestAnimationFrame` über 4 s): Straßenkampf Desktop 1,0
+Bilder/s vorher und nachher, Handy 2,3 vorher und nachher. Absolut ohne Aussage, aber kein Rückschritt: Die Licht-
+Schichten der Glieder kosten etwa so viel wie die alten Glanzstriche, Spiegelung und Nachbild sind jetzt billiger.
+Tresor zeichnet weiter nur, wenn sich etwas bewegt.
+
+## Für die Integration
+
+- Klänge des Tresors in `safe/sounds.ts` (`minigames.safe.tumbler`, `minigames.safe.thud`), angemeldet beim Start.
+- Die Zuschauer-Silhouetten (`brawl/crowd.ts`) könnten andere 2D-Spiele mitnutzen, falls Zuschauer gewünscht sind.
+
+## Offen
+
+- Am echten Handy messen (hier nur Software-Rendering).
+- Tresor: Störklicks nur nach Ton und Stethoskop; eine dritte Hilfe (Rad zittert bei der echten Zahl stärker) wäre
+  möglich, wenn es Spielern noch zu schwer ist.
