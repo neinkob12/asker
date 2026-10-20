@@ -37,6 +37,7 @@ import {
   stashCounts,
   stashPicks,
   stashScore,
+  stashStats,
   step,
   streetClosed,
   timeLeft,
@@ -295,7 +296,7 @@ export function StashGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(stashScore(setup, game.current), stashPicks(setup, game.current));
+    onFinish(stashScore(setup, game.current), stashPicks(setup, game.current), stashStats(setup, game.current));
   };
 
   const hideName = (id: HideId) => getHide(setup, id)?.name ?? '';

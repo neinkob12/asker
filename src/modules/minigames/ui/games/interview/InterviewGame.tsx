@@ -31,6 +31,7 @@ import {
   initInterview,
   interviewPicks,
   interviewScore,
+  interviewStats,
   isDone,
   mark,
   neededHits,
@@ -183,7 +184,7 @@ export function InterviewGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(interviewScore(setup, state()), interviewPicks(state()));
+    onFinish(interviewScore(setup, state()), interviewPicks(state()), interviewStats(state()));
   };
 
   const stopSpeech = () => {

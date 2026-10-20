@@ -10,7 +10,7 @@
 // aus den Design-Tokens (mapToken über readPalette).
 
 import { drawGoodsGlyph, packageLook } from '../../kit/goods';
-import type { StashPalette } from '../stash/draw';
+import type { MinigamePalette } from '../../kit/palette';
 import {
   type CellExposure,
   type CoverKind,
@@ -24,7 +24,7 @@ import {
   rotate,
 } from './model';
 
-export type PackPalette = StashPalette;
+export type PackPalette = MinigamePalette;
 
 /** Farben der Dinge (Inhalt, keine Bedeutung): Container-Stahl, Holzboden, Beton, Pappe, Paletten, Folie. */
 export const PACK_MATERIALS = {

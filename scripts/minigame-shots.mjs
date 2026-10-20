@@ -87,30 +87,37 @@ try {
       if (save)
         await page.waitForFunction(() => !window.location.search.includes('spielstand='), null, { timeout: 30000 });
       // Vorschau über den Dev-Haken (erst, wenn Spiel und HUD stehen): so gelten Spielstand und Uhrzeit. Kurz nach dem
-      // Start kann ein anderer Dialog den Rahmen noch verdrängen (am Handy oft): dann alle zwei Sekunden neu öffnen,
-      // bis die Einleitung steht.
+      // Start kann ein Dialog des frischen Spiels den Rahmen noch verdrängen, auch nachdem die Einleitung schon stand
+      // (am Handy oft): dann alle zwei Sekunden neu öffnen, bis die Einleitung steht und 1,5 s lang stehen bleibt.
       await page.waitForFunction(() => !!window.koeln?.dev?.minigamePreview && !!document.querySelector('.hud'), null, {
         timeout: 30000,
       });
-      await page.waitForFunction(
-        ({ kind, difficulty, seed, hour, realtime }) => {
-          if (document.querySelector('.mg-intro')) return true;
-          const now = performance.now();
-          if (now - (window.__mgPreviewAt ?? 0) < 2000) return false;
-          window.__mgPreviewAt = now;
-          const dev = window.koeln.dev;
-          dev.minigameRealtime?.(realtime);
-          dev.minigamePreview(kind, { schwer: Number(difficulty), seed: Number(seed), uhr: hour });
-          return false;
-        },
-        { kind, difficulty, seed, hour, realtime },
-        { timeout: 40000, polling: 250 },
-      );
-      // Karte und Schriften kurz laden lassen.
-      await page.waitForTimeout(1500);
+      const openPreview = () =>
+        page.waitForFunction(
+          ({ kind, difficulty, seed, hour, realtime }) => {
+            if (document.querySelector('.mg-intro')) return true;
+            const now = performance.now();
+            if (now - (window.__mgPreviewAt ?? 0) < 2000) return false;
+            window.__mgPreviewAt = now;
+            const dev = window.koeln.dev;
+            dev.minigameRealtime?.(realtime);
+            dev.minigamePreview(kind, { schwer: Number(difficulty), seed: Number(seed), uhr: hour });
+            return false;
+          },
+          { kind, difficulty, seed, hour, realtime },
+          { timeout: 40000, polling: 250 },
+        );
+      for (let attempt = 0; ; attempt++) {
+        await openPreview();
+        // Karte und Schriften kurz laden lassen; steht die Einleitung danach noch, geht es los.
+        await page.waitForTimeout(1500);
+        if (await page.$('.mg-intro .mg-button.is-gold')) break;
+        if (attempt >= 4) throw new Error(`${tag} Die Vorschau wird immer wieder verdrängt.`);
+      }
       const shot = async (step) => {
         const file = `${outDir}/${kind}-${size}${hour === undefined ? '' : `-${hour}uhr`}${save ? `-${save}` : ''}-${step}.png`;
-        await page.screenshot({ path: file });
+        // 3D am Handy (Pixelverhältnis 2, Software-WebGL) braucht für ein Bild manchmal länger als der Standard.
+        await page.screenshot({ path: file, timeout: 90000 });
         console.log(`Screenshot: ${file}`);
       };
       await shot('1-einleitung');

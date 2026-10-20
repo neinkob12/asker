@@ -36,6 +36,7 @@ import {
   proximity,
   requiredDir,
   safeScore,
+  safeStats,
   timeLeft,
   turn,
 } from './model';
@@ -146,7 +147,7 @@ export function SafeGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(safeScore(setup, game.current), [`cracked:${cracked(game.current)}`]);
+    onFinish(safeScore(setup, game.current), [`cracked:${cracked(game.current)}`], safeStats(setup, game.current));
   };
 
   const react = (result: ConfirmResult) => {

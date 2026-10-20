@@ -34,6 +34,7 @@ import {
   type TrafficState,
   trafficPicks,
   trafficScore,
+  trafficStats,
 } from './model';
 import { Officer, officerLook } from './Officer';
 import {
@@ -253,7 +254,7 @@ export function TrafficGame(props: MinigameViewProps) {
     f.sent = true;
     f.speech?.();
     f.speech = null;
-    onFinish(trafficScore(game.current), trafficPicks(game.current));
+    onFinish(trafficScore(game.current), trafficPicks(game.current), trafficStats(game.current));
   };
 
   // ------------------------------------------------------------------ Eingaben

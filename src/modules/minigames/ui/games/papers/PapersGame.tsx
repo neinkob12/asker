@@ -35,6 +35,7 @@ import {
   type PapersState,
   papersPicks,
   papersScore,
+  papersStats,
   readingPaper,
   type Signal,
 } from './model';
@@ -143,7 +144,7 @@ export function PapersGame(props: MinigameViewProps) {
     const f = fx.current;
     if (f.sent) return;
     f.sent = true;
-    onFinish(papersScore(setup, game.current), papersPicks(setup, game.current));
+    onFinish(papersScore(setup, game.current), papersPicks(setup, game.current), papersStats(setup, game.current));
   };
 
   /** Ton, Vibration und Optik zu dem, was im Modell passiert ist. */
