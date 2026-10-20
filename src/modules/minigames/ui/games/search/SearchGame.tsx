@@ -70,6 +70,8 @@ const DIRS: Record<string, [number, number]> = {
 const ROOM_ORDER: readonly RoomId[] = ['hall', 'living', 'kitchen', 'bedroom', 'bath'];
 /** Überblenden beim Raumwechsel (ms bis zum Wechsel, ganze Dauer in der CSS). */
 const SWITCH_MS = 170;
+/** So lange steht eine Meldung (ms). */
+const MESSAGE_MS = 2600;
 
 interface Hud {
   left: number;
@@ -417,6 +419,17 @@ export function SearchGame(props: MinigameViewProps) {
     refresh();
     if (f.endAt >= 0 && f.t >= f.endAt) finish();
   }, running);
+
+  // Meldungen verschwinden von selbst.
+  useEffect(() => {
+    if (!hud.message || hud.done) return;
+    const serial = hud.serial;
+    const id = window.setTimeout(
+      () => setHud((h) => (h.serial === serial ? { ...h, message: null, tone: null } : h)),
+      MESSAGE_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [hud.serial, hud.message, hud.done]);
 
   useEffect(() => {
     // Pause mitten im Spiel: angefangenen Tipp vergessen; weiter geht es genau dort.

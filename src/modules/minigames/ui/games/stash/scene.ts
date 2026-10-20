@@ -156,6 +156,9 @@ const LIGHT: Record<DayPhase, { sun: number; sunI: number; sky: number; ground: 
   night: { sun: 0x8aa4ff, sunI: 0.7, sky: 0x2c3a66, ground: 0x15161c, hemiI: 0.2, bg: 0x07080c },
 };
 
+/** Stärke des Aufhelllichts von vorn je Tageszeit. */
+const FILL: Record<DayPhase, number> = { day: 0.35, dusk: 0.5, night: 0.6 };
+
 function std(color: number, rough = 0.85, metal = 0.05): MeshStandardMaterial {
   return new MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 }
@@ -381,6 +384,11 @@ export function createStashScene(
   const policeIn = new PointLight(0x3a7bff, 0, 14, 1.3);
   policeIn.position.set(warehouse ? (gate as number) - 2.5 : L - 3, 3.4, -1.2);
   scene.add(policeIn);
+  // Aufhelllicht von vorn (von der Kamera): Im Schnitt sieht man die Seite, die der Sonne abgewandt ist; ohne
+  // dieses Licht wären Wagen, Figur und Regale nachts nur Umrisse.
+  const fill = new DirectionalLight(phase === 'night' ? 0xb8c6ff : 0xfff2e0, FILL[phase]);
+  fill.position.set(0, 4, 20);
+  scene.add(fill);
   // Gegenlicht von hinten oben: Kanten der Figuren heben sich ab.
   const rim = new DirectionalLight(0xa9c0ff, phase === 'night' ? 0.9 : 0.6);
   rim.position.set(6, 9, -14);
@@ -872,8 +880,9 @@ export function createStashScene(
     height = Math.max(1, h);
     const aspect = width / height;
     camera.aspect = aspect;
-    // Hochkant (Handy) sieht man weniger Strecke, dafür größer; breit bis zu 19 m.
-    viewW = aspect < 0.6 ? 6.4 : aspect < 0.8 ? 7.4 : aspect < 1.2 ? 9 : Math.min(16, 5 + aspect * 4.4);
+    // Hochkant (Handy) sieht man weniger Strecke, dafür größer (die Leiste oben zeigt die ganze Strecke); breit bis
+    // zu 19 m.
+    viewW = aspect < 0.6 ? 5.4 : aspect < 0.8 ? 6.8 : aspect < 1.2 ? 9 : Math.min(16, 5 + aspect * 4.4);
     const tanHalf = Math.tan((camera.fov * Math.PI) / 360);
     const forWidth = viewW / 2 / (tanHalf * aspect);
     const forHeight = 3.3 / tanHalf;
@@ -1095,7 +1104,8 @@ export function createStashScene(
       wantX += (door - wantX) * ease(Math.min(1, fx.breachT * 1.6));
     }
     camX += (wantX - camX) * Math.min(1, dt * (fx.breachT >= 0 ? 5 : 3.2));
-    const wantY = 2.25 + climb * 0.6;
+    // Hochkant tiefer: Dach und Himmel nehmen sonst das obere Drittel ein.
+    const wantY = (width / height < 0.8 ? 1.75 : 2.25) + climb * 0.6;
     camY += (wantY - camY) * Math.min(1, dt * 4);
     const shake = reduced ? fx.shake * 0.2 : fx.shake;
     const sx = shake > 0.01 ? Math.sin(t * 71) * 0.12 * shake : 0;
