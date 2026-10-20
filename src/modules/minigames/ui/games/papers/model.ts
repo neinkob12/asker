@@ -31,6 +31,11 @@ export const MAX_HITS = 2;
 export const BRIBE_SCORE = 0.6;
 /** Wert eines Stempels, der fehlt. */
 export const NO_STAMP = '';
+/** Stichproben: ab dieser Schwierigkeit eine, je PEEK_STEP mehr eine weitere. */
+export const PEEK_FROM = 0.35;
+export const PEEK_STEP = 0.35;
+/** So lange dauert das Hinüberblättern zu einer Stichprobe (Sekunden). */
+export const PEEK_TURN = 2.2;
 
 export type Phase = 'browse' | 'read' | 'pause' | 'turn' | 'end';
 export type Outcome = 'pass' | 'fail' | 'bribe' | 'giveUp';
@@ -65,6 +70,11 @@ export interface PapersSetup {
   lineTime: number;
   paperPause: number;
   hitPause: number;
+  /**
+   * Stichproben (Auftrag 48): Nach der Zeile (Index) springt er zu dieser späteren Zeile auf einem anderen Papier, prüft
+   * sie und liest dann weiter, wo er war. Was er dabei gesehen hat, liest er nicht noch einmal.
+   */
+  peeks: Record<number, number>;
 }
 
 export interface PapersState {
@@ -74,6 +84,8 @@ export interface PapersState {
   phaseLen: number;
   /** Zeile, an der der Finger ist (Index in setup.slots). */
   cursor: number;
+  /** Während einer Stichprobe: hier liest er danach weiter (sonst null). */
+  resume: number | null;
   values: Record<string, string>;
   /** Geprüfte Zeilen: ok oder Treffer. */
   seen: Record<string, 'ok' | 'hit'>;
@@ -91,6 +103,7 @@ export type Signal =
   | 'read'
   | 'hit'
   | 'nextPaper'
+  | 'peek'
   | 'write'
   | 'stamp'
   | 'bribeAccepted'
@@ -275,6 +288,23 @@ export function createPapers(
     slot.start = key === 'stamp' && rnd() < 0.5 ? NO_STAMP : fake[key][0];
     wrong.push(slot.id);
   }
+  // Stichproben: nach einer Zeile auf dem ersten oder zweiten Papier eine Zeile auf einem späteren Papier, möglichst
+  // eine, die falsch ist (dort lohnt es sich für ihn), nie die erste Zeile eines Papiers.
+  const peeks: Record<number, number> = {};
+  const peekCount = d < PEEK_FROM ? 0 : 1 + Math.floor((d - PEEK_FROM) / PEEK_STEP);
+  const used = new Set<number>();
+  for (let i = 0; i < peekCount; i++) {
+    const after = 1 + Math.floor(rnd() * Math.max(1, slots.length - 6));
+    const from = slots[after];
+    const later = slots
+      .map((x, index) => ({ x, index }))
+      .filter(({ x, index }) => x.paper > from.paper && x.line > 0 && index > after + 2 && !used.has(index));
+    if (later.length === 0 || peeks[after] !== undefined) continue;
+    const bad = later.filter(({ x }) => wrong.includes(x.id));
+    const target = pick(bad.length > 0 && rnd() < 0.7 ? bad : later, rnd);
+    peeks[after] = target.index;
+    used.add(target.index);
+  }
   for (const slot of slots) {
     const pool = [slot.truth, ...fake[slot.key].slice(0, 2)];
     if (slot.start !== NO_STAMP && !pool.includes(slot.start)) pool.push(slot.start);
@@ -288,10 +318,11 @@ export function createPapers(
     slots,
     truth,
     wrong: slots.filter((s) => wrong.includes(s.id)).map((s) => s.id),
-    startDelay: lerp(6, 4, d),
-    lineTime: lerp(1.9, 1.25, d),
+    startDelay: lerp(8, 5, d),
+    lineTime: lerp(2.5, 1.45, d),
     paperPause: 1.3,
     hitPause: 1.4,
+    peeks,
   };
 }
 
@@ -302,6 +333,7 @@ export function initPapers(setup: PapersSetup): PapersState {
     phaseT: 0,
     phaseLen: setup.startDelay,
     cursor: 0,
+    resume: null,
     values: Object.fromEntries(setup.slots.map((slot) => [slot.id, slot.start])),
     seen: {},
     edited: [],
@@ -402,9 +434,21 @@ export function advance(setup: PapersSetup, s: PapersState, dt: number): Signal[
     arrive(setup, s, out);
     return out;
   }
-  // Zeile gelesen: weiter zur nächsten (auf einem neuen Papier erst umblättern).
+  // Zeile gelesen: Stichprobe fällig? Dann dorthin blättern, danach weiter, wo er war.
   const prev = setup.slots[s.cursor];
-  s.cursor += 1;
+  const peek = s.resume === null ? setup.peeks[s.cursor] : undefined;
+  if (peek !== undefined && s.seen[setup.slots[peek].id] === undefined) {
+    s.resume = s.cursor + 1;
+    s.cursor = peek;
+    say(setup, s, 'peek', { papier: setup.papers[setup.slots[peek].paper].def.title });
+    setPhase(s, 'turn', PEEK_TURN);
+    out.push('peek');
+    return out;
+  }
+  // Weiter zur nächsten Zeile, die er noch nicht gesehen hat (auf einem neuen Papier erst umblättern).
+  s.cursor = s.resume ?? s.cursor + 1;
+  s.resume = null;
+  while (setup.slots[s.cursor] && s.seen[setup.slots[s.cursor].id] !== undefined) s.cursor += 1;
   const next = setup.slots[s.cursor];
   if (!next) {
     say(setup, s, 'pass');

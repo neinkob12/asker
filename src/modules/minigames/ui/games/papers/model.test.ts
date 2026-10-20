@@ -243,24 +243,29 @@ describe('Papiere fälschen: spielbar', () => {
     expect(slowHard).toBeLessThan(quick);
   });
 
-  it('Schwierigkeit gemessen: wer pro Feld 1,6 s braucht, schafft auch schwer; mit 2 s nur leicht und mittel', () => {
-    // Gemessen (Auftrag 48), 40 Seeds × Autobahn und Kai, Fälscher prüft Feld für Feld in Lesereihenfolge:
-    //            0,8 s  1,2 s  1,6 s  2,0 s  2,6 s je Feld
-    // leicht 0,2  100 %  100 %  100 %  100 %    6 %
-    // mittel 0,5  100 %  100 %  100 %   75 %    0 %
-    // schwer 0,9  100 %  100 %  100 %    1 %    0 %
-    // Ein Mensch prüft nicht jedes Feld gleich schnell; die Lupe (gleiches Feld überall markiert, Vergleich im
-    // Wertewähler) macht das Finden zur Sache des Blicks, nicht des Ratens.
-    const rate = (d: number, pace: number) => {
-      let pass = 0;
-      for (let seed = 1; seed <= 20; seed++)
-        for (const setting of ['autobahn', 'port'] as const)
-          if (forger(createPapers(seed, d, { setting }), pace).outcome === 'pass') pass += 1;
-      return pass / 40;
-    };
-    expect(rate(0.9, 1.6)).toBeGreaterThan(0.9);
-    expect(rate(0.2, 2)).toBeGreaterThan(0.9);
-    expect(rate(0.9, 2)).toBeLessThan(0.2);
+  it('Stichprobe: schwer springt er zu einer späteren Zeile, prüft sie und liest dann weiter, wo er war', () => {
+    // Tabelle der Gewinnquoten mit Test-Fälschern: model.balance.test.ts.
+    expect(Object.keys(createPapers(3, 0.2).peeks)).toHaveLength(0);
+    expect(Object.keys(createPapers(3, 0.5).peeks).length).toBeGreaterThanOrEqual(1);
+    const setup = createPapers(3, 0.9, { setting: 'port' });
+    const [after, target] = Object.entries(setup.peeks).map(([a, b]) => [Number(a), b])[0];
+    expect(setup.slots[target].paper).toBeGreaterThan(setup.slots[after].paper);
+    // Alles richtig machen, dann mitlesen.
+    const s = initPapers(setup);
+    for (const slot of setup.slots) choose(setup, s, slot.id, slot.truth);
+    const order: number[] = [];
+    const signals: string[] = [];
+    for (let t = 0; t < 200 && !isDone(s); t += 0.05) {
+      signals.push(...advance(setup, s, 0.05));
+      if (order[order.length - 1] !== s.cursor && s.phase !== 'end') order.push(s.cursor);
+    }
+    expect(signals).toContain('peek');
+    const at = order.indexOf(after);
+    expect(order[at + 1]).toBe(target);
+    expect(order[at + 2]).toBe(after + 1);
+    // Jede Zeile genau einmal gelesen.
+    expect(Object.keys(s.seen)).toHaveLength(setup.slots.length);
+    expect(s.outcome).toBe('pass');
   });
 });
 

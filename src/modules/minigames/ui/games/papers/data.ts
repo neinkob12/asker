@@ -153,6 +153,7 @@ export type OfficerLine =
   | 'greet'
   | 'browse'
   | 'nextPaper'
+  | 'peek'
   | 'ok'
   | 'hit'
   | 'hitWeight'
@@ -170,6 +171,8 @@ export const OFFICER_LINES: Record<OfficerLine, readonly string[]> = {
   greet: ['Papiere bitte. Alle.', 'Alle Papiere auf den Tisch.', 'Dann zeigen Sie mal her.'],
   browse: ['Mal sehen …', 'Hm.', 'So, so.'],
   nextPaper: ['Dann der {papier}.', 'Weiter. {papier}.', 'Jetzt der {papier}.'],
+  /** Stichprobe (Auftrag 48): Er springt zu einer späteren Zeile auf einem anderen Papier. */
+  peek: ['Moment. Zeigen Sie mal den {papier}.', 'Kurz mal hier: {papier}.', 'Und was steht im {papier}?'],
   ok: ['Hm.', 'Gut.', 'Weiter.'],
   hit: [
     '{feld} passt nicht zu den anderen Papieren.',

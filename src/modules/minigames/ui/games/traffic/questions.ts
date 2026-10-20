@@ -340,13 +340,69 @@ export const QUESTIONS: QuestionDef[] = [
       { text: 'Zur Baustelle.', claims: { to: 'baustelle' }, fits: () => null },
     ],
   },
+  {
+    id: 'owner2',
+    fact: 'owner',
+    repeat: true,
+    ask: () => 'Wem gehört der Wagen gleich noch mal?',
+    answers: [
+      { text: 'Mir, hab ich doch gesagt.', claims: { owner: 'own' }, fits: () => null },
+      { text: 'Meinem Kumpel.', claims: { owner: 'kumpel' }, fits: () => null },
+      { text: 'Der Firma.', claims: { owner: 'firma' }, fits: () => null },
+      { text: 'Der ist gemietet.', claims: { owner: 'miete' }, fits: () => null },
+    ],
+  },
+  // Fangfragen (Auftrag 48): Er unterstellt dir etwas, das du nicht gesagt hast. „Ja, genau.“ behauptet nichts und
+  // fliegt deshalb immer auf; richtig ist, ihn mit deiner ersten Antwort zu berichtigen.
+  {
+    id: 'fromTrap',
+    fact: 'from',
+    repeat: true,
+    ask: (_ev, story) => `Sie kamen doch eben ${FROM_NAMES[otherThan(FROM_NAMES, story.from)]}, oder?`,
+    answers: [
+      { text: 'Ja, genau.', claims: {}, fits: () => null },
+      { text: 'Nein, von der Arbeit.', claims: { from: 'arbeit' }, fits: () => null },
+      { text: 'Nein, von einem Kumpel.', claims: { from: 'kumpel' }, fits: () => null },
+      { text: 'Nein, aus dem Club.', claims: { from: 'club' }, fits: () => null },
+      { text: 'Nein, vom Baumarkt.', claims: { from: 'baumarkt' }, fits: () => null },
+      { text: 'Nein, vom Flughafen.', claims: { from: 'flughafen' }, fits: () => null },
+      { text: `Nein, aus ${ARRIVED_FROM}.`, claims: { from: 'fremd' }, fits: () => null },
+    ],
+  },
+  {
+    id: 'purposeTrap',
+    fact: 'purpose',
+    repeat: true,
+    ask: (_ev, story) => `Also noch mal: ${PURPOSE_NAMES[otherThan(PURPOSE_NAMES, story.purpose)]}, haben Sie gesagt?`,
+    answers: [
+      { text: 'Ja, genau.', claims: {}, fits: () => null },
+      { text: 'Nein, beim Umzug helfen.', claims: { purpose: 'umzug' }, fits: () => null },
+      { text: 'Nein, eine Lieferung.', claims: { purpose: 'lieferung' }, fits: () => null },
+      { text: 'Nein, Freunde besuchen.', claims: { purpose: 'freunde' }, fits: () => null },
+      { text: 'Nein, Kumpel abholen.', claims: { purpose: 'club' }, fits: () => null },
+      { text: 'Nein, Nachtschicht.', claims: { purpose: 'nachtschicht' }, fits: () => null },
+    ],
+  },
 ];
+
+/** Ein anderer Wert als der gesagte (fest, für die Fangfragen). */
+function otherThan(names: Record<string, string>, said: string | undefined): string {
+  const keys = Object.keys(names).filter((k) => k !== said);
+  return keys[(said ?? '').length % keys.length];
+}
 
 const OWNER_NAMES: Record<string, string> = {
   own: 'meiner',
   kumpel: 'vom Kumpel geliehen',
   firma: 'Firmenwagen',
   miete: 'Mietwagen',
+};
+/** Wie er deine Antwort zum Wagen zitiert. */
+const OWNER_TALK: Record<string, string> = {
+  own: 'Ihr eigener Wagen',
+  kumpel: 'vom Kumpel geliehen',
+  firma: 'ein Firmenwagen',
+  miete: 'ein Mietwagen',
 };
 const PURPOSE_NAMES: Record<string, string> = {
   umzug: 'Umzug helfen',
@@ -383,8 +439,16 @@ export function repeatContradiction(def: QuestionDef, answer: AnswerDef, story: 
   if (!said) return null;
   const claim = answer.claims[def.fact];
   if (claim === said) return null;
-  const names = def.fact === 'from' ? FROM_NAMES : TO_NAMES;
-  return `Vorhin sagten Sie, Sie ${def.fact === 'to' ? 'wollen' : 'kommen'} ${names[said] ?? said}.`;
+  switch (def.fact) {
+    case 'from':
+      return `Vorhin sagten Sie, Sie kommen ${FROM_NAMES[said] ?? said}.`;
+    case 'to':
+      return `Vorhin sagten Sie, Sie wollen ${TO_NAMES[said] ?? said}.`;
+    case 'owner':
+      return `Vorhin hieß es: ${OWNER_TALK[said] ?? said}.`;
+    default:
+      return `Vorhin hieß es: ${PURPOSE_NAMES[said] ?? said}.`;
+  }
 }
 
 function capital(s: string): string {
@@ -404,6 +468,8 @@ export const OFFICER_LINES = {
   pass: ['Gute Fahrt.', 'In Ordnung. Fahren Sie vorsichtig.'],
   passNoted: ['Gute Fahrt. Ich notier mir das Kennzeichen trotzdem.'],
   fail: ['Aussteigen. Hände aufs Dach.', 'So, das reicht. Aussteigen, bitte.'],
+  /** Misstrauen voll (zu viel Zögern, zu viele Ausreden). */
+  fed: ['Mir reicht das jetzt. Aussteigen, bitte.', 'Sie sind mir zu nervös. Aussteigen.'],
   bribeOk: ['Ich hab nichts gesehen. Gute Fahrt.'],
   bribeLow: ['Was soll das denn? Stecken Sie das weg.'],
   bribeHigh: ['Bestechung auch noch? Jetzt reicht es.'],

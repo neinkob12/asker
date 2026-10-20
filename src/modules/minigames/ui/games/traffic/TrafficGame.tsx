@@ -37,6 +37,7 @@ import {
   trafficStats,
 } from './model';
 import { Officer, officerLook } from './Officer';
+import { measureFrame } from './perf';
 import {
   type FactKey,
   OFFICER_LINES,
@@ -373,20 +374,22 @@ export function TrafficGame(props: MinigameViewProps) {
   };
 
   useFrameLoop((dt) => {
-    const s = game.current;
-    const f = fx.current;
-    f.t += dt;
-    if (!isDone(s)) onSignals(advance(setup, s, dt));
-    speakLine();
-    f.flash = Math.max(0, f.flash - dt * 1.5);
-    draw(dt);
-    if (f.t - f.lastHud > 0.1) {
-      f.lastHud = f.t;
-      refreshHud();
-    }
-    if (s.outcome === 'flee' && isDone(s)) finish();
-    else if (s.outcome === 'bribe' && isDone(s)) finish();
-    else if (f.endAt >= 0 && f.t >= f.endAt && isDone(s)) finish();
+    measureFrame(() => {
+      const s = game.current;
+      const f = fx.current;
+      f.t += dt;
+      if (!isDone(s)) onSignals(advance(setup, s, dt));
+      speakLine();
+      f.flash = Math.max(0, f.flash - dt * 1.5);
+      draw(dt);
+      if (f.t - f.lastHud > 0.1) {
+        f.lastHud = f.t;
+        refreshHud();
+      }
+      if (s.outcome === 'flee' && isDone(s)) finish();
+      else if (s.outcome === 'bribe' && isDone(s)) finish();
+      else if (f.endAt >= 0 && f.t >= f.endAt && isDone(s)) finish();
+    });
   }, running);
 
   // Pause: Stimme anhalten. Geht es weiter und er wartet auf eine Antwort, wiederholt er seine Frage (sonst nichts

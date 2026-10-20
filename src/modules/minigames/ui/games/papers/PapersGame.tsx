@@ -15,6 +15,7 @@ import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import { useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
+import { measureFrame } from '../traffic/perf';
 import { type FieldKey, fieldLabel, type Setting } from './data';
 import { deskVars, drawDesk } from './draw';
 import {
@@ -168,6 +169,11 @@ export function PapersGame(props: MinigameViewProps) {
         case 'nextPaper':
           audio.play(PAPERS_SOUNDS.rustle, { volume: 0.8 });
           break;
+        case 'peek':
+          // Stichprobe: Er greift sich ein anderes Papier, das Papier springt sichtbar nach vorn.
+          audio.play(PAPERS_SOUNDS.rustle, { volume: 1 });
+          haptic('warning');
+          break;
         case 'write':
           audio.play(PAPERS_SOUNDS.scribble, { volume: 0.8 });
           haptic('light');
@@ -320,14 +326,16 @@ export function PapersGame(props: MinigameViewProps) {
   if (picker && !isEditable(s, picker)) queueMicrotask(() => setPicker(null));
 
   useFrameLoop((dt) => {
-    const st = game.current;
-    react(advance(setup, st, dt));
-    // Wie lange er noch auf dieser Zeile ist: Balken unter der Zeile, direkt ins DOM.
-    if (readBar.current) {
-      const share = fingerOn(st) && st.phaseLen > 0 ? Math.min(1, st.phaseT / st.phaseLen) : 0;
-      readBar.current.style.transform = `scaleX(${share.toFixed(3)})`;
-    }
-    if (isDone(st)) finish();
+    measureFrame(() => {
+      const st = game.current;
+      react(advance(setup, st, dt));
+      // Wie lange er noch auf dieser Zeile ist: Balken unter der Zeile, direkt ins DOM.
+      if (readBar.current) {
+        const share = fingerOn(st) && st.phaseLen > 0 ? Math.min(1, st.phaseT / st.phaseLen) : 0;
+        readBar.current.style.transform = `scaleX(${share.toFixed(3)})`;
+      }
+      if (isDone(st)) finish();
+    });
   }, running);
 
   const reading = readingPaper(setup, s);

@@ -12,6 +12,7 @@ import {
   createTraffic,
   FLEE_SCORE,
   flee,
+  GRACE,
   GREET,
   initTraffic,
   isDone,
@@ -20,6 +21,8 @@ import {
   patience,
   progress,
   questionDef,
+  READ_CPS,
+  readSeconds,
   SILENT,
   type TrafficState,
   trafficPicks,
@@ -206,7 +209,7 @@ describe('Verkehrskontrolle: Gespräch', () => {
     const state = initTraffic(setup);
     untilAsk(setup, state);
     const s0 = state.suspicion;
-    const signals = run(setup, state, 16);
+    const signals = run(setup, state, state.slowAt + 0.5);
     expect(signals).toContain('slow');
     expect(state.suspicion).toBeGreaterThan(s0 + 0.05);
     expect(state.phase).toBe('ask');
@@ -267,9 +270,11 @@ describe('Verkehrskontrolle: Zeitdruck und Rückmeldung', () => {
     const state = initTraffic(setup);
     untilAsk(setup, state);
     expect(patience(setup, state)).toBe(1);
-    run(setup, state, setup.slowAfter + 0.1);
+    // Bedenkzeit je Frage: Grundzeit nach Schwierigkeit plus Lesezeit der Frage.
+    expect(state.slowAt).toBeCloseTo(setup.slowAfter + readSeconds(state.question));
+    run(setup, state, state.slowAt + 0.1);
     expect(patience(setup, state)).toBeLessThan(0.5);
-    const signals = run(setup, state, setup.slowAfter * (SILENT - 1) + 0.2);
+    const signals = run(setup, state, state.slowAt * (SILENT - 1) + 0.2);
     expect(signals).toContain('silent');
     expect(state.hits).toBe(1);
     expect(state.phase).toBe('react');
@@ -363,8 +368,9 @@ describe('Verkehrskontrolle: Schwierigkeit (Test-Bot)', () => {
   });
 
   it('zu langsam (länger als die Geduld) fliegt auf, auch mit den richtigen Antworten', () => {
+    // Länger als jede Frage samt Lesezeit erlaubt (über 300 Zeichen hat keine).
     const setup = createTraffic(4, 0.9, OPTIONS);
-    const slow = play(4, 0.9, setup.slowAfter * SILENT + 1, true);
+    const slow = play(4, 0.9, (setup.slowAfter + 300 / READ_CPS) * SILENT + 1, true);
     expect(slow.state.outcome).toBe('fail');
   });
 });
@@ -379,5 +385,42 @@ describe('Verkehrskontrolle: Werte fürs Ergebnis', () => {
     expect(stats.length).toBe(4);
     expect(stats[0].value).toBe(`0/${MAX_HITS}`);
     expect(stats[2].value).toBe('1');
+  });
+});
+
+describe('Verkehrskontrolle: Fangfragen und volles Misstrauen (Auftrag 48)', () => {
+  it('Fangfrage: „Ja, genau.“ fliegt immer auf, richtig ist die eigene erste Antwort', () => {
+    for (const id of ['fromTrap', 'purposeTrap']) {
+      const def = questionDef(id);
+      const said = def.answers.find((a) => a.claims[def.fact])?.claims[def.fact] ?? '';
+      const story: Story = { [def.fact]: said };
+      const ev = {
+        hour: 14,
+        plateHome: true,
+        plateCity: 'Köln',
+        homeCity: 'Köln',
+        vehicle: 'kombi',
+        visible: 'nichts',
+      } as const;
+      const yes = def.answers.find((a) => a.text === 'Ja, genau.');
+      if (!yes) throw new Error('Antwort fehlt');
+      expect(contradiction(def, yes, ev, story)).not.toBeNull();
+      const right = def.answers.filter((a) => contradiction(def, a, ev, story) === null);
+      expect(right).toHaveLength(1);
+      expect(right[0].claims[def.fact]).toBe(said);
+      // Er unterstellt etwas anderes, als du gesagt hast.
+      expect(def.ask(ev, story)).not.toContain(right[0].text.replace('Nein, ', '').replace('.', ''));
+    }
+  });
+
+  it('ist das Misstrauen voll, lässt er aussteigen, auch ohne zweiten Widerspruch', () => {
+    const setup = createTraffic(5, 0.9, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    state.suspicion = 0.99;
+    const signals = run(setup, state, state.slowAt + GRACE + 1);
+    expect(signals).toContain('fail');
+    expect(state.outcome).toBe('fail');
+    expect(state.hits).toBe(0);
   });
 });
