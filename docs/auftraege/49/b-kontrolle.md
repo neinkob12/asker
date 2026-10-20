@@ -1,8 +1,10 @@
-# Auftrag 48, Teil B: Verkehrskontrolle und Papiere
+# Auftrag 49, Teil B: Verkehrskontrolle und Papiere (Runde 2 der Minispiele)
 
 Branch `claude/auftrag-48-kontrolle`. Geändert nur in `minigames/ui/games/traffic/`, `games/papers/`, dazu eine neue
 Szene in `scripts/perf-browser.mjs` (nur angehängt). Vertrag bleibt: Score, `winAt`, die picks (`flee`, `bribe`,
 `lies:<n>` bzw. `bribe`, `giveUp`, `fixed:<n>`, `hits:<n>`), `applyTraffic`/`applyPapers` unverändert.
+
+Aufbauend auf Auftrag 48 (`docs/auftraege/48-minispiele-gespraeche.md`, `48-minispiele-schreibtisch.md`).
 
 ## Bestandsaufnahme (vorher, 20.10.2026)
 
