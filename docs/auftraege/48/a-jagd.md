@@ -34,3 +34,30 @@ Messung (40 Seeds je Zelle im Test, hier 60 Seeds, Schritte zu 1/30 s):
 | keine Eingabe | 0 % | 0 % | 0 % |
 
 („schwach, vorher“ je nach Reaktionszeit 0,2 bis 0,3 s und Unruhe; nachher mit 0,2 s und kleiner Unruhe.)
+
+## Bedrohung und Gefühl (`scene.ts`, `ChaseGame.tsx`, `chase.css`)
+
+- **Rückspiegel**: Ist eine Streife hinter dir näher als `MIRROR_RANGE` (120 m), blendet oben in der Mitte ein
+  Spiegel ein (`.chase-mirror`, am Handy unter dem Funk) und zeigt sie echt in 3D: zweite Kamera über dem Dach,
+  Blickwinkel `MIRROR_FOV`, Sichtweite `MIRROR_FAR`, dahinter Nebelfarbe. Setzt sie zum Rammen an, glüht der Rahmen
+  rot. Die Szene zeichnet in eine kleine Textur und kopiert sie ins Rechteck des Rahmens (`setMirror`, `mirrorOn`);
+  am Handy in halber Auflösung und nur jedes dritte Bild neu, ohne Bloom und Linse. Liegt der Spiegel da, rückt die
+  Ziel-Pille darunter.
+- **Hit-Stop**: Harte Unfälle (ab Stärke 0,25) stehen 40 bis 90 ms, Sperre 90 ms, Rammstoß 70 ms, Streife zerlegt
+  60 ms; Kamera und Wackeln laufen weiter. Bei `prefers-reduced-motion` die Hälfte.
+- **Karre in Rot** (`PLAYER_COLOR` 0x7a1016, Metallic mit Klarlack): hebt sich in Dämmerung und Nacht ab; vorher ein
+  schwarzer Block.
+
+## Leistung
+
+`npm run perf:browser -- --scenes=jagd --mobile --throttle=4` (SwiftShader, keine GPU: die Bilder pro Sekunde sagen
+nichts, die Rechenzeit pro Bild schon):
+
+| | Rechenzeit pro Bild (Mittel) | schlimmstes Bild |
+| --- | --- | --- |
+| vorher (15 s) | 22,3 ms | 69 ms |
+| Spiegel direkt ins Canvas, jedes Bild (15 s) | 36,0 ms | 81 ms |
+| nachher, Spiegel als Textur, Handy jedes dritte Bild (30 s) | 24,0 ms | 58 ms |
+
+Offen bleibt die Messung auf einem echten Handy (30 fps ist das Ziel). Falls der Spiegel dort zu teuer ist:
+`MIRROR_FAR` kleiner oder am Handy jedes vierte Bild.

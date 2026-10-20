@@ -131,6 +131,7 @@ export function ChaseGame(props: MinigameViewProps) {
     shake: useRef<HTMLSpanElement>(null),
     damage: useRef<HTMLSpanElement>(null),
     goalArrow: useRef<HTMLSpanElement>(null),
+    mirror: useRef<HTMLDivElement>(null),
   };
   const pins = useRef<(HTMLDivElement | null)[]>([]);
   const view = useRef({
@@ -148,6 +149,8 @@ export function ChaseGame(props: MinigameViewProps) {
     /** Doppler: Abstand der nächsten Streife im letzten Bild. */
     lastNear: Number.POSITIVE_INFINITY,
     pitch: 1,
+    /** Hit-Stop: so lange (echte Sekunden) steht das Spiel nach einem harten Treffer still. */
+    hitStop: 0,
     /** Entwicklung: Autopilot (Fahr-Bot) für Bilder und Messungen. */
     pilot: null as Pilot | null,
     /** Entwicklung: Rechenzeit der Bildschleife. */
@@ -179,10 +182,23 @@ export function ChaseGame(props: MinigameViewProps) {
     canvas,
     (st) => {
       sceneFor().resize(st.width, st.height);
+      placeMirror();
       draw(0);
     },
     { maxDpr: coarse ? 1.5 : undefined },
   );
+  /** Rückspiegel: Rahmen im HUD (CSS) bestimmt, wohin die Szene ihn zeichnet. */
+  const placeMirror = () => {
+    const frame = refs.mirror.current;
+    const c = canvas.current;
+    const scene = view.current.scene;
+    if (!frame || !c || !scene) return;
+    const a = frame.getBoundingClientRect();
+    const b = c.getBoundingClientRect();
+    if (a.width <= 0 || b.width <= 0) return scene.setMirror(null);
+    // Innen am Rand (1,5 px) entlang, damit der Rahmen sichtbar bleibt.
+    scene.setMirror({ x: a.left - b.left + 2, y: a.top - b.top + 2, width: a.width - 4, height: a.height - 4 });
+  };
   const draw = (dt: number, render = true) => {
     const st = stage.current;
     if (!st) return;
@@ -481,6 +497,10 @@ export function ChaseGame(props: MinigameViewProps) {
     const slide = p.drifting || (p.braking && p.v > 14) ? Math.min(1, speed / 40) : 0;
     l.skid.set({ volume: g.end ? 0 : slide * 0.5, pitch: Math.min(1, speed / 50) });
   };
+  const hitStop = (seconds: number) => {
+    const v = view.current;
+    v.hitStop = Math.max(v.hitStop, reduced ? seconds * 0.5 : seconds);
+  };
   const onEvents = () => {
     const g = game.current;
     const scene = view.current.scene;
@@ -492,6 +512,7 @@ export function ChaseGame(props: MinigameViewProps) {
           haptic('error');
           scene?.shake(0.5 + e.power * 0.5);
           scene?.sparks(e.x, e.z, e.power);
+          if (e.kind === 'blockHit' || e.power > 0.25) hitStop(e.kind === 'blockHit' ? 0.09 : 0.04 + 0.05 * e.power);
           break;
         case 'splash':
           audio.play(CHASE_SOUNDS.crash, { volume: 0.5 });
@@ -501,6 +522,7 @@ export function ChaseGame(props: MinigameViewProps) {
           audio.play(CHASE_SOUNDS.crash, { volume: 0.55 });
           haptic('medium');
           pop('Gerammt!', 'bad');
+          hitStop(0.07);
           scene?.shake(0.6);
           scene?.sparks(e.x, e.z, 0.6);
           break;
@@ -532,6 +554,7 @@ export function ChaseGame(props: MinigameViewProps) {
           audio.play(CHASE_SOUNDS.crash, { volume: 0.35 });
           audio.playThrottled(CHASE_SOUNDS.honk, 500, { volume: 0.4 });
           scene?.sparks(e.x, e.z, 0.8);
+          hitStop(0.06);
           pop('Streife zerlegt!', 'good');
           say(radioLine(g, 'lost', veedelName, view.current.radioCount));
           break;
@@ -591,9 +614,14 @@ export function ChaseGame(props: MinigameViewProps) {
     const g = game.current;
     const started = performance.now();
     const slow = g.end ? END_SLOW : 1;
-    stepChase(setup, g, inputNow(), dt * slow);
+    // Hit-Stop: Das Modell steht kurz, Kamera und Wackeln laufen weiter.
+    const frozen = v.hitStop > 0;
+    v.hitStop = Math.max(0, v.hitStop - dt);
+    if (!frozen) {
+      stepChase(setup, g, inputNow(), dt * slow);
+      onEvents();
+    }
     v.t += dt;
-    onEvents();
     sound(dt);
     if (g.t - v.lastHud > 0) refreshHud();
     const speed = refs.speed.current;
@@ -612,6 +640,9 @@ export function ChaseGame(props: MinigameViewProps) {
       say(radioLine(g, g.near ? 'heading' : 'search', veedelName, v.radioCount));
     }
     draw(dt * slow, render);
+    const mirror = refs.mirror.current;
+    const mirrorOn = v.scene?.mirrorOn() ? '1' : '';
+    if (mirror && mirror.dataset.on !== mirrorOn) mirror.dataset.on = mirrorOn;
     drawPins();
     if (v.t - v.lastMap > 1 / 15) {
       v.lastMap = v.t;
@@ -746,6 +777,8 @@ export function ChaseGame(props: MinigameViewProps) {
           <b class="chase-goal__dist">{hud.goal} m</b>
         </p>
       )}
+
+      <div ref={refs.mirror} class="chase-mirror" aria-hidden="true" />
 
       <div class="chase-pins" aria-hidden="true">
         {Array.from({ length: PINS }, (_, i) => (
