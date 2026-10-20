@@ -211,8 +211,7 @@ export function InterviewGame(props: MinigameViewProps) {
           audio.play(INTERVIEW_SOUNDS.slide, { volume: 0.5 });
           setClosedLine(null);
           break;
-        case 'asked':
-        case 'auto': {
+        case 'asked': {
           audio.play(INTERVIEW_SOUNDS.slide, { volume: 0.6 });
           haptic('selection');
           // Die Antwort schon vorrechnen, solange du fragst.
@@ -289,7 +288,8 @@ export function InterviewGame(props: MinigameViewProps) {
 
   const onChoose = (index: number) => {
     if (!running) return;
-    if (choose(setup, state(), index)) react(['asked']);
+    // Ton und Vorrechnen der Antwort kommen mit dem Signal 'asked' im nächsten Schritt.
+    if (choose(setup, state(), index)) refresh();
   };
 
   const hold = (on: boolean) => {
