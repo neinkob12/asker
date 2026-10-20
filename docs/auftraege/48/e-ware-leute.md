@@ -54,3 +54,81 @@ Software-Rendering, ganze Seite mit Karte; Abstand zweier Bilder in ms, Mittel /
 - Schwierigkeit: gut 100 / 100 / 98 %, schwach 98 / 98 / 47 % (Reaktion 0,7 s, schaut alle 0,6 s auf den Ring,
   hält jede vierte Geste für ein Zeichen). Mittel zu leicht.
 - Leistung: 106 / 267 / 667 ms (die schlechteste der drei).
+
+## Was neu ist
+
+### Bewerbungsgespräch
+
+- **Zu wenig Druck verrät nichts:** Eine unauffällige Antwort zählt nur als gelesen, wenn die Person mindestens
+  `TENSE_NEEDED` (35 %) der Antwort angespannt war (`InterviewState.tense`, `RoundResult.soft`, `ruledOutBy` schließt
+  dann nichts aus). Urteil: „Zu locker gefragt: … war kaum angespannt.“
+- **Hände auf dem Tisch** (`Hands.tsx`): Unterarme, Hände und Becher. Haltung nach Druck (locker auseinander,
+  angespannt beisammen, macht zu: verschränkt), Gesten mit Händen (Finger trommeln beim Zappeln, Schulterzucken,
+  Vorbeugen; beim Kratzen und Schluck fehlt die Hand, die oben am Porträt ist). Die Person sitzt hinter dem Tisch
+  (Porträt unter der Tischkante abgeschnitten, `--iv-under`). Handy: Akte und Gespräch unter den Händen, keine Lücke.
+- **Schwierigkeit:** Zeichenfenster schrumpft schon zur Mitte (`TELL_CURVE` 0,5, `TELL_WINDOW.hard` 0,55), auf schwer
+  bis zu vier Gesten (`DECOYS.hard`).
+- **Leistung:** kein Filter mehr auf dem atmenden Porträt (Schatten als eigene Fläche), Rauch ohne `blur`, Lampe ohne
+  `brightness`-Filter, `--iv-p` nur in 2-%-Stufen.
+
+### Zivi oder Kunde
+
+- **Ganze Figur** (`Body` in `figure.tsx`): Rumpf, Arme mit Händen, Beine, Schuhe unter dem Porträt, im Licht der
+  Laterne. Leben: Gewicht verlagern (`uc-sway`), Atmen, Arme pendeln, Kopf wie bisher (Blick zum Auto, Ohr …).
+- **Mehr im Bild:** Bierdose, Handy (Arm angewinkelt, Bildschirm leuchtet), Kleingeld in der offenen Hand,
+  Sporttasche mit Gurt, Hund an der Leine (wedelt), E-Roller, zittrige Hände, Treten von einem Fuß auf den anderen
+  (`TellShow` um `beer`, `phone`, `coins`, `bag`, `dog`, `scooter`, `feet`, `shaky`; die Würfe bleiben gleich).
+- **Tempo steigt:** Jede Person hat `seconds`; die letzte Karte hat nur noch `TEMPO_END` (85 % leicht bis 62 % schwer)
+  der ersten (`cardSecondsAt`, `currentSeconds`). Luft nach dem letzten Merkmal nach Schwierigkeit (`revealMargin`,
+  1,8 bis 1,1 s), schwer zeigt sich das meiste später (`REVEAL_LATE`). Der Nächste braucht `NEXT_GAP` (0,8 s) zum
+  Herankommen. HUD zeigt „Voller“, sobald es schneller wird.
+- **Straße gemalt:** Häuser aus Backstein und Putz mit Gesims, Band und Sockel, Fenster mit Rahmen, Sprossen, Bank und
+  Vorhang (hell warm, dunkel mit Spiegelung), Kiosk mit Markise, Fugen im Gehweg, Körnung. Was sich bewegt (Passanten,
+  Auto), liegt in einer eigenen Ebene; Karten hinten im Stapel stehen still und werden ohne Filter abgedunkelt.
+
+### Container packen
+
+- **Lob:** „Passt!“ mit Serie (×2, ×3 …) und Ton, der je Stufe steigt, wenn ein Teil dicht sitzt (`snugness` ab
+  `SNUG_AT` 0,75 der Außenkanten an Wand oder Teil); „Reihe dicht!“ mit Lichtstreifen und Akkord, wenn eine Reihe von
+  Wand zu Wand voll ist (`fullColumns`). Nur Anzeige, der Score bleibt.
+- **Ablage mit Material:** Folie mit Klebeband in der Farbe der Ware, Bananenkiste mit Griffloch, Fliesen auf Palette
+  unter Stretchfolie, Altkleider-Karton.
+- **Schwierigkeit:** Der Scanner sieht Lücken und Blöcke nach Schwierigkeit schärfer (`PackSetup.scanner`,
+  `SCANNER_STRENGTH` 0,8 bis 2,4), weniger Zeit (`TIME_FACTOR.hard` 0,55), beides zieht schon zur Mitte an
+  (`DIFFICULTY_CURVE` 0,5).
+- **Leistung:** ruhig (nur Wippen der Vorschau) höchstens 30 Bilder pro Sekunde.
+
+## Messwerte nachher
+
+| Spiel | gut 0,2 / 0,5 / 0,9 | schwach 0,2 / 0,5 / 0,9 | keine Eingabe | Dauer |
+| --- | --- | --- | --- | --- |
+| Container | 100 / 94 / 78 % (vorher 100 / 100 / 100) | 100 / 50 / 7 % (vorher 100 / 100 / 92) | 0 % | Zeit des Containers |
+| Zivi oder Kunde | 94 / 98 / 86 % (vorher 94 / 98 / 95) | 63 / 33 / 7 % (vorher 28 / 34 / 39) | 0 % | 19 bis 21 s |
+| Bewerbungsgespräch | 100 / 98 / 68 % (vorher 100 / 100 / 98) | 95 / 58 / 30 % (vorher 98 / 98 / 47) | 0 % (vorher 47) | 38 bis 43 s |
+
+Zivi oder Kunde bleibt kurz: police schickt 6 bis 10 Leute; länger machen hieße mehr Leute, das gehört police.
+
+Bildrate (Handy, CPU 4×, Software-Rendering, Mittel / p95 / längstes in ms):
+
+| Spiel | vorher | nachher |
+| --- | --- | --- |
+| Container | 90 / 150 / 183 | 86 / 150 / 200 (Streuung 86 bis 97) |
+| Zivi oder Kunde | 69 / 133 / 567 | 60 / 100 / 367 |
+| Bewerbungsgespräch | 106 / 267 / 667 | 78 / 150 / 283 |
+
+## Für die Integration
+
+- picks, Score und `winAt` unverändert (`trade/packing.ts`, `police/undercover.ts`, `recruiting` lesen wie bisher).
+- Container: Bei gleicher Packweise ist der Score jetzt auf mittel und schwer niedriger (schärferer Scanner); das
+  Zollrisiko in `trade/packing.ts` steigt dadurch für mittelmäßiges Packen.
+- Bewerbungsgespräch: Wer gar nicht drückt, deckt nichts mehr auf (vorher galten ruhige Antworten als richtig).
+- `npm run e2e` läuft (mit Minispielen aus prüft er nur, dass kein Gespräch startet).
+- CLAUDE.md / Architektur: Stellschrauben oben (`TENSE_NEEDED`, `TELL_CURVE`, `TEMPO_END`, `revealMargin`,
+  `REVEAL_LATE`, `NEXT_GAP`, `SNUG_AT`, `SCANNER_STRENGTH`, `DIFFICULTY_CURVE`), Simulationen in
+  `model.balance.test.ts` je Spiel (`BALANCE_REPORT=1` druckt die Tabelle).
+
+## Offen
+
+- Bewerbungsgespräch: „Schweigen aushalten“ (nach der Antwort weiter Blick halten, dann ein Nachsatz mit Zeichen).
+- Zivi oder Kunde: Figur verlässt die Karte nach dem Wischen zu Fuß (geht zum Auto bzw. mit der Ware weg).
+- Container: Bildrate am echten Handy messen; headless ist sie von der Seite dahinter bestimmt.

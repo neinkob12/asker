@@ -182,6 +182,8 @@ export function ContainerGame(props: MinigameViewProps) {
   const fx = useRef<
     PackFx & {
       lastHud: number;
+      /** Zeit des letzten Bildes (ruhig nur 30 pro Sekunde). */
+      lastDraw: number;
       sent: boolean;
       scanT: number;
       beeped: number;
@@ -211,6 +213,7 @@ export function ContainerGame(props: MinigameViewProps) {
     combo: 0,
     rows: new Set(),
     lastHud: -1,
+    lastDraw: -1,
     sent: false,
     scanT: -1,
     beeped: -1,
@@ -521,7 +524,21 @@ export function ContainerGame(props: MinigameViewProps) {
       }
       if (f.scanT >= dur + SCAN_HOLD) finish();
     }
-    draw();
+    // Ruhig (nur Wippen der Vorschau, Pulsen): höchstens 30 Bilder pro Sekunde; sonst jedes Bild (Teil E).
+    const busy =
+      drag.current !== null ||
+      f.landing !== null ||
+      f.dust.length > 0 ||
+      f.glints.length > 0 ||
+      f.pops.length > 0 ||
+      f.scanT >= 0 ||
+      f.t - f.reject < 0.3 ||
+      f.t - f.kick.at < 0.3 ||
+      (f.dropped !== null && f.t - f.dropped.at < 0.5);
+    if (busy || f.t - f.lastDraw >= 1 / 30 - 1e-3) {
+      f.lastDraw = f.t;
+      draw();
+    }
     if (f.t - f.lastHud > 0.1) {
       f.lastHud = f.t;
       setHud((h) => (Math.abs(h.left - timeLeft(setup, s)) >= 0.05 ? { ...h, left: timeLeft(setup, s) } : h));
