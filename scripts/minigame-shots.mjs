@@ -86,18 +86,26 @@ try {
       // Ein Test-Spielstand ist geladen, wenn er sich aus der Adresse genommen hat (src/ui/start.tsx).
       if (save)
         await page.waitForFunction(() => !window.location.search.includes('spielstand='), null, { timeout: 30000 });
-      // Vorschau über den Dev-Haken (erst, wenn Spiel und HUD stehen): so gelten Spielstand und Uhrzeit.
+      // Vorschau über den Dev-Haken (erst, wenn Spiel und HUD stehen): so gelten Spielstand und Uhrzeit. Kurz nach dem
+      // Start kann ein anderer Dialog den Rahmen noch verdrängen (am Handy oft): dann alle zwei Sekunden neu öffnen,
+      // bis die Einleitung steht.
+      await page.waitForFunction(() => !!window.koeln?.dev?.minigamePreview && !!document.querySelector('.hud'), null, {
+        timeout: 30000,
+      });
       await page.waitForFunction(
         ({ kind, difficulty, seed, hour, realtime }) => {
-          const dev = window.koeln?.dev;
-          if (!dev?.minigamePreview) return false;
+          if (document.querySelector('.mg-intro')) return true;
+          const now = performance.now();
+          if (now - (window.__mgPreviewAt ?? 0) < 2000) return false;
+          window.__mgPreviewAt = now;
+          const dev = window.koeln.dev;
           dev.minigameRealtime?.(realtime);
-          return dev.minigamePreview(kind, { schwer: Number(difficulty), seed: Number(seed), uhr: hour });
+          dev.minigamePreview(kind, { schwer: Number(difficulty), seed: Number(seed), uhr: hour });
+          return false;
         },
         { kind, difficulty, seed, hour, realtime },
-        { timeout: 20000, polling: 250 },
+        { timeout: 40000, polling: 250 },
       );
-      await page.waitForSelector('.mg-intro', { timeout: 20000 });
       // Karte und Schriften kurz laden lassen.
       await page.waitForTimeout(1500);
       const shot = async (step) => {

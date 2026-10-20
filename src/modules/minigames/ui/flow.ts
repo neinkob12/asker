@@ -3,6 +3,7 @@
 // z.B. die Akte), kommt der ersetzte zurück.
 
 import type { DialogId, UiApi, UiState } from '../../../ui';
+import type { MinigameStat } from './registry';
 
 type OpenDialog = { id: DialogId; props: unknown };
 
@@ -75,12 +76,14 @@ export function wasOpened(state: object, challengeId: number): boolean {
 }
 
 /** Für Screenshots und Playwright (nur Entwicklung): das laufende Spiel sofort gewinnen bzw. verlieren. */
-let devFinish: ((won: boolean) => void) | null = null;
+type DevFinish = (won: boolean, score?: number, stats?: readonly MinigameStat[]) => void;
 
-export function setDevFinish(fn: ((won: boolean) => void) | null): void {
+let devFinish: DevFinish | null = null;
+
+export function setDevFinish(fn: DevFinish | null): void {
   devFinish = fn;
 }
 
-export function finishFromDev(won: boolean): void {
-  devFinish?.(won);
+export function finishFromDev(won: boolean, score?: number, stats?: readonly MinigameStat[]): void {
+  devFinish?.(won, score, stats);
 }

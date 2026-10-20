@@ -21,8 +21,23 @@ export interface MinigameViewProps {
    * Bildschleife, keine Tasten, keine Zeit.
    */
   running: boolean;
-  /** Einmal aufrufen (Score 0 bis 1, picks je Art), dann zeigt der Rahmen das Ergebnis. */
-  onFinish(score: number, picks?: string[]): void;
+  /**
+   * Einmal aufrufen (Score 0 bis 1, picks je Art), dann zeigt der Rahmen das Ergebnis. stats (optional, höchstens
+   * vier) stehen dort als Werte unter dem Stempel, z.B. „Zeit 23,4 s“ oder „Treffer 3“; sie gehen nicht in den Spielstand.
+   */
+  onFinish(score: number, picks?: string[], stats?: readonly MinigameStat[]): void;
+}
+
+/** Ein Wert im Ergebnis des Rahmens (nur Anzeige). */
+export interface MinigameStat {
+  /** Kurz, z.B. „Zeit“, „Gerettet“, „Treffer“. */
+  label: string;
+  /** Fertig formatiert, z.B. „23,4 s“, „4/6“. */
+  value: string;
+  /** Symbol (Name aus Icon). */
+  icon?: string;
+  /** Färbt den Wert: gut grün, schlecht rot, sonst neutral. */
+  tone?: 'good' | 'bad';
 }
 
 export interface MinigameControls {

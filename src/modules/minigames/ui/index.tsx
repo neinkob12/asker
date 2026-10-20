@@ -30,6 +30,7 @@ import {
 import { registerMinigameSounds } from './kit/sounds';
 import { devClock } from './kit/useFrameLoop';
 import { isMinigameKind, previewChallenge, previewFromUrl } from './preview';
+import type { MinigameStat } from './registry';
 import './kit/kit.css';
 import './minigames.css';
 
@@ -39,7 +40,13 @@ export { capture, type TouchButton, TouchControls, type TouchDirection, useSwipe
 export { MAX_DT, useFrameLoop } from './kit/useFrameLoop';
 export { type GameKeyPress, type GameKeys, useGameKeys } from './kit/useGameKeys';
 export { MAX_DPR, type Stage, useStageCanvas } from './kit/useStageCanvas';
-export { type MinigameControls, type MinigameView, type MinigameViewProps, registerMinigameView } from './registry';
+export {
+  type MinigameControls,
+  type MinigameStat,
+  type MinigameView,
+  type MinigameViewProps,
+  registerMinigameView,
+} from './registry';
 
 // Die Spiele: jede games/<art>/index.tsx meldet sich selbst an (so ändern parallele Teile keine gemeinsame Liste).
 import.meta.glob('./games/*/index.tsx', { eager: true });
@@ -155,7 +162,8 @@ registerGameStat({
 });
 
 // Entwicklung (Screenshots, Playwright, Konsole):
-// - minigameWin() / minigameLose(): das laufende Spiel sofort beenden.
+// - minigameWin() / minigameLose(): das laufende Spiel sofort beenden (optional mit Score und Werten fürs Ergebnis,
+//   z.B. minigameWin(0.55, [{ label: 'Zeit', value: '23,4 s' }])).
 // - minigamePreview(art, { schwer, seed, uhr }): Vorschau öffnen, wenn das Spiel schon steht (z.B. nach einem
 //   Test-Spielstand); `uhr` setzt vorher die Spieluhr (Tageszeit der Karte, params.phase und params.hour).
 // - minigameRealtime(true): Spielzeit läuft auch bei wenigen Bildern pro Sekunde in Echtzeit (headless).
@@ -178,8 +186,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
     ...window.koeln,
     dev: {
       ...window.koeln?.dev,
-      minigameWin: () => finishFromDev(true),
-      minigameLose: () => finishFromDev(false),
+      minigameWin: (score?: number, stats?: MinigameStat[]) => finishFromDev(true, score, stats),
+      minigameLose: (score?: number, stats?: MinigameStat[]) => finishFromDev(false, score, stats),
       minigamePreview,
       minigameRealtime: (on = true) => {
         devClock.realtime = on;

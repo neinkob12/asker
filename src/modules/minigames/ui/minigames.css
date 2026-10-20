@@ -16,6 +16,11 @@
   transition: right var(--dock-duration) var(--dock-ease);
   animation: mg-fade var(--duration-slow) var(--ease-out);
 }
+/* Karte zuerst (Handy-Bildschirm, src/ui/shell/mapfirst.css): Tab-Leiste (40) und Hinweis „Nächster Schritt“ (35)
+   liegen über den Dialog-Ebenen. Das Minispiel deckt beide zu, sonst lägen Bremse, Turbo & Co. unter der Leiste. */
+.is-mapfirst .mg-overlay {
+  z-index: 41;
+}
 .mg-overlay--stage {
   /* Kein Weichzeichner über der Karte: Der kostet bei jedem Bild der Karte darunter (Handy, 4× CPU-Bremse). */
   background: var(--file-backdrop);
@@ -234,6 +239,212 @@
   width: 100%;
 }
 
+/* Wertung: Balken 0–100, Marke an der Schwelle (winAt), „Knapp!“ nahe dran */
+.mg-score {
+  --mg-score: var(--cat-danger);
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+.mg-score.is-won {
+  --mg-score: var(--cat-money);
+}
+.mg-score__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.mg-score__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.mg-score__close {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cat-warn);
+  color: var(--hud-gold-on);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: mg-stamp-in 0.32s 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.mg-score__value {
+  margin-left: auto;
+  font-family: var(--font-hud-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-score);
+}
+.mg-score__bar {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--hud-empty);
+}
+.mg-score__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--mg-score);
+  transform-origin: left center;
+}
+/* Schwelle: kleiner Strich über und unter dem Balken */
+.mg-score__goal {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--hud-ink);
+  box-shadow: 0 0 0 1px var(--hud-glass-strong);
+}
+@keyframes mg-stamp-in {
+  from {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Werte aus dem Spiel (MinigameStat): bis zu vier Kacheln nebeneinander */
+.mg-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 168px));
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+}
+.mg-stat {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-fill);
+  text-align: left;
+}
+.mg-stat dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+.mg-stat__icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.mg-stat dd {
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mg-stat.is-good dd {
+  color: var(--cat-money);
+}
+.mg-stat.is-bad dd {
+  color: var(--cat-danger);
+}
+
+/* Moment des Ausgangs: kurzer Schein vom Rand her in Grün bzw. Rot, dann weg */
+.mg-flash {
+  --mg-flash: var(--cat-danger);
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 45%,
+    color-mix(in srgb, var(--mg-flash) 55%, transparent) 100%
+  );
+  animation: mg-flash 0.9s var(--ease-out) both;
+}
+.mg-flash.is-won {
+  --mg-flash: var(--cat-money);
+}
+@keyframes mg-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Lage in der Einleitung: Wort und vier Striche wie beim Empfang, Farbe nach Stufe */
+.mg-intro__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.mg-level {
+  --mg-level: var(--cat-money);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: var(--hud-glass-fill);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mg-level);
+  white-space: nowrap;
+}
+.mg-level.is-2 {
+  --mg-level: var(--cat-warn);
+}
+.mg-level.is-3 {
+  --mg-level: color-mix(in srgb, var(--cat-warn) 50%, var(--cat-danger));
+}
+.mg-level.is-4 {
+  --mg-level: var(--cat-danger);
+}
+.mg-level__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.mg-level__bars span {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--hud-empty);
+}
+.mg-level__bars span:nth-child(1) {
+  height: 4px;
+}
+.mg-level__bars span:nth-child(2) {
+  height: 7px;
+}
+.mg-level__bars span:nth-child(3) {
+  height: 10px;
+}
+.mg-level__bars span:nth-child(4) {
+  height: 12px;
+}
+.mg-level__bars span.is-on {
+  background: var(--mg-level);
+}
+
 /* ---------------------------------------------------------------- 3-2-1 */
 .mg-countdown {
   position: relative;
@@ -321,7 +532,11 @@
 @media (prefers-reduced-motion: reduce) {
   .mg-overlay,
   .mg-card,
-  .mg-countdown__n {
+  .mg-countdown__n,
+  .mg-score__close {
     animation: none;
+  }
+  .mg-flash {
+    display: none;
   }
 }
