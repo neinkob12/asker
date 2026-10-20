@@ -98,6 +98,9 @@
   align-self: center;
   color: var(--hud-ink-2);
 }
+.papers__label-short {
+  display: none;
+}
 .papers__count small,
 .papers__hits small {
   font-family: var(--font-hud);
@@ -1158,6 +1161,12 @@
 }
 .papers.is-narrow .papers__count {
   font-size: 20px;
+}
+.papers.is-narrow .papers__label-long {
+  display: none;
+}
+.papers.is-narrow .papers__label-short {
+  display: inline;
 }
 .papers.is-narrow .papers__booth {
   grid-template-columns: 84px minmax(0, 1fr);

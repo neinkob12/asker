@@ -406,7 +406,10 @@ Schluss (`RAM_FROM`), `scene.warm` gegen Ruckler; Bude als Gang durch die Wohnun
 Innenraum-Baukasten `kit/indoor3d.ts` (`ParticlePool`, `createFlashlight`, `createCrackLight`, `HitStop`). Zivi mit
 ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung: ohne Druck verrät niemand etwas
 (`TENSE_NEEDED`), „Schweigen aushalten“ (`SILENCE`, `AFTERWORDS`), Hände auf dem Tisch; Container lobt dichtes Packen
-(„Passt! ×n“, „Reihe dicht!“), Scanner je Stufe schärfer (`SCANNER_STRENGTH`).
+(„Passt! ×n“, „Reihe dicht!“), Scanner je Stufe schärfer (`SCANNER_STRENGTH`). Verkehrskontrolle in 3D neu (Beamter
+`traffic/officer.ts` mit Haltungen, Gesicht als Textur `faceTexture.ts`, Tropfen auf der Scheibe im Blaulicht,
+Bedenkzeit aus Lesezeit `READ_CPS`, Fangfragen, Stunde aus der Spieluhr); Papiere mit Stichproben des Zöllners
+(`PEEK_*`). Jagd-Karre mit Form (`buildHeroCar`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
