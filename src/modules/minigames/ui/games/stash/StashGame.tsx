@@ -177,6 +177,7 @@ export function StashGame(props: MinigameViewProps) {
       floats: number;
       pendingDt: number;
       drawQueued: boolean;
+      warmed: boolean;
     }
   >({
     t: 0,
@@ -199,6 +200,7 @@ export function StashGame(props: MinigameViewProps) {
     floats: 0,
     pendingDt: 0,
     drawQueued: false,
+    warmed: false,
   });
   const [floats, setFloats] = useState<Floater[]>([]);
   const snapshot = (h: Partial<Hud> = {}): Hud => {
@@ -244,9 +246,16 @@ export function StashGame(props: MinigameViewProps) {
   function draw(dt: number) {
     const st = stage.current;
     if (!st) return;
+    // Messhilfe für scripts/perf-browser.mjs (--scenes=razzia,bude): nur, wenn das Skript sie anlegt.
+    const perfHook = (window as { __mgPerf?: { frames: number; total: number; max: number } }).__mgPerf;
+    const perfStart = perfHook ? performance.now() : 0;
     const scene = sceneFor();
     const s = game.current;
     const f = fx.current;
+    if (!f.warmed) {
+      f.warmed = true;
+      scene.warm(st);
+    }
     const ctx = contextOf(setup, s);
     if (f.focus?.kind !== 'hide' || s.carry === null) {
       f.focus =
@@ -294,6 +303,12 @@ export function StashGame(props: MinigameViewProps) {
     }
     const me = strip.current;
     if (me) me.style.left = `${((s.x / setup.length) * 100).toFixed(2)}%`;
+    if (perfHook) {
+      const ms = performance.now() - perfStart;
+      perfHook.frames += 1;
+      perfHook.total += ms;
+      perfHook.max = Math.max(perfHook.max, ms);
+    }
   }
 
   const finish = () => {

@@ -197,6 +197,9 @@ export function SearchGame(props: MinigameViewProps) {
   function draw(dt: number) {
     const st = stage.current;
     if (!st) return;
+    // Messhilfe für scripts/perf-browser.mjs (--scenes=razzia,bude): nur, wenn das Skript sie anlegt.
+    const perfHook = (window as { __mgPerf?: { frames: number; total: number; max: number } }).__mgPerf;
+    const perfStart = perfHook ? performance.now() : 0;
     const scene = sceneFor();
     scene.update(game.current, fx.current, dt);
     scene.render(st);
@@ -217,6 +220,12 @@ export function SearchGame(props: MinigameViewProps) {
       const p = scene.itemScreen(index);
       el.style.left = `${p.x.toFixed(1)}px`;
       el.style.top = `${p.y.toFixed(1)}px`;
+    }
+    if (perfHook) {
+      const ms = performance.now() - perfStart;
+      perfHook.frames += 1;
+      perfHook.total += ms;
+      perfHook.max = Math.max(perfHook.max, ms);
     }
   }
 

@@ -101,6 +101,12 @@ export interface ScreenPoint {
 export interface StashScene {
   update(state: StashState, fx: StashFx, dt: number): void;
   render(stage: Stage3d): void;
+  /**
+   * Shader vorab bauen, auch für den Schluss (Beamte mit Taschenlampen, Licht unter dem Tor): Sonst baut three.js
+   * alle Materialien neu, sobald die Lampen der Beamten dazukommen, und das Bild steht genau beim Reinstürmen. Dazu
+   * Geometrie und Texturen hochladen (sonst hakt es, wenn die Kamera zum ersten Mal Richtung Tor schwenkt).
+   */
+  warm(stage: Stage3d): void;
   resize(width: number, height: number): void;
   /** Wohin ein Tipp zeigt: Paket, Versteck oder ein Punkt auf der Strecke. */
   pick(px: number, py: number, state: StashState): StashGoal | null;
@@ -1196,6 +1202,28 @@ export function createStashScene(
   return {
     update,
     render: (stage) => stage.renderer.render(scene, camera),
+    warm: (stage) => {
+      // Einmal alles zeichnen, mit einer Kamera, die die ganze Strecke sieht: lädt Geometrie und Texturen hoch und baut
+      // die Shader (auch für den Schluss). Das nächste Bild zeichnet ohnehin neu.
+      for (const cop of cops) cop.root.visible = true;
+      if (gapGlow) gapGlow.mesh.visible = true;
+      const fov = camera.fov;
+      camera.fov = 70;
+      camera.updateProjectionMatrix();
+      // So weit weg, dass die ganze Strecke samt Straße auch hochkant ins Bild passt.
+      const far = (L / 2 + 6) / (Math.tan((35 * Math.PI) / 180) * Math.min(1, camera.aspect));
+      camera.far = far + 60;
+      camera.position.set(L / 2 + 2, 3, far);
+      camera.lookAt(L / 2 + 2, 1, 0);
+      camera.updateMatrixWorld();
+      stage.renderer.render(scene, camera);
+      for (const cop of cops) cop.root.visible = false;
+      if (gapGlow) gapGlow.mesh.visible = false;
+      stage.renderer.render(scene, camera);
+      camera.fov = fov;
+      camera.far = dist + 60;
+      camera.updateProjectionMatrix();
+    },
     resize,
     pick,
     hideScreen,
