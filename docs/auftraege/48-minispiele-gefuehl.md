@@ -50,4 +50,9 @@ Lead-Session am Ende zusammen.
 - [x] **Werte aus dem Spiel** im Ergebnis: `onFinish(score, picks, stats?)` mit `MinigameStat { label, value, icon?, tone? }`
   (höchstens vier, nur Anzeige, nichts geht in den Spielstand). Rein additiv: Spiele ohne stats sehen aus wie bisher.
   Dev-Haken `minigameWin(score?, stats?)` / `minigameLose(score?, stats?)` zum Ausprobieren.
+- [x] **Pause:** Gehen Tab oder App in den Hintergrund, hält der Rahmen das Spiel an (`running` false, Karte „Kurz
+  angehalten“), weiter mit „Weiter“ und 3-2-1. Vertrag in `registry.ts`: `running` kann mitten im Spiel false und wieder
+  true werden, das Spiel macht dann genau dort weiter.
+- [x] **Ton:** Solange der Rahmen offen ist, tritt die Musik zurück (`audio.setFocus`, `FOCUS_MUSIC` 25 %) und die
+  Geräusche der Stadt schweigen; Effekte und Stimmen bleiben.
 - [x] `npm run screenshot:minigames`: wartet auf das HUD und öffnet die Vorschau neu, bis die Einleitung steht.

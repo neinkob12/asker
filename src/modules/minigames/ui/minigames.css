@@ -78,6 +78,7 @@
   box-shadow: none;
 }
 .mg-run.is-intro .mg-stage,
+.mg-run.is-paused .mg-stage,
 .mg-run.is-result .mg-stage {
   filter: brightness(0.5) saturate(0.7);
 }

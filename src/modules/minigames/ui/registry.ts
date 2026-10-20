@@ -18,7 +18,9 @@ export interface MinigameViewProps {
   preview: boolean;
   /**
    * Läuft das Spiel? false während Einleitung, 3-2-1 und Ergebnis (das Spiel steht dann als Bild dahinter): keine
-   * Bildschleife, keine Tasten, keine Zeit.
+   * Bildschleife, keine Tasten, keine Zeit. Auch mitten im Spiel kann es false und danach wieder true werden (Pause,
+   * wenn Tab oder App in den Hintergrund gehen): Dann geht es genau dort weiter, nichts startet neu, Ton-Schleifen
+   * schweigen in der Pause.
    */
   running: boolean;
   /**

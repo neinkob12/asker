@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { memoryStorage } from '../core';
 import { PiperEngine, type WorkerLike } from './piper/engine';
-import { AudioService, busLevels } from './service';
+import { AudioService, busLevels, FOCUS_MUSIC } from './service';
 import { AUDIO_SETTINGS_KEY, DEFAULT_AUDIO_SETTINGS, loadAudioSettings, saveAudioSettings } from './settings';
 import { SOUND_IDS } from './synth';
 import { type MusicMood, pickTrack, TRACKS, trackDuration } from './tracks';
@@ -100,6 +100,11 @@ describe('Stimmen und Gespräch', () => {
     expect(call.voice).toBeGreaterThan(0);
     expect(busLevels({ ...s, muted: true }, { speaking: false, inCall: false }).master).toBe(0);
     expect(busLevels({ ...s, sfx: 0.2 }, { speaking: false, inCall: false }).voice).toBe(0.6);
+    // Minispiel: Musik leiser, Stadt still, Effekte wie immer.
+    const focus = busLevels(s, { speaking: false, inCall: false, focus: true });
+    expect(focus.music).toBeCloseTo(s.music * 2.2 * FOCUS_MUSIC);
+    expect(focus.ambience).toBe(0);
+    expect(focus.sfx).toBe(s.sfx);
   });
 
   it('merkt sich das Gespräch und meldet es der Oberfläche', () => {

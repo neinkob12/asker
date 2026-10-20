@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { formatPercent } from '../../../core';
-import { Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
+import { audio, Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
 import { type Challenge, delegateInfo, getChallenge, MINIGAME_KINDS, winAt } from '../index';
 import { restoreDialog, setDevFinish } from './flow';
 import { HudBar, ResultStamp } from './kit/hud';
@@ -15,7 +15,7 @@ import { MINIGAME_SOUNDS, playSound } from './kit/sounds';
 import { useFrameLoop } from './kit/useFrameLoop';
 import { type MinigameStat, minigameView } from './registry';
 
-type Phase = 'intro' | 'countdown' | 'play' | 'result';
+type Phase = 'intro' | 'countdown' | 'play' | 'paused' | 'result';
 
 /** Dauer des Countdowns (3, 2, 1, Los) in Sekunden. */
 const COUNTDOWN = 3.6;
@@ -151,6 +151,30 @@ function Countdown(props: { onDone: () => void }) {
   );
 }
 
+/** Pause, wenn Tab oder App in den Hintergrund gehen: Das Spiel steht (running false), weiter mit 3-2-1. */
+function Paused(props: { onResume: () => void }) {
+  const resume = useRef<HTMLButtonElement>(null);
+  useEffect(() => resume.current?.focus(), []);
+  return (
+    <section class="mg-card mg-paused" aria-labelledby="mg-title">
+      <p class="mg-kicker">
+        <Icon name="pause" class="mg-kicker__icon" />
+        Pause
+      </p>
+      <h2 class="mg-title" id="mg-title">
+        Kurz angehalten
+      </h2>
+      <p class="mg-situation">Das Spiel wartet auf dich. Nach „Weiter“ geht es mit 3-2-1 los.</p>
+      <div class="mg-actions">
+        <button ref={resume} type="button" class="mg-button is-gold mg-button--big" onClick={props.onResume}>
+          <Icon name="play" />
+          Weiter
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Wertung 0–100 als Balken mit der Schwelle (winAt) als Marke; zählt beim Erscheinen hoch. */
 function ScoreMeter(props: { score: number; goal: number; won: boolean }) {
   const { score, goal, won } = props;
@@ -257,6 +281,15 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
     setDevFinish((won, score, stats) => onFinish(score ?? (won ? 0.9 : 0.1), [], stats));
     return () => setDevFinish(null);
   }, [phase]);
+  // Tab oder App im Hintergrund: anhalten. Die Spiele kennen running = false schon aus Einleitung und Ergebnis.
+  useEffect(() => {
+    if (phase !== 'play') return;
+    const onVisibility = () => {
+      if (document.hidden && !finished.current) setPhase('paused');
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [phase]);
 
   const leave = (send: () => void) => {
     ui.closeDialog();
@@ -298,6 +331,7 @@ function Run(props: { challenge: Challenge; preview: boolean; onAgain?: () => vo
         />
       )}
       {phase === 'countdown' && <Countdown onDone={() => setPhase('play')} />}
+      {phase === 'paused' && <Paused onResume={() => setPhase('countdown')} />}
       {phase === 'result' && outcome && (
         <div class={`mg-flash ${outcome.won ? 'is-won' : 'is-lost'}`} aria-hidden="true" />
       )}
@@ -326,6 +360,11 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
   // Fokus in den Rahmen (area 'map' hat keine Fokus-Falle), außer die Einleitung hat ihn schon auf „Los“ gesetzt.
   useEffect(() => {
     if (!root.current?.contains(document.activeElement)) root.current?.focus();
+  }, []);
+  // Solange der Rahmen offen ist, tritt die Musik zurück und die Stadt wird still: Das Spiel hat eigene Klänge.
+  useEffect(() => {
+    audio.setFocus(true);
+    return () => audio.setFocus(false);
   }, []);
   return (
     <div
