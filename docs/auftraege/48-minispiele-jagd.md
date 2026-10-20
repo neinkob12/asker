@@ -133,6 +133,11 @@ Spiegelungen, Bloom, Linse). **Offen: auf einem echten Handy messen** (30 fps si
 - Baukasten nur erweitert (die Verkehrskontrolle läuft wie bisher): `cityEnvironment`, `mergeCar`, `buildHeroCar`,
   `buildCar(…, { merged })` (ohne Option wie bisher), `useStage3d(…, { maxDpr })` (ohne Option wie bisher),
   Schattenart `PCFShadowMap` statt des entfernten `PCFSoftShadowMap` (three.js fiel ohnehin darauf zurück und warnte).
+- Ergebnis-Werte für den Rahmen (PR #136): `chaseStats(state)` in `model.ts` liefert bis zu vier Werte (Zeit, Schaden,
+  Knapp vorbei, Streifen zerlegt) in der Form von `MinigameStat`. Anhängen in `ChaseGame.tsx` beim `onFinish`, sobald
+  das dritte Argument in main ist: `onFinish(chaseScore(g), chasePicks(g), chaseStats(g))`.
+- Pause mitten im Spiel (`running` false, dann true): Die Bildschleife steht, die Ton-Schleifen werden beim Anhalten
+  gestoppt und beim Weiterfahren neu gestartet, nichts wird neu aufgebaut, keine Funk-Zeile doppelt.
 - Die Regressionstests in `games/minigame3d.regression.test.ts` laufen unverändert (`Vehicle.missed` ist optional).
 - Headless erscheint `.mg-intro` manchmal nicht: Ein Dialog des frischen Spiels ersetzt die Vorschau. Abhilfe in
   Skripten: die Vorschau erneut öffnen, solange weder `.mg-intro` noch `.mg-run` da ist.

@@ -375,6 +375,8 @@ export interface ChaseState {
   endAt: number;
   /** Ereignisse dieses Schritts (für Ton und Effekte), werden bei jedem Schritt geleert. */
   events: ChaseEvent[];
+  /** Zähler für die Ergebnis-Werte (chaseStats). */
+  tally: { nearMisses: number; blocksPassed: number; copsWrecked: number };
   nextId: number;
   random: () => number;
 }
@@ -699,6 +701,7 @@ export function initChase(setup: ChaseSetup): ChaseState {
     end: null,
     endAt: -1,
     events: [],
+    tally: { nearMisses: 0, blocksPassed: 0, copsWrecked: 0 },
     nextId: 1,
     random,
   };
@@ -1006,6 +1009,7 @@ function collideTraffic(state: ChaseState): void {
       else if (!v.missed && d < r + NEAR_MISS_GAP && p.v > NEAR_MISS_SPEED && v.hitCooldown <= 0) {
         v.missed = true;
         state.shake = clamp(state.shake + NEAR_MISS_SHAKE, 0, 1);
+        state.tally.nearMisses++;
         state.events.push({
           kind: 'nearMiss',
           power: clamp((r + NEAR_MISS_GAP - d) / NEAR_MISS_GAP, 0.2, 1),
@@ -1199,6 +1203,7 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
       if (cop.v > 24 && state.random() < 0.35) {
         cop.state = 'wrecked';
         cop.wreckT = COP_WRECK_SECONDS;
+        state.tally.copsWrecked++;
         v.pushed = 3;
         state.events.push({ kind: 'copCrash', power: 1, x: cop.x, z: cop.z });
       } else {
@@ -1323,6 +1328,7 @@ function stepBlocks(setup: ChaseSetup, state: ChaseState): void {
         b.passed = true;
         if (!b.hit) {
           state.shake = clamp(state.shake + BLOCK_PASS_SHAKE, 0, 1);
+          state.tally.blocksPassed++;
           state.events.push({ kind: 'blockPassed', power: 1, x: c.x, z: c.z });
         }
       }
@@ -1463,6 +1469,34 @@ export function chasePicks(state: ChaseState): string[] {
   if (state.end === 'escaped') picks.push('hideout');
   if (state.end === 'time') picks.push('time');
   return picks;
+}
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface ChaseStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Bis zu vier Ergebnis-Werte: Zeit, Schaden, Knapp vorbei (mit Sperren), zerlegte Streifen. */
+export function chaseStats(state: ChaseState): ChaseStat[] {
+  const t = Math.min(chaseTime(state), TIME_LIMIT);
+  const damage = Math.round(state.player.damage * 100);
+  const stats: ChaseStat[] = [
+    { label: 'Zeit', value: `${Math.round(t)} s`, icon: 'timer' },
+    {
+      label: 'Schaden',
+      value: `${damage} %`,
+      icon: 'car',
+      tone: damage >= 60 ? 'bad' : damage <= 20 ? 'good' : undefined,
+    },
+  ];
+  const risky = state.tally.nearMisses + state.tally.blocksPassed;
+  if (risky > 0) stats.push({ label: 'Knapp vorbei', value: String(risky), icon: 'bolt', tone: 'good' });
+  if (state.tally.copsWrecked > 0)
+    stats.push({ label: 'Streifen zerlegt', value: String(state.tally.copsWrecked), icon: 'siren', tone: 'good' });
+  return stats;
 }
 
 /** Für Screenshots und Playwright: sofort beenden. */
