@@ -264,14 +264,15 @@ export function StashGame(props: MinigameViewProps) {
       const el = labels.current[h.id];
       if (!el) continue;
       const w = widths.current[h.id] ?? 110;
-      const edge = p.x < w / 2 + 8 ? 'left' : p.x > st.width - w / 2 - 8 ? 'right' : null;
+      // Pfeil nur, wenn das Versteck wirklich außerhalb des Bilds liegt.
+      const edge = p.x < 0 ? 'left' : p.x > st.width ? 'right' : null;
       const x = Math.min(st.width - w / 2 - 8, Math.max(w / 2 + 8, p.x));
       let y = Math.min(st.height - 150, Math.max(130, p.y));
       for (let guard = 0; guard < 6; guard++) {
         const hit = placed.find((o) => Math.abs(o.x - x) < (o.w + w) / 2 + 4 && Math.abs(o.y - y) < 32);
         if (!hit) break;
-        // Unten (Bodenverstecke) weicht nach unten aus, oben nach oben.
-        y = h.y + h.h < 0.4 ? hit.y + 34 : hit.y - 34;
+        // Unten (Bodenverstecke) weicht nach unten aus, oben nach oben, solange oben Platz ist (sonst nach unten).
+        y = h.y + h.h < 0.4 || hit.y - 34 < 130 ? hit.y + 34 : hit.y - 34;
       }
       placed.push({ x, y, w });
       el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;

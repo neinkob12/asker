@@ -1008,11 +1008,6 @@ export function createStashScene(
       me.root.rotation.y += (0 - me.root.rotation.y) * Math.min(1, fx.clearT * 3);
     }
     me.root.updateMatrixWorld();
-    me.head.getWorldPosition(v3);
-    const hp = project(v3.x, v3.y + 0.45, v3.z);
-    head.x = hp.x;
-    head.y = hp.y;
-    head.visible = hp.visible;
 
     // --- Pakete.
     for (const p of setup.packages) {
@@ -1082,10 +1077,6 @@ export function createStashScene(
       const focused = fx.focus?.kind === 'hide' && fx.focus.id === h.id;
       const want = closed ? 0 : focused ? 0.55 + 0.2 * Math.sin(t * 6) : 0;
       view.glow.opacity += (want - view.glow.opacity) * Math.min(1, dt * 10);
-      // Verstecke am Boden: Name unter der Bodenkante (im Schnitt), sonst stünde er dir vor der Brust.
-      const sp =
-        h.y + h.h < 0.4 ? project(hideCenter(h), -0.25, FRONT + 0.3) : project(hideCenter(h), h.y + h.h + 0.55, view.z);
-      hideScreen[h.id] = sp;
     }
 
     // --- Tor, Streife, Blaulicht, Klopfen, Reinstürmen.
@@ -1189,6 +1180,18 @@ export function createStashScene(
     sun.target.updateMatrixWorld();
     // Licht ganz am Ende gedimmt (geschafft) bzw. kalt (Razzia).
     if (fx.clearT >= 0) for (const lamp of lamps) lamp.intensity = Math.max(2, lamp.intensity - dt * 8);
+    // Bildschirmlagen erst jetzt, mit der Kamera dieses Bilds.
+    for (const view of hideViews) {
+      const h = view.hide;
+      // Verstecke am Boden: Name unter der Bodenkante (im Schnitt), sonst stünde er dir vor der Brust.
+      hideScreen[h.id] =
+        h.y + h.h < 0.4 ? project(hideCenter(h), -0.25, FRONT + 0.3) : project(hideCenter(h), h.y + h.h + 0.55, view.z);
+    }
+    me.head.getWorldPosition(v3);
+    const hp = project(v3.x, v3.y + 0.45, v3.z);
+    head.x = hp.x;
+    head.y = hp.y;
+    head.visible = hp.visible;
   };
 
   const raycaster = new Raycaster();
