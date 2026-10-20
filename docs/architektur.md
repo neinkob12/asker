@@ -1260,7 +1260,13 @@ Crew mit Werten und Spezialzug, Einsätze, Bestechungsgeld, Polizei-Uhr.
 Handy bildschirmfüllend, Fokus setzt der Rahmen. Abfolge: Einleitung (Titel, Situation, Steuerung für Tastatur und
 Touch, mehr hinter „Mehr dazu“, „Los“ und „<Name> übernimmt (xx %)“) → 3-2-1 (echte Sekunden) → Spiel → Ergebnis
 (Stempel, ein Satz, „Weiter“). Erst „Weiter“ schließt den Rahmen und schickt dann `minigames.finish` (sonst schlösse man
-den Dialog, den die Folgen öffnen). Übergänge (`ui/flow.ts`):
+den Dialog, den die Folgen öffnen). Seit Auftrag 48: Die Einleitung zeigt die Lage aus `difficulty` (`SITUATION_LEVELS`:
+Ruhig, Angespannt, Brenzlig, Kritisch), das Ergebnis die Wertung 0–100 mit der Schwelle (`winAt`) als Marke, „Knapp!“
+bis `CLOSE_MARGIN`, einen Schein in Grün bzw. Rot (`.mg-flash`) und bis zu vier Werte aus dem Spiel (`MinigameStat`).
+Gehen Tab oder App in den Hintergrund, hält der Rahmen das Spiel an (Phase `paused`, weiter mit 3-2-1). Solange der
+Rahmen offen ist, gilt `audio.setFocus(true)`: Musik `FOCUS_MUSIC` (25 %), Geräusche der Stadt aus, Effekte und
+Stimmen bleiben. Am Handy-Bildschirm (Karte zuerst) liegt `.mg-overlay` über Tab-Leiste und Hinweis. Übergänge
+(`ui/flow.ts`):
 
 - Ein Minispiel ersetzt den offenen Dialog; öffnen die Folgen keinen eigenen, kommt der ersetzte nach „Weiter“ zurück.
 - Kommt ein Minispiel aus dem Ausgang einer Konfrontation (Tresor, Bude), wartet es, bis die Ergebnis-Karte der
@@ -1280,13 +1286,19 @@ sich die Karte mit `activeMap()` aus `src/map` und führt nur noch Kamera und ei
 `registerMinigameView(kind, { component, controls: { keys, touch, help? }, layout: 'map' | 'stage', icon,
 previewParams, previewSituation, resultText, resultLabel })`. `resultLabel` gibt besonderen Ausgängen einen eigenen
 Stempel (z.B. „Gas!“ oder „Bestochen“ in Gelb, `tone: 'warn'`; „Aufgegeben“). Vertrag `MinigameViewProps`:
-`challenge`, `preview`, `running` (Bildschleife, Tasten und Zeit nur, solange es läuft), `onFinish(score, picks)`
-(einmal). Baukasten `kit/`:
+`challenge`, `preview`, `running` (Bildschleife, Tasten und Zeit nur, solange es läuft; kann mitten im Spiel false und
+wieder true werden, dann geht es genau dort weiter), `onFinish(score, picks, stats?)` (einmal; `stats` bis zu vier
+`MinigameStat { label, value, icon?, tone? }` nur für die Anzeige, je Spiel aus `<art>Stats` im Modell). Baukasten `kit/`:
 
 - `useFrameLoop(cb, running)`: eigene Bildschleife (die Spielzeit steht still, also laufen `onMapFrame` und die
   Karten-Ebenen nicht), `dt` in echten Sekunden, gedeckelt auf `MAX_DT` 0,05, Pause bei verstecktem Tab.
 - `useGameKeys` (Capture-Phase, ohne Wiederholung), `TouchControls` (Knöpfe ab 56 px, Halten), `useSwipe`, `capture`.
 - `useStageCanvas` (ResizeObserver, Pixelverhältnis bis `MAX_DPR`), `HudBar`, `HudTimer`, `HudMeter`, `ResultStamp`.
+- `palette.ts`: `readPalette()` liest Bedeutungsfarben und Glas als echte Farbwerte für den Canvas (Container,
+  Razzia), einmal beim Aufbau.
+- 3D (`stage3d.ts`, `scene3d.ts`, nur in Spielen, die über `lazyView` laden): `useStage3d(canvas, onResize, { maxDpr })`,
+  `buildCar` (auch `{ merged }`), `buildHeroCar` (deine Karre), `mergeCar`, `cityEnvironment` (Umgebungslicht aus einer
+  im Code gebauten Szene), `lightScene`, `setBlueLight`, `facadeTiles`, `disposeObject`.
 - `goods.ts`: Farbe und Symbol je Ware (`productColor` für die Oberfläche, `packageLook`, `readGoodsPalette`,
   `drawGoodsGlyph` für den Canvas), gleich in Razzia und Container.
 - Klänge: `MINIGAME_SOUNDS` (Synth); eigene Klänge je Spiel in `games/<art>/sounds.ts` über `audio.registerSound`.

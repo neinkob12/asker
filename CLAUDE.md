@@ -374,6 +374,21 @@ Messen: `npm run perf:browser -- --save=public/spielstaende/boss-von-hamburg.jso
 Feedback 16.10.2026 (Tutorial, drei Kunden): In der Mission „Drei Kunden bedienen“ zählt nur der Tipp auf den Spot.
 Läufer anheuern (`staff.runners`, auch `ROLE_FEATURE.runner`) und sich hinstellen (`customers.stand`) sind erst ab
 Stufe 2 frei; `staff.hireRunner` und `customers.standAt` lehnen vorher ab, das Spot-Fenster zeigt beide mit Schloss.
+Auftrag 48 (Minispiele fühlen sich gut an, 20.10.2026, `docs/auftraege/48-minispiele-gefuehl.md`, Notizen je Teil in
+`48-minispiele-<teil>.md`): Rahmen zeigt die Lage aus `difficulty` (Ruhig bis Kritisch), im Ergebnis die Wertung mit
+Schwelle und „Knapp!“ und bis zu vier Werte aus dem Spiel (`onFinish(score, picks, stats?)`, `MinigameStat`, je Spiel
+`<art>Stats` im Modell, nur Anzeige); Pause, wenn Tab oder App in den Hintergrund gehen (`running` kann mitten im Spiel
+false und wieder true werden: dort weitermachen, nichts neu starten); `audio.setFocus` (Musik 25 %, Stadt still);
+am Handy-Bildschirm liegt das Minispiel über der Tab-Leiste. Jagd mit Läden, Fassadenstilen, parkenden Autos und
+Laternen als Wände (`city3d.ts`), „Knapp vorbei“ und Lücke in der Sperre füllen „Abhängen“, Ramm-Warnung
+(`Cop.charging`), Fahr-Bot (`chase/bot.ts`), Baukasten `buildHeroCar`, `cityEnvironment`, `useStage3d(…, { maxDpr })`.
+Straßenkampf mit federnden Haltungen, Licht, Serie, Block hält die Flamme nicht (`HELD_BLOCK_HEAVY`), Test-Bot; Zivi
+oder Kunde: Merkmale zeigen sich nach und nach (`reveal`, `REVEAL_MARGIN`). Razzia als seitlicher Lauf in 3D (neues
+Modell, Score und picks gleich), Bude im Ego-Blick mit Taschenlampe (3D), Tresor erlaubt `CORRECTION` Striche zurück.
+Bewerbungsgespräch mit drei Fragekarten und Druck („Blick halten“, Zone der Person), Verkehrskontrolle mit „Du
+sagtest“, Geduld und sichtbarem Widerspruch. Container mit Licht und Gewicht, Scanner rollt an (`SCANNER_APPROACH`);
+Papiere mit Lupe und Wertewähler zum Vergleichen. Palette für Canvas-Spiele `kit/palette.ts` (`readPalette`). Alle
+Minispiele bleiben aus (`MINIGAMES_ENABLED`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

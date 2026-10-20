@@ -56,3 +56,17 @@ Lead-Session am Ende zusammen.
 - [x] **Ton:** Solange der Rahmen offen ist, tritt die Musik zurück (`audio.setFocus`, `FOCUS_MUSIC` 25 %) und die
   Geräusche der Stadt schweigen; Effekte und Stimmen bleiben.
 - [x] `npm run screenshot:minigames`: wartet auf das HUD und öffnet die Vorschau neu, bis die Einleitung steht.
+
+## Integration
+
+- Alle fünf Kollegen-PRs (#137 Kampf, #138 Schreibtisch, #139 Gespräche, #140 Einbruch, #141 Jagd) ließen sich
+  konfliktfrei mit dem Rahmen zusammenführen; `npm run check` und `npm run build` grün.
+- Ergebnis-Werte aller zehn Spiele hängen am Rahmen (`onFinish(score, picks, <art>Stats(…))`).
+- `readPalette` liegt in `kit/palette.ts` (vorher in `games/stash/draw.ts`, vom Container mitbenutzt).
+- Screenshot-Skript: Vorschau wird neu geöffnet, bis die Einleitung 1,5 s stehen bleibt; Bilder von 3D-Spielen am Handy
+  dürfen länger dauern.
+- Review der Bilder: Jagd, Razzia, Bude, Container, Papiere, Straßenkampf deutlich besser. Offen für eine nächste
+  Runde: Verkehrskontrolle (Beamter wirkt noch wie aus Zylindern gebaut, „Er klopft ans Fenster“ steht zweimal),
+  Zivi oder Kunde (Beine der Figur ragen unter die Karte), echtes Handy messen (alle 3D-Spiele).
+- Wunsch aus dem Einbruch-Teil für den Baukasten: Beschriftung an einem 3D-Punkt, die ausweicht und am Rand als Pfeil
+  steht (Razzia, Jagd und Kontrolle bauen das je selbst).
