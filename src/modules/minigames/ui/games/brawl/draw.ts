@@ -1016,9 +1016,7 @@ interface Shade {
   lx: number;
   ly: number;
   key: string;
-  keySoft: string;
   shadow: string;
-  shadowSoft: string;
   rimX: number;
   rim: string | null;
 }
@@ -1030,10 +1028,8 @@ function shadeFor(light: FigureLight, facing: 1 | -1): Shade {
   return {
     lx: lx / n,
     ly: ly / n,
-    key: alpha(light.keyColor, 0.1 + 0.18 * light.keyAmt),
-    keySoft: alpha(light.keyColor, 0.05 + 0.08 * light.keyAmt),
-    shadow: 'rgba(6, 4, 10, 0.2)',
-    shadowSoft: 'rgba(6, 4, 10, 0.1)',
+    key: alpha(light.keyColor, 0.1 + 0.2 * light.keyAmt),
+    shadow: 'rgba(6, 4, 10, 0.24)',
     rimX: light.rimSide * facing,
     rim: light.rimAmt > 0.04 ? alpha(light.rimColor, Math.min(0.85, light.rimAmt)) : null,
   };
@@ -1059,11 +1055,9 @@ function shadeStroke(ctx: CanvasRenderingContext2D, pts: [number, number][], wid
       ctx.lineTo(bx + ox, by + oy);
       ctx.stroke();
     };
-    // Weich: zwei breite, blasse Striche je Seite statt eines harten.
-    seg(-nx * width * 0.3, -ny * width * 0.3, width * 0.4, sh.shadow);
-    seg(-nx * width * 0.16, -ny * width * 0.16, width * 0.5, sh.shadowSoft);
-    seg(nx * width * 0.14, ny * width * 0.14, width * 0.55, sh.keySoft);
-    seg(nx * width * 0.26, ny * width * 0.26, width * 0.22, sh.key);
+    // Breit und blass, damit es weich wirkt (je Seite ein Strich: das kostet pro Bild am wenigsten).
+    seg(-nx * width * 0.24, -ny * width * 0.24, width * 0.5, sh.shadow);
+    seg(nx * width * 0.2, ny * width * 0.2, width * 0.42, sh.key);
     if (sh.rim) {
       // Randlicht nur an Gliedern, die zur Seite des Schilds zeigen (fast senkrechte Kanten leuchten am stärksten).
       const side = Math.abs(ny) < 0.95 ? Math.sign(nx || 1) : 0;
@@ -1451,17 +1445,14 @@ function drawHead(
 
 /** Licht auf dem Kopf: Verlauf vom Licht weg (Schatten), Glanz oben, Randlicht als Sichel von der Seite. */
 function shadeHead(ctx: CanvasRenderingContext2D, r: number, sh: Shade): void {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 1.05, 0, Math.PI * 2);
-  ctx.clip();
   const g = ctx.createLinearGradient(sh.lx * r, sh.ly * r, -sh.lx * r, -sh.ly * r);
   g.addColorStop(0, sh.key);
   g.addColorStop(0.45, 'rgba(0, 0, 0, 0)');
   g.addColorStop(1, sh.shadow);
   ctx.fillStyle = g;
-  ctx.fillRect(-r * 1.1, -r * 1.1, r * 2.2, r * 2.2);
-  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
   if (sh.rim) {
     const mid = sh.rimX > 0 ? 0 : Math.PI;
     ctx.strokeStyle = sh.rim;

@@ -613,7 +613,7 @@ export function BrawlGame(props: MinigameViewProps) {
         ctx.translate(0, at.y * 2);
         ctx.scale(1, -1);
         ctx.globalAlpha = 0.12;
-        drawFigure(ctx, pose, fig.look, fig.colors, { ...opts, ring: null, opacity: 0.12 });
+        drawFigure(ctx, pose, fig.look, fig.colors, { ...opts, ring: null, opacity: 0.12, light: null });
         ctx.restore();
       }
       if (fighter.state === 'dodge' && !reduced) {
@@ -623,6 +623,7 @@ export function BrawlGame(props: MinigameViewProps) {
           x: at.x + fighter.facing * ppm * 0.35,
           opacity: 0.18,
           ring: null,
+          light: null,
         });
       }
       drawFigure(ctx, pose, fig.look, fig.colors, opts);
