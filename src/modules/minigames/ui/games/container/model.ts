@@ -703,3 +703,35 @@ export function autoPack(setup: PackSetup, state: PackState, steps = Number.POSI
   }
   return placed;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Auftrag 48). */
+export interface PackStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Werte fürs Ergebnis: Tarnung, verstaute Ware, versteckte Blöcke, auffällige Stellen im Röntgen. */
+export function containerStats(setup: PackSetup, state: PackState): PackStat[] {
+  const a = analyze(setup, state);
+  const goods = setup.pieces.filter((p) => p.kind === 'goods').length;
+  const hidden = hiddenGoods(setup, state, a).length;
+  const cover = a.placedGoods > 0 ? Math.round(a.cover * 100) : 0;
+  return [
+    { label: 'Tarnung', value: `${cover} %`, icon: 'eye', tone: cover >= 70 ? 'good' : cover < 40 ? 'bad' : undefined },
+    {
+      label: 'Verstaut',
+      value: `${a.placedGoodsPieces}/${goods}`,
+      icon: 'package',
+      tone: a.placedGoodsPieces === goods ? 'good' : 'bad',
+    },
+    {
+      label: 'Ganz versteckt',
+      value: `${hidden}/${goods}`,
+      icon: 'check',
+      tone: hidden === goods ? 'good' : undefined,
+    },
+    { label: 'Im Röntgen', value: String(a.flagged), icon: 'scan', tone: a.flagged === 0 ? 'good' : 'bad' },
+  ];
+}

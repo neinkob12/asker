@@ -23,6 +23,7 @@ import {
   type PapersState,
   papersPicks,
   papersScore,
+  papersStats,
   type Signal,
 } from './model';
 
@@ -260,5 +261,22 @@ describe('Papiere fälschen: spielbar', () => {
     expect(rate(0.9, 1.6)).toBeGreaterThan(0.9);
     expect(rate(0.2, 2)).toBeGreaterThan(0.9);
     expect(rate(0.9, 2)).toBeLessThan(0.2);
+  });
+});
+
+describe('Papiere fälschen: Werte fürs Ergebnis', () => {
+  it('behoben, beanstandet, gelesen', () => {
+    const setup = createPapers(3, 0.5);
+    const s = initPapers(setup);
+    fixAll(setup, s);
+    run(setup, s, 200);
+    const stats = papersStats(setup, s);
+    expect(stats[0]).toMatchObject({
+      label: 'Behoben',
+      value: `${setup.wrong.length}/${setup.wrong.length}`,
+      tone: 'good',
+    });
+    expect(stats[1]).toMatchObject({ value: `0/${MAX_HITS}`, tone: 'good' });
+    expect(stats[2].value).toBe(`${setup.slots.length}/${setup.slots.length}`);
   });
 });

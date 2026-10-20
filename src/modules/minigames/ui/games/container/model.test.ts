@@ -7,6 +7,7 @@ import {
   bounds,
   type CoverKind,
   canPlace,
+  containerStats,
   createPacking,
   cycle,
   finishPacking,
@@ -326,5 +327,16 @@ describe('Container packen: machbar', () => {
     ])
       place(t, ts, id++, 0, x, y);
     expect(hiddenGoods(t, ts, analyze(t, ts))).toEqual([0]);
+  });
+});
+
+describe('Container packen: Werte fürs Ergebnis', () => {
+  it('Tarnung, verstaut, versteckt, Röntgen', () => {
+    const s = createPacking(1, 0.5, INPUT);
+    const st = initPacking(s);
+    expect(containerStats(s, st).map((x) => x.label)).toEqual(['Tarnung', 'Verstaut', 'Ganz versteckt', 'Im Röntgen']);
+    autoPack(s, st);
+    const goods = s.pieces.filter((p) => p.kind === 'goods').length;
+    expect(containerStats(s, st)[1]).toMatchObject({ value: `${goods}/${goods}`, tone: 'good' });
   });
 });

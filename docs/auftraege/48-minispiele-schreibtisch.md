@@ -83,6 +83,14 @@ Playwright, Handy-Ansicht 390 × 844, CPU 4× gebremst, Software-Rendering (head
 - Papiere: vorher etwa 46 bis 51, jetzt etwa 54 bis 65 (Faser und Schatten auf den Papieren kosten beim Malen; Finger
   und Lesebalken mit `will-change`). Am echten Handy unkritisch (DOM, kaum Arbeit pro Bild), beobachten.
 
+## Für die Integration (Rahmen-PR #136)
+
+- Ergebnis-Werte vorbereitet, Form wie `MinigameStat`: `containerStats(setup, state)` (Tarnung, Verstaut, Ganz versteckt,
+  Im Röntgen) und `papersStats(setup, state)` (Behoben, Beanstandet, Gelesen). Anhängen als drittes Argument von
+  `onFinish`, sobald #136 in main ist (`finish()` in `ContainerGame.tsx` bzw. `PapersGame.tsx`).
+- Pause (`running` false und wieder true): Beide Spiele hängen Bildschleife, Tasten und Eingaben an `running` und machen
+  danach genau dort weiter; Ton-Schleifen gibt es keine, Start-Geräusche nur einmal.
+
 ## Offen
 
 - Container: Kran, der das nächste Teil bringt, als echte Mechanik (Reihenfolge) statt freier Wahl; nur sinnvoll, wenn
