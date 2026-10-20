@@ -19,7 +19,7 @@ import { SurveillanceOverlay } from './overlay';
 import { mapPerf } from './perf';
 import { PrecipitationLayer } from './precipitation';
 import { type MapLayerInstance, mapLayers } from './registry';
-import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
+import { BASE_LAYERS, baseStyle, borderColor, LANDMARK_SOURCE, labelColor, townColor } from './style';
 
 setWorkerUrl(workerUrl);
 
@@ -226,6 +226,10 @@ export class GameMap implements MapController {
     this.paint(L.water, 'fill-color', look.water);
     this.paint(L.waterLine, 'line-color', look.waterLine);
     this.paint(L.waterway, 'line-color', look.water);
+    this.paint(L.town, 'fill-color', townColor(look));
+    for (const id of [L.border, L.stateBorder]) this.paint(id, 'line-color', borderColor(look));
+    this.paint(L.placeLabels, 'text-color', labelColor(look));
+    this.paint(L.placeLabels, 'text-halo-color', look.land);
     this.paint(L.rail, 'line-color', look.rail);
     this.paint(L.roadGlow, 'line-color', look.majorCasing);
     this.paint(L.roadGlow, 'line-opacity', look.glow);

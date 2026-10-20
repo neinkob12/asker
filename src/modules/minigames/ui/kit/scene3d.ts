@@ -7,13 +7,14 @@ import {
   AdditiveBlending,
   BackSide,
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
   CanvasTexture,
   CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
   DirectionalLight,
+  DoubleSide,
   ExtrudeGeometry,
   Float32BufferAttribute,
   Fog,
@@ -35,7 +36,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export type DayPhase = 'day' | 'dusk' | 'night';
 
@@ -647,13 +648,14 @@ function taper(geo: BufferGeometry, from: number, to: number, factor: number): v
 }
 
 /** Seitenprofil (u nach vorn, v nach oben) quer zur Fahrtrichtung extrudiert, Nase in −z, abgerundete Kanten. */
-function profileBody(points: [number, number][], width: number, bevel: number): BufferGeometry {
+function profileBody(points: [number, number][], width: number, bevel: number, steps = 1): BufferGeometry {
   const shape = new Shape();
   shape.moveTo(points[0][0], points[0][1]);
   for (const [u, v] of points.slice(1)) shape.lineTo(u, v);
   shape.closePath();
   const geo = new ExtrudeGeometry(shape, {
     depth: width - 2 * bevel,
+    steps,
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel * 0.8,
@@ -665,6 +667,68 @@ function profileBody(points: [number, number][], width: number, bevel: number): 
   return geo;
 }
 
+/** Bogen über einem Rad (für das Seitenprofil): von unten vorn über oben nach unten hinten, u nach vorn. */
+function archPoints(uc: number, r: number, cy: number, bottom: number): [number, number][] {
+  const pts: [number, number][] = [];
+  const n = 9;
+  // Das Profil läuft unten von hinten nach vorn (u wächst): Bogen von links (π) nach rechts (0).
+  pts.push([uc - r, bottom]);
+  for (let k = 0; k <= n; k++) {
+    const a = Math.PI - (k / n) * Math.PI;
+    pts.push([uc + Math.cos(a) * r, cy + Math.sin(a) * r]);
+  }
+  pts.push([uc + r, bottom]);
+  return pts;
+}
+
+/**
+ * Weiche Normalen (Auftrag 49): ExtrudeGeometry hat je Dreieck eigene Ecken, die Karosserie sähe facettiert aus. Ecken
+ * zusammenführen, Normalen glätten; die Fasen (bevel) halten die Kanten trotzdem knackig.
+ */
+function smoothBody(geo: BufferGeometry): BufferGeometry {
+  const plain = new BufferGeometry();
+  plain.setAttribute('position', geo.getAttribute('position'));
+  const merged = mergeVertices(plain, 1e-4);
+  merged.computeVertexNormals();
+  geo.dispose();
+  return merged;
+}
+
+/** Glocke um z0 mit Halbbreite w (0 bis 1). */
+function bump(z: number, z0: number, w: number): number {
+  const t = Math.max(0, 1 - Math.abs(z - z0) / w);
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Grundriss formen (Auftrag 49): breite Hüften über den Rädern, schmalere Enden, runde Ecken an Nase und Heck. z ist
+ * die Längsachse (Heck +z), x quer. Braucht Unterteilung quer (steps), damit die Ecken rund werden.
+ */
+function shapePlan(
+  geo: BufferGeometry,
+  o: { half: number; rearAxle: number; frontAxle: number; hip: number; frontHip: number; round: number },
+): void {
+  const p = geo.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    // Hüften wölben sich zwischen Schweller und Gürtellinie.
+    const band = bump(y, 0.6, 0.38);
+    const flare = 1 + band * (o.hip * bump(z, o.rearAxle, 1.1) + o.frontHip * bump(z, o.frontAxle, 0.9));
+    // Enden schmaler (in der Draufsicht rund), oben etwas mehr.
+    const end = Math.max(0, Math.abs(z) - 1.75) / 0.6;
+    const narrow = 1 - 0.09 * end * end;
+    const nx = x * flare * narrow;
+    // Ecken: Nase und Heck außen zurückziehen.
+    const q = Math.min(1, Math.abs(nx) / o.half);
+    const pull = o.round * q * q * q;
+    p.setX(i, nx);
+    p.setZ(i, z > 1.6 ? z - pull : z < -1.6 ? z + pull : z);
+  }
+  geo.computeVertexNormals();
+}
+
 /**
  * Deine Karre (Auftrag 48): ein flaches, breites Coupé aus einem extrudierten Seitenprofil mit runden Kanten,
  * Kabine aus getöntem Glas mit Dach, breite Hüften hinten, Heck mit durchgehendem Leuchtband, Diffusor, vier
@@ -673,6 +737,9 @@ function profileBody(points: [number, number][], width: number, bevel: number): 
  */
 export function buildHeroCar(options: { color: number; accent: number; plate: string }): HeroCar {
   const g = new Group();
+  // Achsen (Abstand zur Mitte, Heck +z).
+  const REAR_AXLE = 1.38;
+  const FRONT_AXLE = 1.45;
   const W = 2.04;
   const wheelR = 0.37;
   const lacquer = new MeshPhysicalMaterial({
@@ -692,72 +759,97 @@ export function buildHeroCar(options: { color: number; accent: number; plate: st
   });
   const black = new MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.55, metalness: 0.2 });
   const glass = new MeshPhysicalMaterial({
-    color: 0x0a0e14,
-    metalness: 0.3,
-    roughness: 0.04,
+    color: 0x18202c,
+    metalness: 0.55,
+    roughness: 0.03,
     clearcoat: 1,
     clearcoatRoughness: 0.02,
-    envMapIntensity: 1.6,
+    envMapIntensity: 2.4,
   });
-  // Karosserie unten (u nach vorn): Nase, Haube, Gürtellinie, Entenbürzel, Heck.
+  // Karosserie (u nach vorn): Nase, Haube, Gürtellinie, Entenbürzel, Heck, unten mit Radläufen über beiden Achsen.
+  // Quer unterteilt (steps), damit der Grundriss Hüften und runde Ecken bekommt (shapePlan).
   const lower: [number, number][] = [
-    [2.24, 0.26],
-    [2.32, 0.42],
-    [2.22, 0.62],
-    [1.6, 0.74],
-    [0.95, 0.82],
-    [0.42, 0.88],
-    [-1.3, 0.92],
-    [-1.9, 0.96],
-    [-2.22, 1.0],
-    [-2.3, 0.9],
-    [-2.32, 0.5],
-    [-2.22, 0.26],
+    [2.26, 0.28],
+    [2.34, 0.44],
+    [2.26, 0.64],
+    [1.7, 0.86],
+    [1.0, 0.91],
+    [0.45, 0.94],
+    [-1.3, 0.96],
+    [-1.9, 0.99],
+    [-2.22, 1.02],
+    [-2.32, 0.92],
+    [-2.34, 0.52],
+    [-2.24, 0.28],
+    ...archPoints(-REAR_AXLE, 0.45, wheelR, 0.28),
+    ...archPoints(FRONT_AXLE, 0.43, wheelR - 0.01, 0.28),
   ];
-  const bodyGeo = profileBody(lower, W, 0.07);
-  taper(bodyGeo, 0.55, 1.02, 0.9);
-  const body = new Mesh(bodyGeo, lacquer);
+  const bodyGeo = profileBody(lower, W, 0.09, 8);
+  taper(bodyGeo, 0.55, 1.04, 0.88);
+  shapePlan(bodyGeo, {
+    half: W / 2,
+    rearAxle: REAR_AXLE,
+    frontAxle: -FRONT_AXLE,
+    hip: 0.09,
+    frontHip: 0.04,
+    round: 0.1,
+  });
+  const body = new Mesh(smoothBody(bodyGeo), lacquer);
   body.castShadow = true;
   body.receiveShadow = true;
   g.add(body);
+  // Unterboden zwischen den Radläufen (sonst sähe man durch die Bögen), Radhausschalen hinter den Rädern.
+  const tub = new Mesh(new BoxGeometry(W * 0.6, 0.5, 4.3), black);
+  const linerMat = new MeshStandardMaterial({ color: 0x08090b, roughness: 0.9, side: DoubleSide });
+  tub.position.set(0, 0.52, 0);
+  g.add(tub);
+  for (const [z, r] of [
+    [REAR_AXLE, 0.45],
+    [-FRONT_AXLE, 0.43],
+  ]) {
+    for (const side of [-1, 1]) {
+      const liner = new Mesh(
+        new CylinderGeometry(r - 0.01, r - 0.01, 0.34, 18, 1, true, -Math.PI / 2, Math.PI),
+        linerMat,
+      );
+      liner.rotation.z = Math.PI / 2;
+      liner.position.set(side * (W / 2 - 0.2), wheelR, z);
+      g.add(liner);
+    }
+  }
   // Kabine: Glas, Fließheck, nach oben schmaler; Dach in Lack darüber.
   const cabin: [number, number][] = [
-    [0.5, 0.86],
-    [-0.3, 1.21],
-    [-0.98, 1.23],
-    [-1.75, 0.94],
+    [0.5, 0.9],
+    [-0.3, 1.22],
+    [-0.98, 1.24],
+    [-1.8, 0.97],
   ];
-  const cabinGeo = profileBody(cabin, W * 0.84, 0.05);
-  taper(cabinGeo, 0.86, 1.24, 0.78);
-  g.add(new Mesh(cabinGeo, glass));
+  const cabinGeo = profileBody(cabin, W * 0.82, 0.07, 4);
+  taper(cabinGeo, 0.9, 1.25, 0.76);
+  g.add(new Mesh(smoothBody(cabinGeo), glass));
   const roofGeo = profileBody(
     [
-      [-0.26, 1.195],
-      [-0.32, 1.24],
-      [-0.98, 1.26],
-      [-1.2, 1.21],
+      [-0.26, 1.205],
+      [-0.32, 1.25],
+      [-0.98, 1.27],
+      [-1.2, 1.22],
     ],
-    W * 0.7,
+    W * 0.66,
     0.03,
   );
   g.add(new Mesh(roofGeo, lacquer));
-  // Hüften über den Hinterrädern, flacher vorn.
+  // Fensterlinie: schmale Chromleiste unter der Seitenscheibe; Seitenschweller und Spiegel.
   for (const side of [-1, 1]) {
-    const hip = new Mesh(new SphereGeometry(1, 20, 12), lacquer);
-    hip.scale.set(0.27, 0.32, 0.9);
-    hip.position.set(side * (W / 2 - 0.06), 0.64, 1.35);
-    hip.castShadow = true;
-    g.add(hip);
-    const front = new Mesh(new SphereGeometry(1, 16, 10), lacquer);
-    front.scale.set(0.18, 0.24, 0.72);
-    front.position.set(side * (W / 2 - 0.08), 0.6, -1.4);
-    g.add(front);
-    // Seitenschweller und Spiegel.
-    const skirt = new Mesh(new BoxGeometry(0.08, 0.14, 2.3), black);
-    skirt.position.set(side * (W / 2 - 0.02), 0.3, 0);
+    const trim = new Mesh(new BoxGeometry(0.02, 0.025, 2.1), CHROME);
+    trim.position.set(side * W * 0.41, 0.95, 0.62);
+    trim.rotation.x = -0.02;
+    g.add(trim);
+    const skirt = new Mesh(new BoxGeometry(0.08, 0.12, 1.8), black);
+    skirt.position.set(side * (W / 2 - 0.01), 0.32, 0);
     g.add(skirt);
-    const mirror = new Mesh(new BoxGeometry(0.2, 0.1, 0.14), lacquer);
-    mirror.position.set(side * (W * 0.47), 0.98, 0.28);
+    const mirror = new Mesh(new SphereGeometry(1, 12, 8), lacquer);
+    mirror.scale.set(0.12, 0.06, 0.08);
+    mirror.position.set(side * (W * 0.5), 1.0, 0.2);
     g.add(mirror);
   }
   // Streifen in Akzentfarbe über Haube, Dach und Heck (zwei Bänder).
@@ -770,22 +862,23 @@ export function buildHeroCar(options: { color: number; accent: number; plate: st
       m.rotation.x = -Math.atan2(v1 - v0, u0 - u1);
       g.add(m);
     };
-    stripe(2.2, 0.62, 1.6, 0.74);
-    stripe(1.6, 0.74, 0.95, 0.82);
-    stripe(0.95, 0.82, 0.45, 0.88);
-    stripe(-0.34, 1.24, -0.98, 1.26);
-    stripe(-1.9, 0.96, -2.2, 1.0);
+    stripe(2.2, 0.66, 1.7, 0.86);
+    stripe(1.7, 0.86, 1.0, 0.91);
+    stripe(1.0, 0.91, 0.45, 0.94);
+    stripe(-0.34, 1.25, -0.98, 1.27);
+    stripe(-1.9, 0.99, -2.18, 1.02);
   }
   // Heck: Leuchtband, Rückleuchten, Kennzeichen, Diffusor, Endrohre.
   const rear = glow(0xff1e10, 1.4, 0x4a0604);
   const reverse = glow(0xf4f6ff, 0, 0x30333a);
-  const zTail = 2.32;
-  const band = new Mesh(new BoxGeometry(W * 0.86, 0.045, 0.04), rear);
+  // Heckfläche (mit Fase) liegt bei etwa 2,39.
+  const zTail = 2.37;
+  const band = new Mesh(new BoxGeometry(W * 0.74, 0.045, 0.04), rear);
   band.position.set(0, 0.86, zTail + 0.02);
   g.add(band);
   for (const side of [-1, 1]) {
-    const lamp = new Mesh(new BoxGeometry(0.46, 0.13, 0.05), rear);
-    lamp.position.set(side * 0.66, 0.77, zTail + 0.03);
+    const lamp = new Mesh(new BoxGeometry(0.4, 0.13, 0.05), rear);
+    lamp.position.set(side * 0.56, 0.77, zTail + 0.03);
     g.add(lamp);
     const rev = new Mesh(new BoxGeometry(0.12, 0.06, 0.05), reverse);
     rev.position.set(side * 0.3, 0.74, zTail + 0.04);
@@ -853,7 +946,7 @@ export function buildHeroCar(options: { color: number; accent: number; plate: st
   const rimMat = new MeshStandardMaterial({ map: rimTexture(), metalness: 0.8, roughness: 0.35 });
   const tireMat = new MeshStandardMaterial({ color: 0x101113, roughness: 0.92 });
   const wheels: Mesh[] = [];
-  for (const z of [-1.45, 1.38]) {
+  for (const z of [-FRONT_AXLE, REAR_AXLE]) {
     for (const side of [-1, 1]) {
       const tire = new Mesh(new CylinderGeometry(wheelR, wheelR, 0.32, 24), tireMat);
       tire.rotation.order = 'YXZ';

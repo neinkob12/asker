@@ -9,6 +9,7 @@ import { formatEuro } from '../../../../../core';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
 import { HitStop } from '../../kit/indoor3d';
+import { PauseButton } from '../../kit/pause';
 import { phaseOf } from '../../kit/scene3d';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { useStage3d } from '../../kit/stage3d';
@@ -620,6 +621,7 @@ export function SearchGame(props: MinigameViewProps) {
         </span>
       ))}
       <HudBar class="search__hud">
+        <PauseButton />
         <HudTimer seconds={hud.left} total={setup.duration} urgentAt={7} />
         <span class="search__stashes" role="img" aria-label={`${hud.stashes} von ${setup.stashes} Verstecken`}>
           {Array.from({ length: setup.stashes }, (_, i) => (

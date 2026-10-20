@@ -366,6 +366,9 @@ Rang-Widget mehr (der Rang wird weiter berechnet); oben links am Startbildschirm
 gegen Schwarzgeld je Art, Ort per `ui.pickLocation`, `spots.found`), daneben breiter Ruf und Reviere. Die Reviere sind eine
 Seite: Kacheln Ruf (Slot `'territory.tiles'`, Tipp zeigt die letzten Gründe) und Fortschritt, darunter die Veedel als
 Tabelle (Einfluss, Spots, Heat); Spots stehen in den Veedel-Seiten, Stadtleben und Polizei-Karte sind weg.
+Karte weit draußen (14.10.2026): Unter `OVERVIEW_ZOOM` (9,5, `src/map/style.ts`) ist die Grundkarte ein Atlas: nur
+Autobahnen (schmaler), Flüsse, Wald, Städte als Flächen mit Namen, Landes- und Staatsgrenzen; Köln im Überblick und
+näher bleibt wie bisher. Details: `src/map/README.md`, Abschnitt "Städte und Deutschland-Ansicht".
 Feedback 16.10.2026 (Ruckeln bei vielen Bestellungen, Hamburg): Lieferungen fahren auf der Karte als Konvoi, ein
 Fahrzeug je Lieferant und Ziel mit Etikett „3 Lieferungen · 62 %“ (`shipmentConvoys` in `suppliers/ui/convoys.ts`), und
 nur die der aktiven Stadt; Fahrten der Logistik nur, wenn sie die aktive Stadt berühren (`tripTouchesCity`). Die Flotte
@@ -389,6 +392,21 @@ Bewerbungsgespräch mit drei Fragekarten und Druck („Blick halten“, Zone der
 sagtest“, Geduld und sichtbarem Widerspruch. Container mit Licht und Gewicht, Scanner rollt an (`SCANNER_APPROACH`);
 Papiere mit Lupe und Wertewähler zum Vergleichen. Palette für Canvas-Spiele `kit/palette.ts` (`readPalette`). Alle
 Minispiele bleiben aus (`MINIGAMES_ENABLED`).
+Auftrag 49 (Minispiele, zweite Runde, 20.10.2026, `docs/auftraege/49-minispiele-runde-2.md`, Notizen je Teil in
+`49/<teil>.md`): Spielhalle in Einstellungen › Minispiele (Panel `minigames.arcade`, `ui/arcade.tsx`: jedes Spiel als
+Vorschau mit Lage, neuer Seed je Start und „Nochmal“, Bestwert pro Gerät in `ui/records.ts`, localStorage
+`koeln-tycoon:minigames`, origin `ARCADE_ORIGIN`, nichts im Spielstand). Esc hält jedes Minispiel an, am Handy der
+Pause-Knopf `<PauseButton />` aus `kit/pause.tsx` vorn in der HUD-Leiste (der Rahmen gibt `PauseContext` nur, solange
+das Spiel läuft); in der Vorschau „Zurück“ und „Aufhören“; am Handy sitzen Einleitung, Pause und Ergebnis unten. Jede
+Art hat eine Schwierigkeits-Simulation (`model.balance.test.ts`: guter, schwacher, kein Spieler bei 0,2/0,5/0,9).
+Jagd mit Rückspiegel (`MIRROR_RANGE`, `setMirror`), Hit-Stop, „Knapp vorbei“ lädt Turbo (`NEAR_MISS_TURBO`), Unfälle je
+Stufe (`CRASH_FACTOR`). Kampf mit Figuren aus Kapseln, Zuschauern (`brawl/crowd.ts`), `FOE_HP` 140, Crew zieht nur mit,
+wenn du kämpfst; Tresor hakt an der Zahl (`catchTime`), Störklicks ab `DECOY_FROM`, Schwung. Razzia mit Rammbock zum
+Schluss (`RAM_FROM`), `scene.warm` gegen Ruckler; Bude als Gang durch die Wohnung (Türen im Flur, `RoomView.exits`);
+Innenraum-Baukasten `kit/indoor3d.ts` (`ParticlePool`, `createFlashlight`, `createCrackLight`, `HitStop`). Zivi mit
+ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung: ohne Druck verrät niemand etwas
+(`TENSE_NEEDED`), „Schweigen aushalten“ (`SILENCE`, `AFTERWORDS`), Hände auf dem Tisch; Container lobt dichtes Packen
+(„Passt! ×n“, „Reihe dicht!“), Scanner je Stufe schärfer (`SCANNER_STRENGTH`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
 import { HudBar, HudTimer } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture, TouchControls } from '../../kit/TouchControls';
 import { useFrameLoop } from '../../kit/useFrameLoop';
@@ -514,6 +515,7 @@ export function SafeGame(props: MinigameViewProps) {
         onPointerCancel={onPointerUp}
       />
       <HudBar class="safe__hud">
+        <PauseButton />
         <HudTimer seconds={hud.left} total={setup.duration} urgentAt={10} />
         <span class="safe__dots" role="img" aria-label={`${cracked(s)} von 3 Zahlen`}>
           {[0, 1, 2].map((i) => (

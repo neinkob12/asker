@@ -297,6 +297,14 @@ Rahmen öffnet sich nach dem Laden von selbst. Fragerunde als Pop-ups in der Ses
 als Gespräch mit Widersprüchen aus dem Auto, Tresor leichter. Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck und die
 Optik der 2D-Spiele folgen als Auftrag 48. Eine Session.
 
+### Minispiele, zweite Runde (20.10.2026)
+
+[Auftrag 48](48-minispiele-gefuehl.md) (Minispiele fühlen sich gut an, PRs #136 bis #141) ist erledigt.
+[Auftrag 49](49-minispiele-runde-2.md) baut darauf auf: eine steuernde Session (Rahmen, Spielhalle, Pause, Doku) und
+fünf Kollegen-Sessions (A Jagd, B Kontrolle und Papiere, C Kampf und Tresor, D Razzia und Bude, E Container, Zivi und
+Bewerbung), jede mit eigenen Ordnern, Notizen in `49/<teil>.md`, Schwierigkeit als Simulation im Test. Das Büro erlaubt
+höchstens fünf Nachrichten pro Stunde zwischen Sessions: Befunde für alle stehen deshalb im Plan.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.

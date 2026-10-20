@@ -1671,6 +1671,41 @@ spricht der Beamte mit `audio.speak` (Stimme `voiceFor` aus dem Seed), roter Bli
 über `PROXIMITY_RANGE` (16) Striche; `crossedTarget` meldet das Überfahren der richtigen Zahl in der richtigen
 Richtung (eigener Klick, Ausschlag am Stethoskop).
 
+### Auftrag 49: Minispiele, zweite Runde (20.10.2026)
+
+Auf Grundlage von Auftrag 48 hat eine steuernde Session fünf Kollegen-Sessions gestartet (Plan, Regeln und Befunde in
+`docs/auftraege/49-minispiele-runde-2.md`, Notizen mit Messwerten vorher und nachher je Teil in
+`docs/auftraege/49/<teil>.md`). Die Minispiele bleiben im Spiel aus (`MINIGAMES_ENABLED = false`).
+
+**Spielhalle** (`minigames/ui/arcade.tsx`): Abschnitt „Minispiele“ in den Einstellungen (Slot `core.settings`), Panel
+`minigames.arcade` (auch in der Suche): die zehn Arten als Kacheln mit Lage Leicht, Normal, Schwer (0,25, 0,5, 0,85).
+`playInArcade` baut eine Vorschau (`previewChallenge`) mit `origin.module = ARCADE_ORIGIN` und neuem Seed aus
+`nextArcadeSeed`; am Handy-Bildschirm wird das Handy weggelegt und nach „Weiter“ wieder bei der Spielhalle geöffnet
+(`backToArcade`). Bestwerte pro Gerät in `ui/records.ts` (`loadRecords`, `recordResult`; localStorage
+`koeln-tycoon:minigames` mit Ersatz im Speicher, wenn er gesperrt ist), nie im Spielstand. Jede Vorschau trägt ihr
+Ergebnis ein; das Ergebnis zeigt „Neuer Bestwert!“ bzw. den Bestwert.
+
+**Rahmen.** Esc hält das Spiel an (Spiele, die Esc selbst brauchen, fangen die Taste mit `useGameKeys` vorher ab,
+z.B. die Papiere). Für das Handy gibt es `<PauseButton />` (`kit/pause.tsx`): Der Rahmen setzt `PauseContext` nur in
+der Phase `play`, sonst zeichnet der Knopf nichts; die Spiele setzen ihn vorn in ihre HUD-Leiste. In der Vorschau hat
+die Einleitung „Zurück“ und die Pause „Aufhören“ (vorher kam man nur durch Zuendespielen hinaus), in der Spielhalle
+gibt es kein „übernimmt“. „Nochmal“ bringt einen neuen Seed. Am Handy (bis 760 px) sitzen Einleitung, Pause und
+Ergebnis unten (`place-items: end center`), die 3-2-1 in der Mitte; mit dem Finger fällt die Tastatur-Zeile weg.
+
+**Schwierigkeit als Test.** Jede Art misst in `model.balance.test.ts` (bzw. in `model.test.ts`) mit einem guten, einem
+schwachen und keinem Spieler (Bots je Spiel, z.B. `chase/bot.ts` mit `createClumsyPilot`, `safe/bot.ts`) die
+Gewinnrate bei 0,2, 0,5 und 0,9. Richtwerte: gut bei 0,5 85 bis 95 %, bei 0,9 60 bis 80 %; schwach bei 0,5 30 bis
+60 %; ohne Eingabe nie.
+
+| Teil | Was neu ist |
+| --- | --- |
+| A Jagd | Rückspiegel (`MIRROR_RANGE` 120 m, zweite Kamera in eine kleine Textur, am Handy halbe Auflösung, jedes dritte Bild; Rahmen glüht rot bei Ramm-Warnung), Hit-Stop bei harten Treffern (40 bis 90 ms), „Knapp vorbei“ lädt Turbo (`NEAR_MISS_TURBO`), Unfälle kosten je Stufe weniger (`CRASH_FACTOR`, `RAM_DAMAGE { easy, hard }`, `COP_SPEED.hard` 0,95), Karre in Rot, am Handy keine Bewegungsunschärfe |
+| B Kontrolle, Papiere | Schwierigkeit mit Test-Spielern abgestimmt (`model.balance.test.ts` je Spiel), Mess-Szenen `perf-browser --scenes=kontrolle,papiere` |
+| C Kampf, Tresor | Figuren aus verjüngten Kapseln mit Licht, Schatten und Randlicht (`volumeLimb`, `drawTorso`), atmen, angeschlagene Haltung, Ebenen weiter auseinander (`LANE_DEPTH`), Zuschauer (`crowd.ts`), `FOE_HP` 140, Crew pausiert ohne deine Eingabe (`CREW_IDLE_AFTER`); Tresor hakt an der Zahl (`catchTime`, `CATCH_EASY`/`CATCH_HARD`, Kreidestrich), Störklicks (`DECOY_FROM`, `DECOY_TWO_FROM`), Schwung (`SPIN_FRICTION`), Messing und Kratzer |
+| D Razzia, Bude | Baukasten `kit/indoor3d.ts` (`ParticlePool`, `createFlashlight`, `createCrackLight`, `policeBlink`, `HitStop`); Bude als Gang durch die Wohnung (Türen im Flur, `innerDoor`, `RoomView.exits`, `scene.walk`), Klick trifft, was im Licht ist (`DEAD_ZONE`), weicherer Kegel; Razzia mit Rammbock in den letzten `RAM_FROM` Sekunden, „Knapp!“ (`CLOSE_CALL`), Hinweis am Ort, am Handy näher, `scene.warm` gegen den Ruckler beim ersten Schwenk; Mess-Szenen `--scenes=razzia,bude` |
+| E Container, Zivi, Bewerbung | Zivi mit ganzer Figur (`Body` in `figure.tsx`) und Requisiten (`TellShow`), Tempo steigt (`TEMPO_END`, `FIRST_CARD`), gemalte Straße; Bewerbung: ohne Druck verrät niemand etwas (`TENSE_NEEDED`), „Schweigen aushalten“ (`SILENCE`, `AFTERWORDS`, `Cue.bonus`), Hände auf dem Tisch (`Hands.tsx`); Container lobt dichtes Packen (`snugness`, `fullColumns`), Material in der Ablage, Scanner je Stufe schärfer (`SCANNER_STRENGTH`, `TIME_FACTOR`) |
+| F Rahmen | Spielhalle, Esc und Pause-Knopf, Karten unten am Handy, „Zurück“/„Aufhören“ in der Vorschau (siehe oben) |
+
 ## Qualität
 
 - `npm run check` = Typecheck + `npm run lint` (Biome + `scripts/check-boundaries.mjs`) + Tests.

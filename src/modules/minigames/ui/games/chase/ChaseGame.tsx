@@ -12,6 +12,7 @@ import { audio, haptic, Icon, type LoopHandle, prefersReducedMotion, useGame } f
 import { activeCity } from '../../../../city';
 import { getVeedel } from '../../../../veedel';
 import { HudBar, HudTimer } from '../../kit/hud';
+import { PauseButton } from '../../kit/pause';
 import { phaseOf } from '../../kit/scene3d';
 import { useStage3d } from '../../kit/stage3d';
 import { capture, TouchControls } from '../../kit/TouchControls';
@@ -739,6 +740,7 @@ export function ChaseGame(props: MinigameViewProps) {
       />
 
       <HudBar class="chase-top">
+        <PauseButton />
         <HudTimer seconds={hud.left} total={TIME_LIMIT} urgentAt={15} />
         <div class="chase-meter chase-meter--shake">
           <span class="chase-meter__head">
