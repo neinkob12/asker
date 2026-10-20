@@ -370,3 +370,23 @@ export function searchPicks(setup: SearchSetup, state: SearchState): string[] {
   if (state.alerted) picks.push('noise');
   return picks;
 }
+
+/** Ein Wert unter der Wertung (Form wie MinigameStat im Rahmen, Lead-PR #136). */
+export interface SearchStat {
+  label: string;
+  value: string;
+  icon?: string;
+  tone?: 'good' | 'bad';
+}
+
+/** Ergebnis-Werte: Verstecke, durchsucht, Nachbarn (höchstens vier). Geld zeigt der Rahmen schon im Satz. */
+export function searchStats(setup: SearchSetup, state: SearchState): SearchStat[] {
+  const stats: SearchStat[] = [
+    { label: 'Verstecke', value: `${state.foundStashes}/${setup.stashes}`, icon: 'search', tone: 'good' },
+    { label: 'Durchsucht', value: `${state.searched.filter(Boolean).length}/${setup.items.length}` },
+  ];
+  if (state.alerted) stats.push({ label: 'Nachbarn', value: 'alarmiert', icon: 'siren', tone: 'bad' });
+  else if (state.reason === 'all')
+    stats.push({ label: 'Zeit übrig', value: `${Math.ceil(timeLeft(state))} s`, icon: 'clock' });
+  return stats;
+}
