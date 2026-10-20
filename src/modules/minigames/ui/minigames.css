@@ -509,8 +509,25 @@
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
       env(safe-area-inset-left, 0px);
   }
+  /* Karten (Einleitung, Pause, Ergebnis) unten andocken (Auftrag 49): Mittig lagen sie genau über der Szene (Tresor,
+     Razzia …), oben bleibt sie jetzt sichtbar. Die 3-2-1 bleibt in der Mitte. */
   .mg-run {
     padding: var(--space-5);
+    place-items: end center;
+  }
+  .mg-countdown {
+    align-self: center;
+  }
+  .mg-card {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Mit dem Finger braucht es die Tastatur-Zeile nicht (mehr Platz für die Szene). */
+  @media (pointer: coarse) {
+    .mg-controls li.is-second {
+      display: none;
+    }
   }
   .mg-stage {
     inset: 0;
@@ -530,14 +547,141 @@
   }
 }
 
+/* Bestwert der Spielhalle unter der Wertung (Auftrag 49): neu = Gold mit Pokal, der aufploppt */
+.mg-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mg-best__value {
+  font-family: var(--font-hud-display);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+}
+.mg-best__icon {
+  width: 16px;
+  height: 16px;
+}
+.mg-best.is-new {
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  animation: mg-stamp-in 0.4s 0.9s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.mg-best.is-new .mg-best__value {
+  color: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mg-overlay,
   .mg-card,
   .mg-countdown__n,
-  .mg-score__close {
+  .mg-score__close,
+  .mg-best {
     animation: none;
   }
   .mg-flash {
     display: none;
+  }
+}
+
+/* Spielhalle im Handy (Einstellungen › Minispiele, Auftrag 49): Kacheln, zwei pro Reihe */
+.mg-arcade {
+  display: grid;
+  gap: var(--space-3);
+}
+.mg-arcade__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.mg-arcade__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-group);
+  background: var(--phone-group, var(--color-panel-raised));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-out);
+}
+.mg-arcade__tile:active {
+  transform: scale(0.97);
+}
+.mg-arcade__tile:focus-visible {
+  outline: 2px solid var(--phone-tint, var(--color-accent));
+  outline-offset: 2px;
+}
+.mg-arcade__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.mg-arcade__play {
+  width: 18px;
+  height: 18px;
+  color: var(--phone-tint, var(--color-accent));
+}
+.mg-arcade__name {
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
+  hyphens: none;
+  overflow-wrap: normal;
+}
+.mg-arcade__blurb {
+  font-size: var(--type-caption, 12px);
+  line-height: 1.3;
+  color: var(--color-muted);
+}
+.mg-arcade__best {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 2px;
+  font-size: var(--type-caption, 12px);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.mg-arcade__score {
+  font-size: var(--type-subhead, 15px);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+.mg-arcade__best.is-new {
+  font-style: italic;
+}
+.mg-arcade__trophy {
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  color: var(--cat-brand);
+}
+.mg-arcade-settings {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-arcade__tile {
+    transition: none;
   }
 }

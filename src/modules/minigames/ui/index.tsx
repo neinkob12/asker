@@ -33,8 +33,11 @@ import { isMinigameKind, previewChallenge, previewFromUrl } from './preview';
 import type { MinigameStat } from './registry';
 import './kit/kit.css';
 import './minigames.css';
+// Spielhalle in den Einstellungen (Auftrag 49), meldet Abschnitt, Seite und Suche selbst an.
+import './arcade';
 
 export { HudBar, HudMeter, HudTimer, type MeterColor, ResultStamp } from './kit/hud';
+export { PauseButton, PauseContext } from './kit/pause';
 export { MINIGAME_SOUNDS, type MinigameSoundId, playSound, registerMinigameSounds } from './kit/sounds';
 export { capture, type TouchButton, TouchControls, type TouchDirection, useSwipe } from './kit/TouchControls';
 export { MAX_DT, useFrameLoop } from './kit/useFrameLoop';
