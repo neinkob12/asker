@@ -571,7 +571,7 @@ export function ChaseGame(props: MinigameViewProps) {
           audio.play(CHASE_SOUNDS.whoosh, { volume: 0.5 + 0.4 * e.power });
           haptic('light');
           scene?.shake(0.12);
-          pop('Knapp vorbei! +5 %', 'gold');
+          pop('Knapp vorbei! Turbo +', 'gold');
           break;
         case 'charge':
           audio.playThrottled(CHASE_SOUNDS.warn, 800, { volume: 0.6 });

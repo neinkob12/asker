@@ -94,6 +94,8 @@ export const POST_DAMAGE = 0.6;
 export const NEAR_MISS_SPEED = 24;
 export const NEAR_MISS_GAP = 1.5;
 export const NEAR_MISS_SHAKE = 0.045;
+/** Knapp vorbei lädt auch den Turbo (Anteil der vollen Ladung; nicht, solange er brennt). */
+export const NEAR_MISS_TURBO = 0.2;
 /** Durch die Lücke einer Sperre: so viel Abhängen. */
 export const BLOCK_PASS_SHAKE = 0.1;
 /** Streife setzt zum Rammen an (Warnung in der Oberfläche): so nah dahinter (Meter). */
@@ -1019,6 +1021,7 @@ function collideTraffic(setup: ChaseSetup, state: ChaseState): void {
       else if (!v.missed && d < r + NEAR_MISS_GAP && p.v > NEAR_MISS_SPEED && v.hitCooldown <= 0) {
         v.missed = true;
         state.shake = clamp(state.shake + NEAR_MISS_SHAKE, 0, 1);
+        if (!p.turboOn) p.turbo = clamp(p.turbo + NEAR_MISS_TURBO, 0, 1);
         state.tally.nearMisses++;
         state.events.push({
           kind: 'nearMiss',

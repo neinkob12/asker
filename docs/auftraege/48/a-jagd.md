@@ -28,7 +28,7 @@ Messung (40 Seeds je Zelle im Test, hier 60 Seeds, Schritte zu 1/30 s):
 | Spieler | 0,2 | 0,5 | 0,9 |
 | --- | --- | --- | --- |
 | gut, vorher | 85 % · 28 s | 93 % · 31 s | 45 % · 36 s |
-| gut, nachher | 88 % · 31 s | 93 % · 32 s | 70 % · 38 s |
+| gut, nachher | 90 % · 31 s | 93 % · 32 s | 70 % · 38 s |
 | schwach, vorher | 3 bis 20 % | 3 bis 30 % | 0 bis 20 % |
 | schwach, nachher | 42 % · 40 s | 35 % · 35 s | 18 % · 34 s |
 | keine Eingabe | 0 % | 0 % | 0 % |
@@ -45,6 +45,8 @@ Messung (40 Seeds je Zelle im Test, hier 60 Seeds, Schritte zu 1/30 s):
   Ziel-Pille darunter.
 - **Hit-Stop**: Harte Unfälle (ab Stärke 0,25) stehen 40 bis 90 ms, Sperre 90 ms, Rammstoß 70 ms, Streife zerlegt
   60 ms; Kamera und Wackeln laufen weiter. Bei `prefers-reduced-motion` die Hälfte.
+- **Knapp vorbei lädt den Turbo** (`NEAR_MISS_TURBO` 0,2 der Ladung, nicht, solange er brennt); Einblendung
+  „Knapp vorbei! Turbo +“. Riskant fahren zahlt sich doppelt aus.
 - **Karre in Rot** (`PLAYER_COLOR` 0x7a1016, Metallic mit Klarlack): hebt sich in Dämmerung und Nacht ab; vorher ein
   schwarzer Block.
 

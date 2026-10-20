@@ -19,6 +19,7 @@ import {
   initChase,
   lineAt,
   NEAR_MISS_SHAKE,
+  NEAR_MISS_TURBO,
   onRoad,
   PARKED_DAMAGE,
   PARKING,
@@ -450,6 +451,7 @@ describe('Verfolgungsjagd: Auftrag 48 (parken, knapp vorbei, Warnung)', () => {
       missed: false,
     });
     const before = state.shake;
+    p.turbo = 0;
     let misses = 0;
     for (let t = 0; t < 1.2; t += 1 / 60) {
       stepChase(setup, state, GAS, 1 / 60);
@@ -457,6 +459,8 @@ describe('Verfolgungsjagd: Auftrag 48 (parken, knapp vorbei, Warnung)', () => {
     }
     expect(misses).toBe(1);
     expect(state.shake).toBeGreaterThanOrEqual(before + NEAR_MISS_SHAKE - 0.001);
+    // Lädt auch den Turbo (mehr als das Nachladen in 1,2 s allein).
+    expect(p.turbo).toBeGreaterThanOrEqual(NEAR_MISS_TURBO);
   });
 
   it('setzt die Streife zum Rammen an, warnt das Modell vorher (charge)', () => {
