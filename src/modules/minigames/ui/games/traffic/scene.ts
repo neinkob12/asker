@@ -41,6 +41,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Look } from '../../../../../core';
 import { buildCar, type CarParts, type DayPhase, disposeObject, lightScene, setBlueLight } from '../../kit/scene3d';
 import type { Stage3d } from '../../kit/stage3d';
@@ -218,19 +219,19 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
   curb.position.set(-10.9, 0.075, 0);
   outside.add(curb);
   // Gehweg auf deiner Seite (hinter dem Beamten ist die Straße; rechts von dir der Bordstein).
-  const lineMat = new MeshStandardMaterial({ color: 0xd8d6cc, roughness: 0.6 });
-  const dashGeo = new PlaneGeometry(0.14, 3);
-  for (let z = -60; z < 60; z += 7) {
-    const dash = new Mesh(dashGeo, lineMat);
-    dash.rotation.x = -Math.PI / 2;
-    dash.position.set(-5.4, 0.01, z);
-    outside.add(dash);
-  }
+  // Mittelstriche als ein Mesh (ein Draw-Call statt einem je Strich).
+  const dashes: BufferGeometry[] = [];
+  for (let z = -60; z < 60; z += 7)
+    dashes.push(new PlaneGeometry(0.14, 3).rotateX(-Math.PI / 2).translate(-5.4, 0.01, z));
+  const dashMesh = new Mesh(mergeGeometries(dashes), new MeshStandardMaterial({ color: 0xd8d6cc, roughness: 0.6 }));
+  for (const g of dashes) g.dispose();
+  outside.add(dashMesh);
 
   // ---------------------------------------------------------------- Häuser gegenüber
   const fac = facadeTextures(options.seed, night || dusk);
   const tints = [0xe2d6c2, 0xc7ae8f, 0xb4735a, 0xa5abb2, 0xd9c79d];
   const houseGeo = new BoxGeometry(1, 1, 1);
+  const cornices: BufferGeometry[] = [];
   let z = -60;
   let k = 0;
   while (z < 70) {
@@ -255,13 +256,13 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
     house.scale.set(10, h, w);
     house.position.set(-23, h / 2, z + w / 2);
     outside.add(house);
-    const cornice = new Mesh(houseGeo, new MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.8 }));
-    cornice.scale.set(10.6, 0.5, w + 0.2);
-    cornice.position.set(-23, h + 0.25, z + w / 2);
-    outside.add(cornice);
+    cornices.push(new BoxGeometry(10.6, 0.5, w + 0.2).translate(-23, h + 0.25, z + w / 2));
     z += w + 0.15;
     k += 1;
   }
+  // Gesimse aller Häuser als ein Mesh.
+  outside.add(new Mesh(mergeGeometries(cornices), new MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.8 })));
+  for (const g of cornices) g.dispose();
 
   // ---------------------------------------------------------------- Laterne (hinter dem Beamten, gibt ihm Kontur)
   const poleMat = new MeshStandardMaterial({ color: 0x2f3236, roughness: 0.5, metalness: 0.6 });
@@ -359,9 +360,10 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
   const doorX = -0.9;
   const fabric = fabricTexture(options.seed);
   fabric.repeat.set(4, 4);
-  const trimDark = new MeshStandardMaterial({ color: 0x1b1d21, roughness: 0.62, roughnessMap: fabric });
-  const trimSoft = new MeshStandardMaterial({ color: 0x2c2f35, roughness: 0.85 });
-  const headliner = new MeshStandardMaterial({ color: night ? 0x46474b : 0x8d8a83, roughness: 0.95, map: fabric });
+  // Innen dunkler als draußen, aber nicht schwarz: Kunststoff, Stoff und der helle Dachhimmel haben Form.
+  const trimDark = new MeshStandardMaterial({ color: 0x272a30, roughness: 0.62, roughnessMap: fabric });
+  const trimSoft = new MeshStandardMaterial({ color: 0x3b3f46, roughness: 0.85 });
+  const headliner = new MeshStandardMaterial({ color: night ? 0x8a8b90 : 0xd8d3c8, roughness: 0.95, map: fabric });
   const chrome = new MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.4, metalness: 0.9 });
   const trimPlain = new MeshStandardMaterial({ color: 0x1b1d21, roughness: 0.7 });
   const openZ0 = -0.62;
@@ -648,6 +650,7 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
       poseName === 'rear' || poseName === 'glare' || poseName === 'fail' || (night && cue.tension > 0.5) ? 1 : 0;
     pos.torch += (wantTorch - pos.torch) * Math.min(1, 5 * dt);
     officer.lamp.intensity = pos.torch * (night ? 70 : 28);
+    officer.lensMat.emissiveIntensity = pos.torch * 3;
     (officer.beam.material as MeshBasicMaterial).opacity = pos.torch * (night ? 0.07 : 0.03);
     // Blendung: wie genau die Lampe auf dein Auge zeigt.
     officer.flare.getWorldPosition(lensWorld);
@@ -743,8 +746,12 @@ export function createTrafficScene(options: TrafficSceneOptions): TrafficScene {
       grade.uniforms.time.value = reduced ? 0 : t % 10;
       grade.uniforms.flash.value = zoom;
     }
+    // Draw-Calls über alle Durchgänge (Szene, Bloom, Nachbearbeitung) zählen, nicht nur den letzten.
+    const info = stage.renderer.info;
+    info.autoReset = false;
+    info.reset();
     ensureComposer(stage).render();
-    lastCalls = stage.renderer.info.render.calls;
+    lastCalls = info.render.calls;
   };
   const resize = (width: number, height: number) => {
     portrait = width < height;

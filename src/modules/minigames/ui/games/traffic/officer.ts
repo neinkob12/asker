@@ -167,6 +167,8 @@ export interface OfficerParts {
   flare: Sprite;
   /** Reflexstreifen und Schrift (Farbe des Blaulichts setzt die Szene). */
   reflect: MeshStandardMaterial;
+  /** Linse der Lampe (leuchtet nur, wenn sie an ist). */
+  lensMat: MeshStandardMaterial;
   /** Ein Schein in der linken Hand (beim Bestechen sichtbar). */
   note: Mesh;
   pose: Pose;
@@ -354,10 +356,8 @@ export function buildOfficer(options: { skin: string; jacket: string; face: Text
   const torch = new Mesh(new CylinderGeometry(0.022, 0.028, 0.22, 12), leather);
   torch.position.set(0, -0.08, -0.01);
   right.hand.add(torch);
-  const lens = new Mesh(
-    new CylinderGeometry(0.03, 0.03, 0.012, 14),
-    new MeshStandardMaterial({ color: 0x222222, emissive: 0xfff2c8, emissiveIntensity: 2.5 }),
-  );
+  const lensMat = new MeshStandardMaterial({ color: 0x222222, emissive: 0xfff2c8, emissiveIntensity: 0 });
+  const lens = new Mesh(new CylinderGeometry(0.03, 0.03, 0.012, 14), lensMat);
   lens.position.set(0, -0.19, -0.01);
   right.hand.add(lens);
   const lamp = new SpotLight(0xfff0c8, 0, 12, 0.36, 0.5, 1.4);
@@ -411,6 +411,7 @@ export function buildOfficer(options: { skin: string; jacket: string; face: Text
     beam,
     flare,
     reflect,
+    lensMat,
     note,
     pose: { ...POSES.window },
   };
