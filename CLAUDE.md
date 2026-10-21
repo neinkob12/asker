@@ -410,6 +410,12 @@ ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung
 `traffic/officer.ts` mit Haltungen, Gesicht als Textur `faceTexture.ts`, Tropfen auf der Scheibe im Blaulicht,
 Bedenkzeit aus Lesezeit `READ_CPS`, Fangfragen, Stunde aus der Spieluhr); Papiere mit Stichproben des Zöllners
 (`PEEK_*`). Jagd-Karre mit Form (`buildHeroCar`).
+Auftrag 51 (Charakter der Städte, Look und Klang): Jede Stadt hat in `CITIES` einen `look` (Stimmung der Karte für Tag,
+Nacht und Dämmerung, `glowTint` färbt die nachts leuchtenden Hauptstraßen: Köln Bernstein, Hamburg Flutlicht, Berlin
+Neon, München Weiß, Frankfurt Blau) und `sounds` (Geräusch-Schleifen `harbor`, `club`, `airport`, mit `night` und
+`weekHours`); `city/ui/look.ts` legt beides als Stimmung `'city'` auf die Karte und an `audio`. Musik je Stadt über
+`Track.cities` (`tracksForCity`, `audio.setCity`), Schlagzeug `four` (Techno, House) und `dub`. Eine neue Stadt bekommt
+`look`, `sounds` und zwei bis vier Stücke mit ihrer Kennung.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

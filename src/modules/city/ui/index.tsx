@@ -53,6 +53,7 @@ import {
   travelMinutesBetween,
 } from '../index';
 import { citiesLayer } from './cards';
+import { cityLookLayer } from './look';
 import './sale';
 import { autobahnLayer } from './map';
 import { travelLayer } from './travel';
@@ -97,6 +98,7 @@ registerCityViews({
   active: (state) => activeCity(state),
 });
 
+registerMapLayer(cityLookLayer);
 registerMapLayer(citiesLayer);
 registerMapLayer(autobahnLayer);
 registerMapLayer(travelLayer);

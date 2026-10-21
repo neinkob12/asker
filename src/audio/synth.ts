@@ -36,7 +36,12 @@ export const SOUND_IDS: readonly SoundId[] = [
   'ring',
 ];
 
-export type AmbienceId = 'rain' | 'storm' | 'wind';
+/**
+ * Geräusch-Schleifen: Wetter (rain, storm, wind) und seit Auftrag 51 der Klang der Städte: harbor (Wasser am Kai, ab
+ * und zu ein Schiffshorn, Hamburg), club (dumpfer Bass durch die Wand, Berliner Wochenende), airport (Flieger im
+ * Anflug, Frankfurt).
+ */
+export type AmbienceId = 'rain' | 'storm' | 'wind' | 'harbor' | 'club' | 'airport';
 
 export const midiToFreq = (note: number) => 440 * 2 ** ((note - 69) / 12);
 
@@ -467,6 +472,96 @@ export class Ambience {
     }
   }
 
+  /**
+   * Klang einer Stadt (Auftrag 51): ein leiser Grund aus Rauschen plus Ereignisse, die ein Takt einplant (Horn, Bass,
+   * Flieger). Zufall aus Math.random: reiner Klang, kein Einfluss auf das Spiel.
+   */
+  private buildCity(
+    id: 'harbor' | 'club' | 'airport',
+    src: AudioBufferSourceNode,
+    gain: GainNode,
+    nodes: AudioNode[],
+  ): { lfo: OscillatorNode | null; timer: ReturnType<typeof setInterval> } {
+    const ctx = this.core.ctx;
+    if (id === 'harbor') {
+      // Wasser am Kai: tiefes Rauschen, das langsam schwappt.
+      const lp = filter(ctx, 'lowpass', 300, 0.9);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.18;
+      const depth = ctx.createGain();
+      depth.gain.value = 140;
+      lfo.connect(depth).connect(lp.frequency);
+      lfo.start();
+      src.connect(lp).connect(gain);
+      nodes.push(lp, depth, lfo);
+      let next = ctx.currentTime + 6 + Math.random() * 10;
+      const timer = setInterval(() => {
+        if (ctx.currentTime + 0.5 < next) return;
+        // Schiffshorn in der Ferne: Grundton und Quinte, weich gefiltert, mit Hall.
+        const t = Math.max(next, ctx.currentTime + 0.05);
+        const horn = filter(ctx, 'lowpass', 420, 0.8);
+        const env = envelope(ctx, t, 0.9, 0.7, 2 + Math.random(), 1.8);
+        horn.connect(env).connect(gain);
+        env.connect(this.core.reverbSend);
+        for (const f of [73.4, 110]) osc(ctx, 'sawtooth', f, t, 5, Math.random() * 8).connect(horn);
+        next = t + 28 + Math.random() * 30;
+      }, 250);
+      return { lfo, timer };
+    }
+    if (id === 'club') {
+      // Kein Rauschen, nur der Bass aus dem Club nebenan: Kick auf jedem Viertel bei 124 BPM, durch die Wand gedämpft.
+      const room = ctx.createGain();
+      room.gain.value = 0;
+      src.connect(room);
+      nodes.push(room);
+      const beat = 60 / 124;
+      const wall = filter(ctx, 'lowpass', 150, 0.7);
+      wall.connect(gain);
+      nodes.push(wall);
+      let next = ctx.currentTime + 0.1;
+      const timer = setInterval(() => {
+        while (next < ctx.currentTime + 0.3) {
+          const t = Math.max(next, ctx.currentTime + 0.02);
+          const kick = ctx.createOscillator();
+          kick.type = 'sine';
+          kick.frequency.setValueAtTime(110, t);
+          kick.frequency.exponentialRampToValueAtTime(46, t + 0.12);
+          kick.start(t);
+          kick.stop(t + 0.4);
+          kick.connect(envelope(ctx, t, 1, 0.004, 0.06, 0.28)).connect(wall);
+          next += beat;
+        }
+      }, 100);
+      return { lfo: null, timer };
+    }
+    // Flughafen: leiser Grund, alle 40 bis 70 Sekunden zieht ein Flieger drüber (Rauschen, das an- und abschwillt).
+    const base = filter(ctx, 'lowpass', 200, 0.7);
+    const quiet = ctx.createGain();
+    quiet.gain.value = 0.25;
+    src.connect(base).connect(quiet).connect(gain);
+    nodes.push(base, quiet);
+    let next = ctx.currentTime + 8 + Math.random() * 12;
+    const timer = setInterval(() => {
+      if (ctx.currentTime + 0.5 < next) return;
+      const t = Math.max(next, ctx.currentTime + 0.05);
+      const jet = ctx.createBufferSource();
+      jet.buffer = this.core.noise;
+      jet.loop = true;
+      const bp = filter(ctx, 'bandpass', 320, 1.1);
+      bp.frequency.setValueAtTime(320, t);
+      bp.frequency.linearRampToValueAtTime(900, t + 4.5);
+      bp.frequency.linearRampToValueAtTime(280, t + 10);
+      jet
+        .connect(bp)
+        .connect(envelope(ctx, t, 1.6, 4, 1.2, 4.5))
+        .connect(gain);
+      jet.start(t);
+      jet.stop(t + 11);
+      next = t + 40 + Math.random() * 30;
+    }, 250);
+    return { lfo: null, timer };
+  }
+
   /** Baut die Schleife auf und gibt zurück, wie man sie wieder abbaut. */
   private build(id: AmbienceId, gain: GainNode): () => void {
     const ctx = this.core.ctx;
@@ -475,7 +570,12 @@ export class Ambience {
     src.loop = true;
     const nodes: AudioNode[] = [src];
     let lfo: OscillatorNode | null = null;
-    if (id === 'rain') {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (id === 'harbor' || id === 'club' || id === 'airport') {
+      const built = this.buildCity(id, src, gain, nodes);
+      lfo = built.lfo;
+      timer = built.timer;
+    } else if (id === 'rain') {
       const hp = filter(ctx, 'highpass', 450);
       const lp = filter(ctx, 'lowpass', 3800);
       src.connect(hp).connect(lp).connect(gain);
@@ -497,6 +597,7 @@ export class Ambience {
     }
     src.start();
     return () => {
+      if (timer) clearInterval(timer);
       try {
         src.stop();
         lfo?.stop();
@@ -509,4 +610,11 @@ export class Ambience {
   }
 }
 
-const AMBIENCE_LEVEL: Record<AmbienceId, number> = { rain: 0.18, storm: 0.35, wind: 0.14 };
+const AMBIENCE_LEVEL: Record<AmbienceId, number> = {
+  rain: 0.18,
+  storm: 0.35,
+  wind: 0.14,
+  harbor: 0.16,
+  club: 0.2,
+  airport: 0.14,
+};

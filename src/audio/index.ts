@@ -3,7 +3,8 @@
 //   import { audio, soundOnEvent } from '../../../ui';
 //   audio.play('cash')                              Soundeffekt (siehe SOUND_IDS)
 //   audio.playThrottled('cash', 400)                höchstens alle 400 ms
-//   audio.setAmbience('rain', 0.7)                  Geräusch-Schleife (rain, storm, wind), 0 = aus
+//   audio.setAmbience('rain', 0.7)                  Geräusch-Schleife (rain, storm, wind; Städte: harbor, club, airport), 0 = aus
+//   audio.setCity('hamburg')                         Musik der Stadt (Track.cities), läuft eine fremde, wird überblendet
 //   audio.registerSound('gangs.shot', { kind: 'file', url: 'audio/sfx/shot.ogg' })
 //   soundOnEvent('sale.completed', 'cash', { throttleMs: 400 })   Sound an ein Spielereignis binden
 //   audio.speak(text, contactVoice(contact), onEnd)  Satz mit der Stimme einer Figur (Anruf), null = geht gerade nicht

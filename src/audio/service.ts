@@ -12,7 +12,7 @@ import { SpeechPlayback } from './piper/playback';
 import { type PiperVoice, type PiperVoiceId, piperParams, piperVoiceFor } from './piper/voices';
 import { type AudioSettings, DEFAULT_AUDIO_SETTINGS, loadAudioSettings, saveAudioSettings } from './settings';
 import { Ambience, type AmbienceId, playSound, type SoundId, SynthCore } from './synth';
-import { type MusicMood, pickTrack, TRACKS, type Track } from './tracks';
+import { MOOD_NEIGHBORS, type MusicMood, pickTrack, TRACKS, type Track, trackFitsCity } from './tracks';
 import { Speaker } from './voice';
 
 export type AudioStatus = 'locked' | 'running' | 'suspended' | 'unsupported';
@@ -58,12 +58,7 @@ export interface NowPlaying {
 
 /** Wie lange (Sekunden) ein Stück gegen die Tageszeit laufen darf, bevor überblendet wird. */
 const MISMATCH_SECONDS = 45;
-const NEIGHBORS: Record<MusicMood, MusicMood[]> = {
-  night: ['dusk', 'dawn'],
-  dawn: ['night', 'day'],
-  day: ['dawn', 'dusk'],
-  dusk: ['day', 'night'],
-};
+const NEIGHBORS = MOOD_NEIGHBORS;
 
 export interface AudioServiceOptions {
   /** Erzeugt den AudioContext. Standard: window.AudioContext. In Tests null. */
@@ -117,6 +112,8 @@ export class AudioService {
   settings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
   status: AudioStatus = 'locked';
   mood: MusicMood = 'night';
+  /** Stadt für die Auswahl der Stücke (Auftrag 51), null = alle. */
+  private city: string | null = null;
 
   private storage: KeyValueStorage | null = null;
   private ctx: AudioContext | null = null;
@@ -459,6 +456,17 @@ export class AudioService {
     if (ctx.currentTime - this.mismatchSince > MISMATCH_SECONDS) this.next();
   }
 
+  /**
+   * Stadt, in der gespielt wird (Auftrag 51): Jede Stadt hat eigene Stücke. Läuft gerade eines aus einer anderen
+   * Stadt, wird gleich überblendet.
+   */
+  setCity(city: string | null): void {
+    if (city === this.city) return;
+    this.city = city;
+    const track = this.player?.track;
+    if (track && !trackFitsCity(TRACKS, track, city)) this.next();
+  }
+
   /** Zum nächsten Stück springen (überblendet). */
   next(): void {
     if (!this.ctx || !this.settings.musicOn) return;
@@ -476,7 +484,7 @@ export class AudioService {
 
   private startTrack(): void {
     if (!this.core || !this.musicBus) return;
-    const track = pickTrack(TRACKS, this.mood, this.recent, Math.random);
+    const track = pickTrack(TRACKS, this.mood, this.recent, Math.random, this.city);
     this.recent.push(track.id);
     if (this.recent.length > 3) this.recent.shift();
     this.clearMusicRetry();
