@@ -54,6 +54,8 @@ import {
   findRoute,
   findRouteMeters,
   type GraphRoute,
+  graphView,
+  isGraphBuilt,
   nearestMotorwayNode,
   nearestNetwork,
   networkAt,
@@ -69,6 +71,22 @@ import { SEA_LANES, SEA_NODES, SEA_PORTS } from './seaways';
 import { WATERWAYS } from './waterways';
 
 export { SHIP_SPEED } from './config';
+/**
+ * Baut den Graphen eines Netzes vorab (Auftrag 50): Das erste Mal kostet 15 bis 50 ms, mitten im Spiel ist das ein
+ * Ruck (erste Route nach dem Laden, Fahrt in eine andere Stadt). Die Oberfläche ruft das in ruhigen Momenten auf.
+ * Reiner Cache, ändert keine Ergebnisse. Gibt false zurück, wenn es nichts mehr zu tun gab.
+ */
+export function prewarmRoadNetwork(networkId: string): boolean {
+  if (isGraphBuilt(networkId)) return false;
+  graphView(networkId);
+  return true;
+}
+
+/** Alle Straßennetze (eins pro Stadt). */
+export function roadNetworkIds(): string[] {
+  return networkIds();
+}
+
 export {
   type ClassWeights,
   graphView as roadGraph,
