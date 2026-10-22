@@ -110,6 +110,8 @@ setPrecipitation({ kind: 'rain', intensity: 0.8, wind: 0.3 });                //
 `MapMood`: `darken`, `brighten`, `desaturate`, `tint` + `tintStrength`, `haze`, `wet` (alle 0–1). Mehrere
 Beiträge werden addiert und legen sich über die Palette. Dezente, kühle Farbstiche nehmen (kräftige Töne
 machen die gedämpfte Karte bunt). Das Wetter-Modul nutzt beides (`src/modules/weather/ui/index.tsx`).
+Seit Auftrag 51 färbt `glowTint` + `glowTintStrength` das nächtliche Leuchten der Hauptstraßen (`MapLook.glowColor`),
+`glowBoost` macht es stärker; die Stimmung `'city'` (`city/ui/look.ts`) gibt jeder Stadt so ihren Look.
 
 ## 3D-Mini-Fahrzeuge
 

@@ -6,6 +6,41 @@
 import type { Contact, LngLat } from '../../core';
 import { HARBOR_CALLER } from './config';
 
+/**
+ * Stimmung der Karte einer Stadt (Auftrag 51, Charakter der Städte): legt sich wie das Wetter über die Palette. Werte
+ * 0–1, Farben als Hex. glowTint färbt das nächtliche Leuchten der Hauptstraßen (Köln Bernstein, Berlin Neon …).
+ * Dezent halten: Die Karte bleibt gedämpft, Farbe tragen Reviere, Spots und Gangs.
+ */
+export interface CityMood {
+  tint?: string;
+  tintStrength?: number;
+  desaturate?: number;
+  brighten?: number;
+  darken?: number;
+  glowTint?: string;
+  glowTintStrength?: number;
+  glowBoost?: number;
+}
+
+/** Look einer Stadt: Tag und Nacht werden nach dem Tageslicht gemischt, die Dämmerung legt sich obendrauf. */
+export interface CityLook {
+  day: CityMood;
+  night: CityMood;
+  twilight?: CityMood;
+}
+
+/**
+ * Geräusch einer Stadt (Auftrag 51): Kennung einer Geräusch-Schleife aus src/audio (harbor, club, airport), Lautstärke
+ * 0–1. night: nur nachts (folgt dem Tageslicht). weekHours: nur in diesem Fenster der Woche (Stunde der Woche, 0 =
+ * Montag 0 Uhr, darf über Montag springen, wie Spot.weekHours). Mehrere Einträge einer Kennung: der lauteste gilt.
+ */
+export interface CitySound {
+  id: string;
+  level: number;
+  night?: boolean;
+  weekHours?: readonly [number, number];
+}
+
 export interface CityDef {
   id: string;
   name: string;
@@ -42,6 +77,10 @@ export interface CityDef {
   contact: Contact;
   /** Der Dreh der Stadt in einem Satz (Glas-Karte der Deutschland-Ansicht, Anruf). */
   pitch: string;
+  /** Stimmung der Karte (Auftrag 51), ohne Angabe die Grundpalette. */
+  look?: CityLook;
+  /** Geräusche der Stadt (Auftrag 51). */
+  sounds?: readonly CitySound[];
   /**
    * Rang beim Anruf nach "<Stadt> komplett" (Auftrag 39, Standard 0): Erst nach Rang, dann nach Entfernung. Frankfurt ist
    * optional (1) und ruft nicht vor Hamburg an, obwohl es näher an Köln liegt; per Chat und auf Wunsch geht es trotzdem.
@@ -158,6 +197,12 @@ export const CITIES: readonly CityDef[] = [
     description: 'Der Rhein, zwölf Veedel, Kölscher Klüngel: Hier kennt jeder jeden, und das hilft.',
     contact: KOELN_CONTACT,
     pitch: 'Klüngel, Karneval und Kneipen: Hier kennt jeder jeden, und das hilft.',
+    // Warm: Bernstein auf den Ringen, ein Hauch Kölsch-Gold am Tag.
+    look: {
+      day: { tint: '#ffd49a', tintStrength: 0.08 },
+      night: { glowTint: '#ffb04a', glowTintStrength: 0.3, glowBoost: 0.05 },
+      twilight: { tint: '#ffb27a', tintStrength: 0.1 },
+    },
   },
   {
     id: 'hamburg',
@@ -178,6 +223,14 @@ export const CITIES: readonly CityDef[] = [
       'gibt es hier nur gegen Bezahlung.',
     contact: HARBOR_CALLER,
     pitch: 'Der Hafen: Container kiloweise, aber Zoll und Polizei sind eine Stufe härter.',
+    // Kühl und grau-blau wie die Elbe, morgens und abends Nebel über dem Wasser, nachts Flutlicht im Hafen.
+    // Wasser am Kai und ab und zu ein Schiffshorn.
+    sounds: [{ id: 'harbor', level: 0.7 }],
+    look: {
+      day: { tint: '#8fa9bc', tintStrength: 0.2, desaturate: 0.15 },
+      night: { tint: '#2c4258', tintStrength: 0.12, glowTint: '#a9d2ef', glowTintStrength: 0.45 },
+      twilight: { desaturate: 0.3, brighten: 0.08, tint: '#c3ccd4', tintStrength: 0.18 },
+    },
   },
   {
     // Auftrag 37: Die Nacht. Clubs von Freitagabend bis Montagfrüh, viel Nachtleben, viele Spots, starke Gangs, die
@@ -201,6 +254,17 @@ export const CITIES: readonly CityDef[] = [
       'teilen wollen. Die Polizei hat genug anderes zu tun.',
     contact: BERLIN_CALLER,
     pitch: 'Die Nacht: Clubs rund um die Uhr, viele Spots, starke Gangs, Polizei locker.',
+    // Tags Beton, grau und flach; nachts Neon über den Clubs.
+    // Der Bass aus den Clubs: am Wochenende (Fr 22 bis Mo 8 Uhr, wie die Clubs) laut, sonst nachts leise.
+    sounds: [
+      { id: 'club', level: 0.9, weekHours: [4 * 24 + 22, 8] },
+      { id: 'club', level: 0.3, night: true },
+    ],
+    look: {
+      day: { desaturate: 0.25, tint: '#9d9daa', tintStrength: 0.1 },
+      night: { tint: '#4a2f6e', tintStrength: 0.14, glowTint: '#c45cff', glowTintStrength: 0.5, glowBoost: 0.15 },
+      twilight: { tint: '#c07ab8', tintStrength: 0.1 },
+    },
   },
   {
     // München (Auftrag 38): teuer und streng. Die höchste Kaufkraft im Spiel, aber Lager, Spots und Löhne kosten am
@@ -223,6 +287,12 @@ export const CITIES: readonly CityDef[] = [
       'die Polizei schaut hier genauer hin als irgendwo sonst.',
     contact: MUENCHEN_CALLER,
     pitch: 'Teuer und streng: viel Kaufkraft, teure Lager und Löhne, die Polizei startet eine Stufe härter.',
+    // Föhn: klar, hell, kühl; nachts weißes Licht, ordentlich.
+    look: {
+      day: { brighten: 0.08, tint: '#d4e6ff', tintStrength: 0.12 },
+      night: { glowTint: '#f3efe2', glowTintStrength: 0.45 },
+      twilight: { tint: '#ffd2b0', tintStrength: 0.12, brighten: 0.04 },
+    },
   },
   {
     // Auftrag 39 (optional): Geld und Flughafen.
@@ -244,6 +314,14 @@ export const CITIES: readonly CityDef[] = [
       'Polizei. Hier wird gerechnet: Gefallen kosten, Wäsche geht in größeren Summen.',
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
+    // Glas und Stahl: blau-grau am Tag, nachts kühles Blau aus den Türmen.
+    // Flieger im Anflug auf den Flughafen.
+    sounds: [{ id: 'airport', level: 0.7 }],
+    look: {
+      day: { tint: '#a6bccd', tintStrength: 0.15 },
+      night: { tint: '#1f3550', tintStrength: 0.12, glowTint: '#5fb4ff', glowTintStrength: 0.45, glowBoost: 0.1 },
+      twilight: { tint: '#9fb6d8', tintStrength: 0.1 },
+    },
     offerRank: 1,
   },
 ];
