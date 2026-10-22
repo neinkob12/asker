@@ -23,7 +23,7 @@ import { registerMapLayerOption, type TrafficLevel } from '../../../ui';
 import { activeCity, getCity } from '../../city';
 import { getHeat } from '../../police';
 import { allVeedel } from '../../veedel';
-import { roadGraph } from '../index';
+import { prewarmRoadNetwork, roadGraph, roadNetworkIds } from '../index';
 import {
   mulberry32,
   policeShare,
@@ -40,6 +40,30 @@ export const TRAFFIC_MIN_ZOOM = 12.5;
 const KEYFRAMES_PER_SECOND = 20;
 /** Scheinwerfer nachts nur für die nächsten Fahrzeuge. */
 const LIGHTS = 12;
+
+/**
+ * Straßennetze vorab bauen (Auftrag 50, „Flüssiger“): Das erste Mal kostet ein Netz 15 bis 50 ms, mitten im Spiel war
+ * das der Ruck bei der ersten Route nach dem Laden oder der ersten Fahrt in eine andere Stadt. Hier baut der Browser
+ * in ruhigen Momenten eins nach dem anderen, die aktive Stadt zuerst. Reiner Cache: ändert keine Ergebnisse.
+ */
+let prewarmQueue: string[] | null = null;
+
+function schedulePrewarm(first: string): void {
+  if (prewarmQueue) return;
+  prewarmQueue = [first, ...roadNetworkIds().filter((id) => id !== first)];
+  const idle: (fn: () => void) => void =
+    typeof requestIdleCallback === 'function'
+      ? (fn) => requestIdleCallback(fn, { timeout: 5000 })
+      : (fn) => setTimeout(fn, 500);
+  const next = () => {
+    const id = prewarmQueue?.shift();
+    if (id === undefined) return;
+    // Ein Netz pro ruhigem Moment; war es schon gebaut, gleich das nächste.
+    if (prewarmRoadNetwork(id)) idle(next);
+    else next();
+  };
+  idle(next);
+}
 
 const trafficLayer: MapLayer = {
   id: 'roads.traffic',
@@ -166,6 +190,7 @@ const trafficLayer: MapLayer = {
           graph = roadGraph(network);
           traffic = trafficFor(network);
         }
+        schedulePrewarm(network);
         level = ui.traffic;
         mobile = isMobile();
         hour = clock.hour(state.time);

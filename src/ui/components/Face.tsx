@@ -6,6 +6,7 @@
 // deshalb feste, gedeckte Werte hier. Pro Porträt höchstens rund 70 Elemente, es steht in langen Listen.
 
 import { memo } from 'preact/compat';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import type { FaceShape, Look } from '../../core';
 
 /**
@@ -1087,7 +1088,39 @@ function Top(props: { look: Look; color: string; skin: string }) {
 // --- Das Porträt -----------------------------------------------------------------------------------------------------
 
 /** Porträt als SVG. Füllt den Avatar-Kreis. */
+/**
+ * Fertig gezeichnete Porträts als SVG-Inhalt, nach Aussehen (Auftrag 50, „Flüssiger“): Ein Gesicht sind rund 70
+ * Elemente, am Handy mit Drossel etwa 6 ms pro Zeichnen, beim Öffnen der Nachrichten-App die Hälfte der Zeit. Das
+ * erste Mal zeichnet Preact, danach kommt derselbe Inhalt als Markup (sieht gleich aus, stammt aus diesem Baustein).
+ */
+const FACE_CACHE_SIZE = 400;
+const faceMarkup = new Map<string, string>();
+
 export const Face = memo(function Face(props: { look: Look }) {
+  const key = JSON.stringify(props.look);
+  const known = faceMarkup.get(key);
+  const ref = useRef<SVGSVGElement>(null);
+  useLayoutEffect(() => {
+    if (known !== undefined || !ref.current) return;
+    if (faceMarkup.size >= FACE_CACHE_SIZE) faceMarkup.delete(faceMarkup.keys().next().value as string);
+    faceMarkup.set(key, ref.current.innerHTML);
+  }, [key, known]);
+  // Eigener, zuvor von Preact gezeichneter SVG-Inhalt (keine fremden Daten).
+  if (known !== undefined) {
+    return (
+      <svg
+        class="ui-face"
+        viewBox="0 0 64 64"
+        aria-hidden="true"
+        focusable="false"
+        dangerouslySetInnerHTML={{ __html: known }}
+      />
+    );
+  }
+  return <FaceSvg look={props.look} svgRef={ref} />;
+});
+
+function FaceSvg(props: { look: Look; svgRef: { current: SVGSVGElement | null } }) {
   const look = props.look;
   const skin = SKIN[look.skin] ?? SKIN[1];
   const shade = tint(skin, 0.84);
@@ -1105,7 +1138,7 @@ export const Face = memo(function Face(props: { look: Look }) {
   // Kapuze: beim Kapuzenpulli (und Trainingsjacke, Öljacke) in deren Farbe, sonst ein dunkler Pulli unter der Jacke.
   const hood = look.top === 'hoodie' || look.top === 'tracksuit' || look.top === 'raincoat' ? top : '#30323a';
   return (
-    <svg class="ui-face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <svg ref={props.svgRef} class="ui-face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
       {look.hat === 'hood' && <path d="M14.6 44 Q13.4 9.6 32 9.2 Q50.6 9.6 49.4 44 Z" fill={tint(hood, 0.85)} />}
       <g transform={fit}>
         <HatBack look={look} top={top} />
@@ -1187,4 +1220,4 @@ export const Face = memo(function Face(props: { look: Look }) {
       <Earrings look={look} earX={earX} />
     </svg>
   );
-});
+}

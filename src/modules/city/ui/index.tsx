@@ -7,9 +7,10 @@
 // frei).
 
 import { useEffect } from 'preact/hooks';
-import { clock, formatEuro, type Simulation } from '../../../core';
+import { clock, contactVoice, formatEuro, type Simulation } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
+  audio,
   HudPill,
   Icon,
   IconChip,
@@ -19,6 +20,7 @@ import {
   registerSlot,
   soundOnEvent,
   useGame,
+  useGameSelector,
   useUi,
 } from '../../../ui';
 import { cityReport } from '../../finance';
@@ -279,6 +281,28 @@ function CitySync() {
 }
 
 registerSlot('map.overlay', { id: 'city.sync', order: 1, component: CitySync });
+
+/**
+ * Stimme vorab laden (Auftrag 50): Ist der Anruf einer Stadt eingeplant, lädt das Sprachmodell ihres Kontakts schon
+ * jetzt im Hintergrund, nicht erst beim Klingeln. Beim ersten Anruf (Hamburg) lud es sonst zusammen mit dem Flug der
+ * Karte und den Kacheln der neuen Stadt (Verdacht beim Absturz in Hamburg, Auftrag 47).
+ */
+function VoicePrewarm() {
+  const next = useGameSelector((state) => {
+    let best: { id: string; at: number } | null = null;
+    for (const [id, offer] of Object.entries(state.modules.city.offers ?? {})) {
+      if (offer.status !== 'scheduled' || offer.callAt === null) continue;
+      if (!best || offer.callAt < best.at) best = { id, at: offer.callAt };
+    }
+    return best?.id ?? null;
+  });
+  useEffect(() => {
+    if (next) audio.prepareVoice(contactVoice(cityContact(next)));
+  }, [next]);
+  return null;
+}
+
+registerSlot('map.overlay', { id: 'city.voicePrewarm', order: 2, component: VoicePrewarm });
 
 // ---------------------------------------------------------------------------------------------
 // Nur im Dev-Build: Abkürzungen zum Ausprobieren (z.B. in der Konsole window.koeln.dev.koelnKomplett()).

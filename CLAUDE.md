@@ -410,6 +410,11 @@ ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung
 `traffic/officer.ts` mit Haltungen, Gesicht als Textur `faceTexture.ts`, Tropfen auf der Scheibe im Blaulicht,
 Bedenkzeit aus Lesezeit `READ_CPS`, Fangfragen, Stunde aus der Spieluhr); Papiere mit Stichproben des Zöllners
 (`PEEK_*`). Jagd-Karre mit Form (`buildHeroCar`).
+Auftrag 50 (Flüssiger, Plan vom 21.10.2026): `isMobile()` aus `src/map` liest eine gemerkte Media Query (nie
+`window.innerWidth` pro Update, das erzwang am Handy 40 ms Layout); Straßennetze baut `roads/ui` in ruhigen Momenten vor
+(`prewarmRoadNetwork`), die erste Route kostete sonst 15–50 ms; ein eingeplanter Stadt-Anruf lädt die Stimme schon vorher
+(`VoicePrewarm` in `city/ui`), eine Fahrt holt die Kacheln der Zielstadt (`prefetchMapView`); `Face` nimmt nach dem ersten
+Zeichnen den fertigen SVG-Inhalt. Spitzen messen: `PERF=1 npx vitest run src/playtest/spikes.bench.test.ts --silent=false`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
