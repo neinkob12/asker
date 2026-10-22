@@ -410,6 +410,12 @@ ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung
 `traffic/officer.ts` mit Haltungen, Gesicht als Textur `faceTexture.ts`, Tropfen auf der Scheibe im Blaulicht,
 Bedenkzeit aus Lesezeit `READ_CPS`, Fangfragen, Stunde aus der Spieluhr); Papiere mit Stichproben des Zöllners
 (`PEEK_*`). Jagd-Karre mit Form (`buildHeroCar`).
+Auftrag 52 (erster Abend je Stadt): `CITIES[].opening` (`CityOpening`) gibt jeder Stadt nach Köln bei der ersten
+Ankunft einen kleinen Einstieg (etwa ein halber Spieltag Umsatz): `cargo` (Hamburg: Ware am Kai über `receiveCargo`),
+`spot` (Berlin: geschenkter Club über `giftSpot`, mit `SpotsState.boosts` doppelte Kundschaft bis Ende des ersten
+Öffnungsfensters, `firstOpeningEnd`; spots Version 6), `order` (München: Bestellung über `scriptedOrder` mit `amount`
+und `priceFactor`, sobald Ware im Lager liegt) und `delivery` (Frankfurt: Probe ins erste Lager). Was auf ein Lager wartet,
+steht in `CityState.openings` (city Version 8) und prüft `tickOpenings` stündlich.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

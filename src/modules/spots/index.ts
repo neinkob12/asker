@@ -130,12 +130,19 @@ export interface SpotsState {
   custom: Spot[];
   /** Bekanntheit eigener Spots (0–1, Auftrag 23). Fehlt ein Spot: voll bekannt. */
   awareness: Record<string, number>;
+  /**
+   * Zeitweise mehr Kundschaft an einem Spot (Auftrag 52, erster Abend einer Stadt): Faktor bis zur Spielminute until.
+   */
+  boosts: Record<string, { factor: number; until: number }>;
 }
+
+/** Zustand in Version 5 (vor Auftrag 52): ohne Zuschläge. */
+type SpotsStateV5 = Omit<SpotsState, 'boosts'>;
 
 /** Zustand bis Version 3 (vor Auftrag 23). */
 type SpotsStateV3 = Pick<SpotsState, 'unlocked' | 'custom'>;
 /** Zustand in Version 4 (Auftrag 23 bis 46d): mit Ausbau pro Spot. */
-type SpotsStateV4 = SpotsState & { upgrades?: Record<string, string[]> };
+type SpotsStateV4 = SpotsStateV5 & { upgrades?: Record<string, string[]> };
 
 declare module '../../core' {
   interface ModuleStates {
@@ -372,6 +379,8 @@ export function spotAwareness(state: GameState, spotId: string): number {
 export function spotDemandFactor(state: GameState, spot: Spot, time: number): number {
   const awareness = spotAwareness(state, spot.id);
   let factor = awareness >= 1 ? 1 : AWARENESS_FLOOR + (1 - AWARENESS_FLOOR) * awareness;
+  const boost = state.modules.spots.boosts?.[spot.id];
+  if (boost && time < boost.until) factor *= boost.factor;
   if (!spot.custom || !spot.kind || spot.kind === 'corner') return factor;
   const type = SPOT_TYPES[spot.kind];
   if (!type) return factor;
@@ -468,6 +477,39 @@ function unlock(ctx: Ctx, spotId: string): CommandResult {
   });
   ctx.emit('spots.unlocked', { spotId, veedelId: spot.veedelId });
   return { ok: true };
+}
+
+/**
+ * Bis wann ein Spot nach jetzt zum ersten Mal offen hat (Ende des ersten Öffnungsfensters, Spielminute). Spots ohne
+ * Öffnungszeiten über die Woche: ein Tag.
+ */
+export function firstOpeningEnd(spot: Pick<Spot, 'kind' | 'weekHours'>, now: number): number {
+  if (!spot.weekHours) return now + MINUTES_PER_DAY;
+  let t = Math.ceil(now / 60) * 60;
+  const limit = t + 14 * MINUTES_PER_DAY;
+  while (t < limit && !isSpotOpen(spot, t)) t += 60;
+  while (t < limit && isSpotOpen(spot, t)) t += 60;
+  return t;
+}
+
+/**
+ * Ein vorgegebener Spot als Geschenk (Auftrag 52, erster Abend einer Stadt): offen ohne Kosten, mit mehr Kundschaft bis
+ * zum Ende seines ersten Öffnungsfensters (Berlin: das erste Club-Wochenende). Gibt false zurück, wenn es ihn nicht gibt
+ * oder er schon offen ist.
+ */
+export function giftSpot(ctx: Ctx, spotId: string, boostFactor: number): boolean {
+  const spot = presetById(spotId);
+  const state = ctx.state.modules.spots;
+  if (!spot || state.unlocked.includes(spotId)) return false;
+  state.unlocked.push(spotId);
+  state.boosts ??= {};
+  if (boostFactor > 1) state.boosts[spotId] = { factor: boostFactor, until: firstOpeningEnd(spot, ctx.now) };
+  journal.add(ctx, `${spot.name} ist offen, geschenkt. Hier kannst du jetzt verkaufen.`, 'good', {
+    spotId,
+    veedelId: spot.veedelId,
+  });
+  ctx.emit('spots.unlocked', { spotId, veedelId: spot.veedelId });
+  return true;
 }
 
 /**
@@ -635,12 +677,13 @@ function dailyAwareness(ctx: Ctx): void {
 
 export default defineModule({
   id: 'spots',
-  version: 5,
+  version: 6,
   dependsOn: ['veedel'],
   init: () => ({
     unlocked: PRESET_SPOTS.filter((s) => !s.unlockCost).map((s) => s.id),
     custom: [],
     awareness: {},
+    boosts: {},
   }),
   tickEvery: 60,
   tick: (ctx) => {
@@ -676,6 +719,8 @@ export default defineModule({
       upgrades: {},
     }),
     // Version 5 (Auftrag 46d): Der Ausbau ist weg, der Spielstand vergisst ihn.
-    5: ({ upgrades: _upgrades, ...rest }: SpotsStateV4): SpotsState => rest,
+    5: ({ upgrades: _upgrades, ...rest }: SpotsStateV4): SpotsStateV5 => rest,
+    // Version 6 (Auftrag 52): Zuschläge für geschenkte Spots.
+    6: (old: SpotsStateV5): SpotsState => ({ ...old, boosts: {} }),
   },
 });

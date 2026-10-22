@@ -328,7 +328,10 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
  * übliche Menge des Produkts, höchstens der Bestand). Nimmt keine Rücksicht auf Ruf oder Einstellungen; null ohne
  * Ware oder bei zu vielen offenen Anfragen.
  */
-export function scriptedOrder(ctx: Ctx, request: { veedelId: string }): Order | null {
+export function scriptedOrder(
+  ctx: Ctx,
+  request: { veedelId: string; amount?: number; priceFactor?: number },
+): Order | null {
   const state = ctx.state;
   const veedel = getVeedel(request.veedelId);
   if (!veedel) return null;
@@ -342,10 +345,13 @@ export function scriptedOrder(ctx: Ctx, request: { veedelId: string }): Order | 
   if (!best) return null;
   const product = best.product;
   const [min] = product.typicalAmount;
-  const amount = Math.max(1, Math.min(best.stock, Math.round(min)));
+  // Auftrag 52 (erster Abend in München): eine größere Bestellung zu einem besseren Preis.
+  const amount = Math.max(1, Math.min(best.stock, Math.round(request.amount ?? min)));
   const type = CUSTOMER_TYPES.find((t) => productsFor(t.id, [product]).length > 0) ?? CUSTOMER_TYPES[0];
   const place = placeIn(ctx, veedel);
-  const price = Math.round(amount * referencePrice(state, product.id, veedel.id) * DELIVERY_MARKUP);
+  const price = Math.round(
+    amount * referencePrice(state, product.id, veedel.id) * DELIVERY_MARKUP * (request.priceFactor ?? 1),
+  );
   const goods = `${formatProductAmount(product.id, amount)} ${product.name}`;
   return createOrder(
     ctx,

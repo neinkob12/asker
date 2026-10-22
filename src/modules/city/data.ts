@@ -6,6 +6,23 @@
 import type { Contact, LngLat } from '../../core';
 import { HARBOR_CALLER } from './config';
 
+/**
+ * Der erste Abend in einer Stadt (Auftrag 52): ein kleiner, eigener Einstieg bei der ersten Ankunft, etwa ein halber
+ * Spieltag Umsatz. text schickt der Kontakt der Stadt. Was ein Lager braucht (order, delivery), wartet, bis du eines
+ * mit Ware bzw. überhaupt eines hast.
+ */
+export interface CityOpening {
+  text: string;
+  /** Ware wartet am Kai des Hafens der Stadt (wie jede Schiffsware, Zoll wird neugierig). */
+  cargo?: { supplierId: string; productId: string; amount: number; quality: number };
+  /** Ein Spot als Geschenk, mit mehr Kundschaft bis zum Ende seines ersten Öffnungsfensters. */
+  spot?: { spotId: string; boost: number };
+  /** Eine Bestellung aus einem Veedel, sobald ein Lager der Stadt Ware hat. */
+  order?: { veedelId: string; amount: number; priceFactor: number; text: string };
+  /** Ware kommt direkt ins erste Lager der Stadt, sobald es eines gibt. */
+  delivery?: { productId: string; amount: number; quality: number; text: string };
+}
+
 export interface CityDef {
   id: string;
   name: string;
@@ -42,6 +59,8 @@ export interface CityDef {
   contact: Contact;
   /** Der Dreh der Stadt in einem Satz (Glas-Karte der Deutschland-Ansicht, Anruf). */
   pitch: string;
+  /** Der erste Abend (Auftrag 52), nur bei der ersten Ankunft. */
+  opening?: CityOpening;
   /**
    * Rang beim Anruf nach "<Stadt> komplett" (Auftrag 39, Standard 0): Erst nach Rang, dann nach Entfernung. Frankfurt ist
    * optional (1) und ruft nicht vor Hamburg an, obwohl es näher an Köln liegt; per Chat und auf Wunsch geht es trotzdem.
@@ -178,6 +197,11 @@ export const CITIES: readonly CityDef[] = [
       'gibt es hier nur gegen Bezahlung.',
     contact: HARBOR_CALLER,
     pitch: 'Der Hafen: Container kiloweise, aber Zoll und Polizei sind eine Stufe härter.',
+    // Erster Abend (Auftrag 52): Fiete hat dir etwas am Kai stehen lassen.
+    opening: {
+      text: 'Kleines Willkommen: Am Kai stehen 300 Gramm für dich, von Hein. Hol sie ab, bevor der Zoll neugierig wird.',
+      cargo: { supplierId: 'hamburg', productId: 'weed', amount: 300, quality: 0.6 },
+    },
   },
   {
     // Auftrag 37: Die Nacht. Clubs von Freitagabend bis Montagfrüh, viel Nachtleben, viele Spots, starke Gangs, die
@@ -201,6 +225,13 @@ export const CITIES: readonly CityDef[] = [
       'teilen wollen. Die Polizei hat genug anderes zu tun.',
     contact: BERLIN_CALLER,
     pitch: 'Die Nacht: Clubs rund um die Uhr, viele Spots, starke Gangs, Polizei locker.',
+    // Erster Abend (Auftrag 52): Dilara macht dir eine Tür auf.
+    opening: {
+      text:
+        'Ich hab dir die Tür im Club an der Köpenicker aufgemacht, geht aufs Haus. Am ersten Wochenende kommt doppelt ' +
+        'so viel Kundschaft, die Leute wollen das Neue sehen.',
+      spot: { spotId: 'club-koepenicker', boost: 2 },
+    },
   },
   {
     // München (Auftrag 38): teuer und streng. Die höchste Kaufkraft im Spiel, aber Lager, Spots und Löhne kosten am
@@ -223,6 +254,16 @@ export const CITIES: readonly CityDef[] = [
       'die Polizei schaut hier genauer hin als irgendwo sonst.',
     contact: MUENCHEN_CALLER,
     pitch: 'Teuer und streng: viel Kaufkraft, teure Lager und Löhne, die Polizei startet eine Stufe härter.',
+    // Erster Abend (Auftrag 52): eine teure Bestellung, sobald Ware im Lager liegt.
+    opening: {
+      text: 'Ich hätte da jemanden in Bogenhausen, der gut zahlt. Sobald Sie Ware im Lager haben, meldet er sich.',
+      order: {
+        veedelId: 'bogenhausen',
+        amount: 40,
+        priceFactor: 2,
+        text: 'Mein Bekannter aus Bogenhausen ist so weit. Doppelter Preis, er erwartet Diskretion.',
+      },
+    },
   },
   {
     // Auftrag 39 (optional): Geld und Flughafen.
@@ -244,6 +285,16 @@ export const CITIES: readonly CityDef[] = [
       'Polizei. Hier wird gerechnet: Gefallen kosten, Wäsche geht in größeren Summen.',
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
+    // Erster Abend (Auftrag 52): Kofi schickt eine Probe per Luftfracht.
+    opening: {
+      text: 'Kofi aus der Cargo City schickt Ihnen eine Probe, sobald Sie ein Lager haben. Beste Ware, aufs Haus.',
+      delivery: {
+        productId: 'kush',
+        amount: 150,
+        quality: 0.82,
+        text: 'Kofis Probe ist im Lager: 150 Gramm Kush, beste Qualität.',
+      },
+    },
     offerRank: 1,
   },
 ];
