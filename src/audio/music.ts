@@ -8,8 +8,18 @@ import { CHORD_INTERVALS, type DrumStyle, type Layer, type Track, trackDuration 
 const LOOKAHEAD_S = 0.2;
 const TICK_MS = 40;
 
+interface DrumPattern {
+  kick: readonly number[];
+  snare: readonly number[];
+  hat: readonly number[];
+  /** Sechzehntel mit offener Hi-Hat (four: auf dem Offbeat). */
+  open?: readonly number[];
+  /** Snare als Rimshot (trocken, kurz). */
+  rim?: boolean;
+}
+
 /** Muster je Schlagzeugstil, 16 Sechzehntel pro Takt: Stärke 0–1. */
-const DRUMS = {
+const DRUMS: Record<DrumStyle, DrumPattern> = {
   halftime: {
     kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0],
     snare: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
@@ -24,8 +34,23 @@ const DRUMS = {
     kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.4, 0],
     snare: [0, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0],
     hat: [0.6, 0, 0, 0, 0.5, 0, 0, 0, 0.6, 0, 0, 0, 0.5, 0, 0, 0],
+    rim: true,
   },
-} as const;
+  // Auftrag 51: Techno und House (Berlin, Frankfurt): Kick auf jedem Viertel, Clap auf 2 und 4, offene Hat dazwischen.
+  four: {
+    kick: [1, 0, 0, 0, 0.95, 0, 0, 0, 1, 0, 0, 0, 0.95, 0, 0, 0],
+    snare: [0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0],
+    hat: [0.3, 0, 0.8, 0, 0.3, 0, 0.8, 0, 0.3, 0, 0.8, 0, 0.3, 0, 0.8, 0.25],
+    open: [2, 6, 10, 14],
+  },
+  // Auftrag 51: Dub (Hamburg): Kick auf 1 und 3, Rimshot auf 3, viel Raum.
+  dub: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.6, 0],
+    rim: true,
+  },
+};
 
 /** Bass-Rhythmus je Stil: [Sechzehntel, Länge in Sechzehnteln, Stufe 0 = Grundton, 1 = Quinte, 2 = Oktave]. */
 const BASS: Record<DrumStyle, [number, number, number][]> = {
@@ -42,6 +67,18 @@ const BASS: Record<DrumStyle, [number, number, number][]> = {
   ],
   minimal: [
     [0, 12, 0],
+    [14, 2, 2],
+  ],
+  four: [
+    [2, 1, 0],
+    [6, 1, 0],
+    [10, 1, 1],
+    [14, 1, 0],
+  ],
+  dub: [
+    [0, 4, 0],
+    [6, 2, 0],
+    [8, 4, 1],
     [14, 2, 2],
   ],
 };
@@ -228,13 +265,14 @@ export class MusicPlayer implements TrackPlayer {
     if (layers.has('drums')) {
       const d = DRUMS[track.drums];
       if (d.kick[s]) this.instruments.kick(t, d.kick[s] * human());
-      if (d.snare[s]) this.instruments.snare(t, d.snare[s] * human(), track.drums === 'minimal');
+      if (d.snare[s]) this.instruments.snare(t, d.snare[s] * human(), d.rim === true);
       // Kleiner Wirbel am Ende eines Abschnitts.
       if (lastBarOfSection && s >= 13) this.instruments.snare(t, 0.35 + s * 0.02, true);
     }
     if (layers.has('hats')) {
       const d = DRUMS[track.drums];
-      if (d.hat[s]) this.instruments.hat(t, d.hat[s] * human(), s === 14 && this.rng() < 0.3);
+      if (d.hat[s])
+        this.instruments.hat(t, d.hat[s] * human(), d.open ? d.open.includes(s) : s === 14 && this.rng() < 0.3);
     }
     if (layers.has('arp') && s % 2 === 0 && this.rng() < 0.85) {
       const index = ARP_PATTERN[(s / 2 + bar) % ARP_PATTERN.length];

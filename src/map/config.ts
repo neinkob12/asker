@@ -19,6 +19,25 @@ export const FAR_ZOOM = 9;
 /** Breite, ab der das Handy-Layout gilt (gleich wie in den Styles). */
 export const MOBILE_BREAKPOINT = 760;
 
-export const isMobile = () => window.innerWidth <= MOBILE_BREAKPOINT;
+/**
+ * Handy-Layout? Gemerkt über eine Media Query mit Listener (Auftrag 50): `window.innerWidth` zu lesen kann ein Layout
+ * erzwingen, und Layer fragen das in jedem update(). Am Handy mit 4× Drossel kostete das im Verkehr 40 ms pro Update.
+ */
+let mobileQuery: MediaQueryList | null = null;
+let mobileNow = false;
+
+export const isMobile = (): boolean => {
+  if (!mobileQuery) {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT;
+    }
+    mobileQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    mobileNow = mobileQuery.matches;
+    mobileQuery.addEventListener?.('change', (event) => {
+      mobileNow = event.matches;
+    });
+  }
+  return mobileNow;
+};
 
 export const koelnZoom = () => (isMobile() ? 12.4 : 13.6);

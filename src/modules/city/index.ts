@@ -132,7 +132,16 @@ export {
   SALE_PROFIT_DAYS,
   SLEEP_AVERAGE_DAYS,
 } from './config';
-export { ABROAD_CITIES, CITIES, type CityDef, type CityOpening, DEUTSCHLAND_VIEW } from './data';
+export {
+  ABROAD_CITIES,
+  CITIES,
+  type CityDef,
+  type CityLook,
+  type CityMood,
+  type CityOpening,
+  type CitySound,
+  DEUTSCHLAND_VIEW,
+} from './data';
 export { majorityMakesBoss, PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
 export { getRegion, isRegion, REGIONS, type RegionDef } from './regions';
 

@@ -410,6 +410,17 @@ ganzer Figur und Requisiten, Tempo steigt (`TEMPO_END`, `FIRST_CARD`); Bewerbung
 `traffic/officer.ts` mit Haltungen, Gesicht als Textur `faceTexture.ts`, Tropfen auf der Scheibe im Blaulicht,
 Bedenkzeit aus Lesezeit `READ_CPS`, Fangfragen, Stunde aus der Spieluhr); Papiere mit Stichproben des Zöllners
 (`PEEK_*`). Jagd-Karre mit Form (`buildHeroCar`).
+Auftrag 50 (Flüssiger, Plan vom 21.10.2026): `isMobile()` aus `src/map` liest eine gemerkte Media Query (nie
+`window.innerWidth` pro Update, das erzwang am Handy 40 ms Layout); Straßennetze baut `roads/ui` in ruhigen Momenten vor
+(`prewarmRoadNetwork`), die erste Route kostete sonst 15–50 ms; ein eingeplanter Stadt-Anruf lädt die Stimme schon vorher
+(`VoicePrewarm` in `city/ui`), eine Fahrt holt die Kacheln der Zielstadt (`prefetchMapView`); `Face` nimmt nach dem ersten
+Zeichnen den fertigen SVG-Inhalt. Spitzen messen: `PERF=1 npx vitest run src/playtest/spikes.bench.test.ts --silent=false`.
+Auftrag 51 (Charakter der Städte, Look und Klang): Jede Stadt hat in `CITIES` einen `look` (Stimmung der Karte für Tag,
+Nacht und Dämmerung, `glowTint` färbt die nachts leuchtenden Hauptstraßen: Köln Bernstein, Hamburg Flutlicht, Berlin
+Neon, München Weiß, Frankfurt Blau) und `sounds` (Geräusch-Schleifen `harbor`, `club`, `airport`, mit `night` und
+`weekHours`); `city/ui/look.ts` legt beides als Stimmung `'city'` auf die Karte und an `audio`. Musik je Stadt über
+`Track.cities` (`tracksForCity`, `audio.setCity`), Schlagzeug `four` (Techno, House) und `dub`. Eine neue Stadt bekommt
+`look`, `sounds` und zwei bis vier Stücke mit ihrer Kennung.
 Auftrag 52 (erster Abend je Stadt): `CITIES[].opening` (`CityOpening`) gibt jeder Stadt nach Köln bei der ersten
 Ankunft einen kleinen Einstieg (etwa ein halber Spieltag Umsatz): `cargo` (Hamburg: Ware am Kai über `receiveCargo`),
 `spot` (Berlin: geschenkter Club über `giftSpot`, mit `SpotsState.boosts` doppelte Kundschaft bis Ende des ersten

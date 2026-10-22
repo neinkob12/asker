@@ -164,3 +164,40 @@ describe('Stimmen und Gespräch', () => {
     expect(service.voiceState({ feminine: false, pitch: 0.85, rate: 1 })).toEqual({ kind: 'error', message: 'kaputt' });
   });
 });
+
+describe('Musik je Stadt (Auftrag 51)', () => {
+  const cities = ['koeln', 'hamburg', 'berlin', 'muenchen', 'frankfurt'];
+  const moods: MusicMood[] = ['night', 'dawn', 'day', 'dusk'];
+
+  it('jede Stadt hat eigene Stücke, und nur die laufen dort', () => {
+    for (const city of cities) {
+      for (const mood of moods) {
+        for (let i = 0; i < 10; i++) {
+          const track = pickTrack(TRACKS, mood, [], () => i / 10, city);
+          expect(track.cities ?? [city], `${city} ${mood}`).toContain(city);
+        }
+      }
+    }
+  });
+
+  it('jede Stadt deckt Nacht und Tag mit passenden Stücken ab', () => {
+    for (const city of cities) {
+      const own = TRACKS.filter((t) => t.cities?.includes(city));
+      expect(
+        own.some((t) => t.moods.includes('night')),
+        city,
+      ).toBe(true);
+      expect(
+        own.some((t) => t.moods.includes('day')),
+        city,
+      ).toBe(true);
+    }
+  });
+
+  it('ohne eigene Stücke (Rotterdam) laufen alle', () => {
+    const seen = new Set(
+      Array.from({ length: 40 }, (_, i) => pickTrack(TRACKS, 'night', [], () => i / 40, 'rotterdam').id),
+    );
+    expect(seen.size).toBeGreaterThan(3);
+  });
+});

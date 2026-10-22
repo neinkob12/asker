@@ -12,9 +12,11 @@ import {
   el,
   FAR_ZOOM,
   type FootpathHandle,
+  isMobile,
   type MapLayer,
   onMapFrame,
   pointAlong,
+  prefetchMapView,
 } from '../../../map';
 import {
   Button,
@@ -116,8 +118,14 @@ function TravelCard() {
 
 registerSlot('map.overlay', { id: 'city.travel', order: 20, component: TravelCard });
 
-onGameEvent('city.travelStarted', 'city.travel.camera', () => {
+onGameEvent('city.travelStarted', 'city.travel.camera', (payload) => {
   following = true;
+  // Auftrag 50: Kacheln der Zielstadt schon während der Fahrt laden, bei der Ankunft ist sie gleich scharf.
+  const view = getCity(payload.to)?.view;
+  if (view) {
+    const zoom = isMobile() ? view.mobileZoom : view.zoom;
+    prefetchMapView(view.center, zoom);
+  }
 });
 
 onGameEvent('city.arrived', 'city.travel.arrived', (payload, ui, state) => {

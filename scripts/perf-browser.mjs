@@ -374,7 +374,7 @@ async function micro(label) {
         for (const c of mm.chatList(s)) core.messages.hasOpenDeadline(s, c.contactId);
       }),
     );
-    out.push(time('collectLiveActivities(state)', () => reg.collectLiveActivities(s)));
+    out.push(time('collectStatusCounters(state)', () => reg.collectStatusCounters(s)));
     out.push(time('collectAdvice(state)', () => ns.collectAdvice(s)));
     const badges = [...reg.phoneApps.list(), ...reg.sidebarTabs.list()].filter((a) => a.badge);
     for (const a of badges) out.push(time(`badge ${a.id}`, () => a.badge(s, ui)));

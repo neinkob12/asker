@@ -310,6 +310,11 @@ function getGraph(networkId: string): Graph {
   return g;
 }
 
+/** Ist der Graph dieses Netzes schon gebaut? */
+export function isGraphBuilt(networkId: string): boolean {
+  return graphs.has(networkId);
+}
+
 /**
  * Lesesicht auf den Graphen (z.B. für den Verkehr als Kulisse in roads/ui): Knoten und Kanten in Metern einer lokalen
  * Projektion, Nachbarschaft als CSR (adjStart/adjEdge/adjDir, dir 1 = vorwärts). Nur lesen!

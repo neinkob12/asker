@@ -23,6 +23,14 @@ export interface MapMood {
   haze?: number;
   /** Nasse Straßen: dunkler, nachts leuchten die Hauptstraßen stärker. */
   wet?: number;
+  /**
+   * Farbe, in der die Hauptstraßen nachts leuchten (Auftrag 51: Charakter der Städte, z.B. Neon in Berlin), mit
+   * Stärke 0–1. Ohne bleibt es beim Bernstein der Palette.
+   */
+  glowTint?: string;
+  glowTintStrength?: number;
+  /** Zusätzliches Leuchten der Hauptstraßen nachts (0–1). */
+  glowBoost?: number;
 }
 
 /** Farben einer Tageszeit. Alle Farben als #rrggbb. */
@@ -60,6 +68,8 @@ export interface MapLook extends Palette {
   night: number;
   /** Überwiegende Tageszeit. */
   phase: DayPhase;
+  /** Farbe der leuchtenden Hauptstraßen (nachts), ohne Stimmung gleich majorCasing. */
+  glowColor: string;
 }
 
 export const PALETTES: Record<DayPhase, Palette> = {
@@ -204,7 +214,7 @@ export function pastel(color: string, amount = 0.45): string {
 
 /** Mehrere Stimmungen zu einer zusammenfassen. Der Farbstich wird nach Stärke gemittelt. */
 export function combineMoods(moods: readonly MapMood[]): MapMood {
-  const sum = (key: 'darken' | 'brighten' | 'desaturate' | 'haze' | 'wet') =>
+  const sum = (key: 'darken' | 'brighten' | 'desaturate' | 'haze' | 'wet' | 'glowBoost') =>
     clamp01(moods.reduce((s, m) => s + (m[key] ?? 0), 0));
   const tinted = moods.filter((m) => m.tint && (m.tintStrength ?? 0) > 0);
   const strength = tinted.reduce((s, m) => s + (m.tintStrength ?? 0), 0);
@@ -219,6 +229,14 @@ export function combineMoods(moods: readonly MapMood[]): MapMood {
     }
     tint = acc;
   }
+  const glowing = moods.filter((m) => m.glowTint && (m.glowTintStrength ?? 0) > 0);
+  let glowTint: string | undefined;
+  let glowStrength = 0;
+  for (const m of glowing) {
+    const w = m.glowTintStrength ?? 0;
+    glowTint = glowTint ? mixColor(glowTint, m.glowTint as string, w / (glowStrength + w)) : m.glowTint;
+    glowStrength += w;
+  }
   return {
     darken: sum('darken'),
     brighten: sum('brighten'),
@@ -227,6 +245,9 @@ export function combineMoods(moods: readonly MapMood[]): MapMood {
     wet: sum('wet'),
     tint,
     tintStrength: clamp01(strength),
+    glowTint,
+    glowTintStrength: clamp01(glowStrength),
+    glowBoost: sum('glowBoost'),
   };
 }
 
@@ -335,7 +356,7 @@ export function computeLook(minuteOfDay: number, mood: MapMood = {}): MapLook {
     buildings: p.buildings.map(adjust) as unknown as Palette['buildings'],
     shadow: p.shadow,
     shadowOpacity: round(p.shadowOpacity * (1 - darken * 0.5)),
-    glow: round(clamp01(p.glow + wet * 0.2 * night + darken * 0.15 * (1 - night))),
+    glow: round(clamp01(p.glow + wet * 0.2 * night + darken * 0.15 * (1 - night) + (mood.glowBoost ?? 0) * night)),
     light: adjust(p.light),
     lightIntensity: round(p.lightIntensity * (1 - darken * 0.3) * (1 + brighten * 0.2)),
     fog: mixColor(horizon, land, 0.35),
@@ -343,5 +364,9 @@ export function computeLook(minuteOfDay: number, mood: MapMood = {}): MapLook {
     fogBlend: round(clamp01(0.8 - (mood.haze ?? 0) * 0.4)),
     night: round(night),
     phase: blend.t < 0.5 ? blend.from : blend.to,
+    glowColor:
+      mood.glowTint && (mood.glowTintStrength ?? 0) > 0
+        ? mixColor(adjust(p.majorCasing), mood.glowTint, clamp01(mood.glowTintStrength ?? 0))
+        : adjust(p.majorCasing),
   };
 }

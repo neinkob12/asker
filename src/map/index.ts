@@ -59,6 +59,7 @@ export {
   type TargetMarker,
   type TargetMarkerOptions,
 } from './markers';
+export { prefetchMapView } from './prefetch';
 export { type MapLayer, type MapLayerContext, type MapLayerInstance, registerMapLayer } from './registry';
 export { ABOVE_LAND, BASE_LAYERS, BELOW_BUILDINGS, BELOW_ROADS } from './style';
 export { MAP_TAKEN_CLASS, type MapTakeoverOptions, takeOverMap } from './takeover';

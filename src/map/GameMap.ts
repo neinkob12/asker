@@ -231,7 +231,7 @@ export class GameMap implements MapController {
     this.paint(L.placeLabels, 'text-color', labelColor(look));
     this.paint(L.placeLabels, 'text-halo-color', look.land);
     this.paint(L.rail, 'line-color', look.rail);
-    this.paint(L.roadGlow, 'line-color', look.majorCasing);
+    this.paint(L.roadGlow, 'line-color', look.glowColor);
     this.paint(L.roadGlow, 'line-opacity', look.glow);
     this.paint(L.minorCasing, 'line-color', look.minorCasing);
     this.paint(L.minor, 'line-color', look.minor);
