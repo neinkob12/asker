@@ -58,11 +58,11 @@ import {
   texts,
   wallet,
 } from '../../core';
-import { isPlayerDelivering, playerSpot } from '../customers';
+import { isPlayerDelivering, playerSpot, scriptedOrder } from '../customers';
 import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
-import { getLots } from '../goods';
+import { getLots, getStock, getWarehouses, storeFitting } from '../goods';
 import { growGoals } from '../grow';
 import {
   FULL_POWER_SHARE,
@@ -73,10 +73,10 @@ import {
   rightHandTitle,
 } from '../hierarchy';
 import { launderAtOnce, launderedCost } from '../laundering';
-import { getRoutes, getTrips } from '../logistics';
+import { getRoutes, getTrips, receiveCargo } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
-import { getSpot } from '../spots';
+import { getSpot, giftSpot } from '../spots';
 import { getStaffMember, staffContact } from '../staff';
 import { getSupplier, supplierContact } from '../suppliers';
 import { campaignProgress } from '../territory';
@@ -138,6 +138,7 @@ export {
   type CityDef,
   type CityLook,
   type CityMood,
+  type CityOpening,
   type CitySound,
   DEUTSCHLAND_VIEW,
 } from './data';
@@ -244,10 +245,15 @@ export interface CityState {
   sleep: Record<string, CitySleep>;
   /** Städte, in denen du schon warst (die erste Ankunft bringt Fietes Begrüßung). */
   visited: string[];
+  /** Erster Abend (Auftrag 52): Teile, die noch auf ein Lager warten, als '<stadt>:order' bzw. '<stadt>:delivery'. */
+  openings: string[];
 }
 
+/** Zustand in Version 7 (vor Auftrag 52): ohne ersten Abend. */
+type CityStateV7 = Omit<CityState, 'openings'>;
+
 /** Zustand in Version 6 (Auftrag 40): mit Startpaket-Person unterwegs (Auftrag 36). */
-type CityStateV6 = CityState & { startLeader: { staffId: string; cityId: string } | null };
+type CityStateV6 = CityStateV7 & { startLeader: { staffId: string; cityId: string } | null };
 
 /** Zustand in Version 5 (Auftrag 36 nach dem Review): ohne Verkauf. */
 type CityStateV5 = Omit<CityStateV6, 'sale'>;
@@ -967,6 +973,50 @@ function arrive(ctx: Ctx): void {
     for (const text of CITY_OFFERS[travel.to]?.welcome ?? []) {
       messages.send(ctx, { contact: cityContact(travel.to), text });
     }
+    startOpening(ctx, travel.to);
+  }
+}
+
+/**
+ * Der erste Abend einer Stadt (Auftrag 52, Daten in CITIES.opening): Ware am Kai und ein geschenkter Spot kommen sofort,
+ * Bestellung und Lieferung warten auf ein Lager (tickOpenings).
+ */
+function startOpening(ctx: Ctx, cityId: string): void {
+  const opening = getCity(cityId)?.opening;
+  if (!opening) return;
+  tell(ctx, cityId, opening.text);
+  if (opening.cargo) receiveCargo(ctx, { ...opening.cargo, unitCost: 0, cityId });
+  if (opening.spot) giftSpot(ctx, opening.spot.spotId, opening.spot.boost);
+  const c = ctx.state.modules.city;
+  if (opening.order) c.openings.push(`${cityId}:order`);
+  if (opening.delivery) c.openings.push(`${cityId}:delivery`);
+}
+
+/** Wartende Teile des ersten Abends: einmal pro Spielstunde, nur für die Stadt, die live ist. */
+function tickOpenings(ctx: Ctx): void {
+  const c = ctx.state.modules.city;
+  if (!c.openings?.length || ctx.now % 60 !== 0) return;
+  for (const key of [...c.openings]) {
+    const [cityId, part] = key.split(':');
+    if (!isCityLive(ctx.state, cityId)) continue;
+    const opening = getCity(cityId)?.opening;
+    const warehouses = getWarehouses(ctx.state, cityId);
+    let done = !opening;
+    if (opening?.delivery && part === 'delivery' && warehouses.length > 0) {
+      const { productId, amount, quality, text } = opening.delivery;
+      storeFitting(ctx, { warehouseId: warehouses[0].id, productId, amount, quality });
+      tell(ctx, cityId, text);
+      done = true;
+    }
+    if (opening?.order && part === 'order' && getStock(ctx.state, { cityId }) > 0) {
+      const { veedelId, amount, priceFactor, text } = opening.order;
+      // Ist gerade kein Platz für eine Bestellung (zu viele offen), versucht er es in einer Stunde wieder.
+      if (scriptedOrder(ctx, { veedelId, amount, priceFactor })) {
+        tell(ctx, cityId, text);
+        done = true;
+      }
+    }
+    if (done) c.openings = c.openings.filter((k) => k !== key);
   }
 }
 
@@ -1550,6 +1600,7 @@ function tick(ctx: Ctx): void {
   if (travel && ctx.now >= travel.arrivesAt) arrive(ctx);
   tickOffers(ctx);
   tickSale(ctx);
+  tickOpenings(ctx);
 }
 
 function initialState(): CityState {
@@ -1566,6 +1617,7 @@ function initialState(): CityState {
     travel: null,
     sleep: { [FIRST_CITY]: newSleep(true, 0) },
     visited: [FIRST_CITY],
+    openings: [],
   };
 }
 
@@ -1576,7 +1628,7 @@ function playerOnly(meta: CommandMeta): CommandResult | null {
 
 export default defineModule({
   id: 'city',
-  version: 7,
+  version: 8,
   dependsOn: ['territory', 'hierarchy'],
   init: () => initialState(),
   tickEvery: 5,
@@ -1663,9 +1715,11 @@ export default defineModule({
     6: (old: CityStateV5): CityStateV6 => ({ ...old, sale: { status: 'none', callAt: null, sold: null } }),
     // Version 7 (Feedback vom 05.10.2026): Leute bleiben in ihrer Stadt, das Startpaket bringt niemanden mehr mit. Wer
     // noch unterwegs ist, kommt als normale Person an.
-    7: (old: CityStateV6): CityState => {
+    7: (old: CityStateV6): CityStateV7 => {
       const { startLeader: _, ...rest } = old;
       return rest;
     },
+    // Version 8 (Auftrag 52): erster Abend. Alte Stände waren schon überall, wo sie hinwollten.
+    8: (old: CityStateV7): CityState => ({ ...old, openings: [] }),
   },
 });

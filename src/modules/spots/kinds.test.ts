@@ -141,7 +141,7 @@ describe('Spot-Arten, Bekanntheit, Ausbau (Auftrag 23)', () => {
     delete state.modules.spots.custom[0].kind;
     state.moduleVersions.spots = 3;
     const loaded = loadSimulation(state, sim.modules);
-    expect(loaded.state.moduleVersions.spots).toBe(5);
+    expect(loaded.state.moduleVersions.spots).toBe(6);
     expect(spotKind(getSpot(loaded.state, id))).toBe('corner');
     expect(spotAwareness(loaded.state, id)).toBe(1);
     expect('upgrades' in loaded.state.modules.spots).toBe(false);
@@ -153,7 +153,7 @@ describe('Spot-Arten, Bekanntheit, Ausbau (Auftrag 23)', () => {
     state.modules.spots.upgrades = { ebertplatz: ['lookout', 'stash', 'regular'] };
     state.moduleVersions.spots = 4;
     const loaded = loadSimulation(state, sim.modules);
-    expect(loaded.state.moduleVersions.spots).toBe(5);
+    expect(loaded.state.moduleVersions.spots).toBe(6);
     expect('upgrades' in loaded.state.modules.spots).toBe(false);
     expect(spotModifiers(loaded.state, 'ebertplatz')).toEqual({
       heatFactor: 1,
