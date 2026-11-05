@@ -87,15 +87,22 @@ export function placeBox(
   const centerY = anchor.top + anchor.height / 2;
   let left: number;
   let top: number;
+  let clamped = false;
   if (side === 'top' || side === 'bottom') {
     top = side === 'top' ? anchor.top - gap - box.height : anchor.top + anchor.height + gap;
+    // Liegt der Anker teils außerhalb des Fensters (unten in einer scrollenden Seite, iPad im Querformat), bliebe die
+    // Box mit ihrem „Weiter“ außerhalb: Sie bleibt immer im Fenster, auch wenn sie dann den Anker berührt.
+    const inside = clamp(top, margin, viewport.height - box.height - margin);
+    clamped = inside !== top;
+    top = inside;
     left = clamp(centerX - box.width / 2, margin, viewport.width - box.width - margin);
   } else {
     left = side === 'left' ? anchor.left - gap - box.width : anchor.left + anchor.width + gap;
     top = clamp(centerY - box.height / 2, margin, viewport.height - box.height - margin);
   }
-  const arrow =
-    side === 'top' || side === 'bottom'
+  const arrow = clamped
+    ? null
+    : side === 'top' || side === 'bottom'
       ? { x: clamp(centerX - left, arrowInset, box.width - arrowInset), y: side === 'top' ? box.height : 0 }
       : { x: side === 'left' ? box.width : 0, y: clamp(centerY - top, arrowInset, box.height - arrowInset) };
   return { left: Math.round(left), top: Math.round(top), side, arrow };

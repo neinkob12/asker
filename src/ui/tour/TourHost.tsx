@@ -19,6 +19,8 @@ export const ANCHOR_WAIT_MS = 2000;
 const HOLE_PADDING = 6;
 /** Rundung des Ausschnitts, wenn das Element keine hat. */
 const FALLBACK_RADIUS = 12;
+/** So oft wird ein Anker nachgeholt, der noch außerhalb seiner scrollenden Seite liegt. */
+const SCROLL_RETRY_MS = 400;
 /** Ein Element, das verschwunden ist, wird höchstens so oft pro Sekunde neu gesucht. */
 const REQUERY_MS = 120;
 /** Abstand des Blatts am Handy-Bildschirm zum Rand (wie .tour--mobile .tour-box in tour.css). */
@@ -97,6 +99,7 @@ function useAnchor(anchor: string | undefined, key: string | undefined, tick: nu
     }
     let element: HTMLElement | null = null;
     let lastQuery = 0;
+    let lastScroll = 0;
     const started = performance.now();
     let frame = 0;
     let current: Tracked = { rect: null, radius: FALLBACK_RADIUS, missing: false };
@@ -109,6 +112,12 @@ function useAnchor(anchor: string | undefined, key: string | undefined, tick: nu
           element = findAnchor(anchor, key);
           if (element) scrollAnchorIntoView(element);
         }
+      }
+      // Eine scrollende Seite baut sich oft erst nach dem Öffnen fertig auf: Der erste Versuch kam dann zu kurz, der Anker
+      // blieb unter dem Rand, und die Box mit „Weiter“ stand mit ihm außerhalb des Bildschirms (iPad, Querformat).
+      if (element && now - lastScroll >= SCROLL_RETRY_MS) {
+        lastScroll = now;
+        scrollAnchorIntoView(element);
       }
       let next: Tracked;
       if (element && isVisible(element)) {

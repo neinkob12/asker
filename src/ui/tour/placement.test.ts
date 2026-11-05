@@ -5,6 +5,15 @@ const viewport = { width: 1440, height: 900 };
 const box = { width: 360, height: 160 };
 
 describe('placeBox', () => {
+  it('liegt der Anker unter dem Fensterrand, bleibt die Box trotzdem ganz im Fenster (iPad, Querformat)', () => {
+    const small = { width: 1180, height: 820 };
+    const anchor = { left: 797, top: 869, width: 352, height: 229 };
+    const pos = placeBox(anchor, small, { width: 380, height: 180 }, 'auto', { gap: 14, margin: 12 });
+    expect(pos.top).toBeGreaterThanOrEqual(12);
+    expect(pos.top + 180).toBeLessThanOrEqual(820 - 12);
+    expect(pos.left + 380).toBeLessThanOrEqual(1180 - 12);
+  });
+
   it('ohne Anker steht die Box mittig', () => {
     const pos = placeBox(null, viewport, box);
     expect(pos.side).toBe('center');
