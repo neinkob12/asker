@@ -270,8 +270,11 @@ async function run() {
       assert.equal(after.mission, 'buySpots');
       assert.ok(after.dirty >= before + 100, 'Belohnung (mindestens 100 €) nach drei Verkäufen');
       await card.getByText('Zwei Spots kaufen').waitFor();
-      // Stufe 2: zwei Schritte an den Markern der Spots zum Kauf.
+      // Stufe 2: erst die Läufer am Neumarkt, dann zwei Schritte an den Markern der Spots zum Kauf (die Tour endet auf der
+      // Karte).
       await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:2');
+      await page.getByText('Neu: Am Spot kannst du jetzt Läufer').waitFor();
+      await page.keyboard.press('Enter');
       await page.getByText('Zülpicher Platz, zu haben').waitFor();
       await shot(page, 'tutorial-mission-2');
       await nextTour(page);

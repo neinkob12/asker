@@ -75,10 +75,11 @@ describe('tutorial: Touren', () => {
     const sell = stageTour(1, ctx).steps.find((s) => s.id === 'sell');
     expect(sell?.waitFor).toEqual({ event: 'sale.completed' });
     // Feedback 16.10.2026: Läufer und Hinstellen werden mit Stufe 2 frei, die Tour zeigt es am Spot.
+    // Die Spots stehen zuletzt: Die Tour endet auf der Karte, nicht unter dem offenen Spot-Fenster des Neumarkts.
     expect(stageTour(2, ctx).steps.map((s) => [s.anchor, s.anchorKey])).toEqual([
+      ['spot.runner', undefined],
       ['spot.marker', 'zuelpicher'],
       ['spot.marker', 'rudolfplatz'],
-      ['spot.runner', undefined],
     ]);
   });
   it('Stufe 5: Der Spieler tippt selbst einen Lieferanten an und bestellt einmal (Anker bleibt frei)', () => {

@@ -173,9 +173,22 @@ function stage1(ctx: TourContext): TourStep[] {
   ];
 }
 
+/**
+ * Stufe 2: erst die Läufer am Neumarkt, dann die beiden Spots zum Kauf. Die Spots stehen zuletzt, weil die Tour
+ * auf der Karte enden muss: Am Handy-Bildschirm lag sonst das Spot-Fenster des Neumarkts über der Karte und deckte die
+ * grauen Marker zu, die der Spieler gleich antippen soll (Feedback 05.11.2026).
+ */
 function stage2(ctx: TourContext): TourStep[] {
   const { ui } = ctx;
   return [
+    step({
+      // Feedback 16.10.2026: ab jetzt frei ('staff.runners', 'customers.stand').
+      id: 'runner',
+      anchor: 'spot.runner',
+      tint: 'people',
+      before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
+      text: 'Neu: Am Spot kannst du jetzt Läufer anheuern oder dich selbst hinstellen. Dann läuft der Verkauf ohne Tippen.',
+    }),
     step({
       id: 'zuelpicher',
       anchor: 'spot.marker',
@@ -194,14 +207,6 @@ function stage2(ctx: TourContext): TourStep[] {
       anchorKey: 'rudolfplatz',
       tint: 'place',
       text: 'Und der Rudolfplatz, auch 350 €. Hol dir beide, dann hast du drei Ecken in der Stadt.',
-    }),
-    step({
-      // Feedback 16.10.2026: ab jetzt frei ('staff.runners', 'customers.stand').
-      id: 'runner',
-      anchor: 'spot.runner',
-      tint: 'people',
-      before: () => ui.openPanel('spots.spot', { spotId: SPOT }),
-      text: 'Neu: Am Spot kannst du jetzt Läufer anheuern oder dich selbst hinstellen. Dann läuft der Verkauf ohne Tippen.',
     }),
   ];
 }

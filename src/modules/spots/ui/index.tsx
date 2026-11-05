@@ -87,8 +87,35 @@ function SpotPanel(props: { spotId: string }) {
   const active = isSpotActive(state, spot.id);
   const waiting = waitingAt(state, spot.id).length;
   const cost = unlockCostOf(state, spot);
+  // Freischalten steht bei einem fremden Spot ganz oben: Im halb offenen Handy-Blatt (Handy-Bildschirm) lag es sonst
+  // unter der Tab-Leiste, und wer den Spot kaufen wollte, musste erst scrollen (Feedback 05.11.2026).
+  const unlock = !active && (
+    <Group
+      title="Noch nicht deiner"
+      icon="lock"
+      color="brand"
+      note="Hier verkauft noch niemand für dich. Mit ein paar Kontakten vor Ort gehört der Platz dir."
+    >
+      <List>
+        <ListItem
+          action
+          disabled={state.wallet.dirty < cost}
+          value={formatEuro(cost)}
+          onClick={() => dispatch({ type: 'spots.unlock', payload: { spotId: spot.id } })}
+        >
+          <ItemContent
+            icon="unlock"
+            color="brand"
+            title="Freischalten"
+            meta={state.wallet.dirty < cost ? `Dir fehlen ${formatEuro(cost - state.wallet.dirty)}` : undefined}
+          />
+        </ListItem>
+      </List>
+    </Group>
+  );
   return (
     <div class="spot-panel" data-tour="spot.panel">
+      {unlock}
       <SummaryTiles
         items={[
           { icon: 'smile', color: waiting > 0 ? 'warn' : 'money', value: waiting, label: 'warten' },
@@ -131,34 +158,11 @@ function SpotPanel(props: { spotId: string }) {
           Stammkunden, und sie schauen weniger auf den Preis. Der Ruf zählt hier doppelt, im Guten wie im Schlechten.
         </Disclosure>
       )}
-      {active ? (
+      {active && (
         <>
           <Slot name="spots.spotPanel" props={{ spotId: spot.id }} />
           <SpotManage spotId={spot.id} />
         </>
-      ) : (
-        <Group
-          title="Noch nicht deiner"
-          icon="lock"
-          color="brand"
-          note="Hier verkauft noch niemand für dich. Mit ein paar Kontakten vor Ort gehört der Platz dir."
-        >
-          <List>
-            <ListItem
-              action
-              disabled={state.wallet.dirty < cost}
-              value={formatEuro(cost)}
-              onClick={() => dispatch({ type: 'spots.unlock', payload: { spotId: spot.id } })}
-            >
-              <ItemContent
-                icon="unlock"
-                color="brand"
-                title="Freischalten"
-                meta={state.wallet.dirty < cost ? `Dir fehlen ${formatEuro(cost - state.wallet.dirty)}` : undefined}
-              />
-            </ListItem>
-          </List>
-        </Group>
       )}
     </div>
   );
