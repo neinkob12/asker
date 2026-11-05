@@ -1,6 +1,7 @@
 // Regressionstests aus dem Bugreview (Paket tutorial, Teil src/ui): Ergebnis einer Tour bei Reset und Überspringen,
 // Tempo nach einem Reset, Enter und Leertaste bei einem Dialog über der Tour.
 
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameEvent, GameSession, GameState } from '../../core';
 import { registerDialog } from '../registry';
@@ -177,6 +178,25 @@ describe('Bugreview tutorial (src/ui)', () => {
       press('Enter');
       expect(runtime.tours.current()?.index).toBe(1);
       unbind();
+    });
+  });
+
+  describe('Ebene der Tour am Handy-Bildschirm (Karte zuerst)', () => {
+    const mapfirst = readFileSync(new URL('../shell/mapfirst.css', import.meta.url), 'utf8');
+
+    it('liegt über dem Blatt, dem Hinweis und der Tab-Leiste, sonst steckt das „Weiter“ dahinter', () => {
+      const own = mapfirst.match(/\.shell\.is-mapfirst\s*\{[^}]*--z-tour:\s*(\d+)/);
+      expect(own, 'mapfirst.css setzt --z-tour').not.toBeNull();
+      const tour = Number(own?.[1]);
+      // Alle festen Ebenen der Datei: Blatt, Griff, Tab-Leiste, Hinweis „Nächster Schritt“.
+      const layers = [...mapfirst.matchAll(/z-index:\s*(\d+)/g)].map((m) => Number(m[1]));
+      expect(layers.length).toBeGreaterThan(0);
+      for (const layer of layers) expect(tour).toBeGreaterThan(layer);
+    });
+
+    it('die Tour nimmt ihre Ebene aus --z-tour (sonst wirkt die Regel nicht)', () => {
+      const css = readFileSync(new URL('./tour.css', import.meta.url), 'utf8');
+      expect(css.match(/\.tour\s*\{[^}]*z-index:\s*var\(--z-tour\)/)).not.toBeNull();
     });
   });
 });

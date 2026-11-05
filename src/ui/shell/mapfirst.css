@@ -14,6 +14,16 @@
   --sheet-half-top: 48dvh;
 }
 
+/*
+ * Tour über Blatt, Hinweis und Tab-Leiste. Das Blatt (30), der Hinweis „Nächster Schritt“ (35) und die Leiste (40) liegen
+ * hier über der Standard-Ebene der Tour (--z-tour, 16): Das „Weiter“ am unteren Rand steckte unter der Leiste, die
+ * Blocker der Tour sperrten aber weiter Karte und HUD. Wer in Stufe 2 Zülpicher Platz und Rudolfplatz kaufen wollte,
+ * kam nicht mehr weiter. 42 liegt auch über dem Minispiel (41).
+ */
+.shell.is-mapfirst {
+  --z-tour: 42;
+}
+
 /* ---------------------------------------------------------------- HUD: Geld und Uhr flach (Kacheln wie Stadt und Events bleiben) */
 .shell.is-mapfirst .hud-capsule--money,
 .shell.is-mapfirst .hud-capsule--clock {
